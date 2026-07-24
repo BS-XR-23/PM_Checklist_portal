@@ -1,30 +1,34 @@
 "use server";
 
-import { getServerSession } from "next-auth";
-import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-
-async function requireSession() {
-  const session = await getServerSession(authOptions);
-  if (!session) redirect("/login");
-  return session;
-}
+import { requireModuleWrite, writeAudit } from "@/lib/rbac";
 
 export async function updateProjectFinancials(
   projectId: string,
   data: Partial<{ contractValue: number; plannedManDays: number; crRate: number }>
 ) {
-  await requireSession();
+  // This one control feeds both Milestones (tranche amounts) and Budget
+  // Tracker (EVM) — require write access to both rather than picking one.
+  await requireModuleWrite(projectId, "MILESTONES");
+  const user = await requireModuleWrite(projectId, "BUDGET_TRACKER");
 
-  await prisma.project.update({
-    where: { id: projectId },
-    data,
+  const before = await prisma.project.findUniqueOrThrow({ where: { id: projectId } });
+  await prisma.project.update({ where: { id: projectId }, data });
+
+  await writeAudit({
+    actor: user,
+    projectId,
+    action: "update",
+    entityType: "Project",
+    entityId: projectId,
+    summary: "Updated project financials (contract value / planned man-days / CR rate)",
+    diff: { before, changes: data },
   });
 
   revalidatePath(`/projects/${projectId}/milestones`);
   revalidatePath(`/projects/${projectId}/budget`);
   revalidatePath(`/projects/${projectId}/change-requests`);
   revalidatePath(`/projects/${projectId}/dashboard`);
+  revalidatePath(`/projects/${projectId}/activity`);
 }

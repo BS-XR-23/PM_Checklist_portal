@@ -1,8 +1,12 @@
 import { prisma } from "@/lib/prisma";
+import { requireModuleAccess } from "@/lib/rbac";
 import { AddRiskButton } from "./add-risk-button";
 import { RiskRow } from "./risk-row";
 
 export default async function RiskRegisterPage({ params }: { params: { projectId: string } }) {
+  const access = await requireModuleAccess(params.projectId, "RISK_REGISTER", "READ_LIMITED");
+  const canWrite = access === "WRITE";
+
   const risks = await prisma.riskItem.findMany({
     where: { projectId: params.projectId },
     orderBy: { order: "asc" },
@@ -17,7 +21,7 @@ export default async function RiskRegisterPage({ params }: { params: { projectId
             Risk Score = Probability x Impact (Low=1, Medium=2, High=3). 1-2 Low, 3-4 Medium, 6-9 High.
           </p>
         </div>
-        <AddRiskButton projectId={params.projectId} />
+        {canWrite && <AddRiskButton projectId={params.projectId} />}
       </div>
 
       <div className="rounded-lg border border-slate-200 bg-white overflow-x-auto">
@@ -36,12 +40,12 @@ export default async function RiskRegisterPage({ params }: { params: { projectId
               <th className="px-3 py-2 font-medium w-36">Date Raised</th>
               <th className="px-3 py-2 font-medium w-36">Date Closed</th>
               <th className="px-3 py-2 font-medium min-w-[160px]">Notes</th>
-              <th className="px-3 py-2 font-medium w-8" />
+              {canWrite && <th className="px-3 py-2 font-medium w-8" />}
             </tr>
           </thead>
           <tbody>
             {risks.map((r) => (
-              <RiskRow key={r.id} projectId={params.projectId} risk={r} />
+              <RiskRow key={r.id} projectId={params.projectId} risk={r} canWrite={canWrite} />
             ))}
           </tbody>
         </table>

@@ -1,20 +1,18 @@
 "use server";
 
-import { getServerSession } from "next-auth";
-import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { parseDateInput } from "@/lib/format";
+import { requireModuleWrite, writeAudit } from "@/lib/rbac";
 
-async function requireSession() {
-  const session = await getServerSession(authOptions);
-  if (!session) redirect("/login");
-  return session;
+function revalidateCrLog(projectId: string) {
+  revalidatePath(`/projects/${projectId}/change-requests`);
+  revalidatePath(`/projects/${projectId}/dashboard`);
+  revalidatePath(`/projects/${projectId}/activity`);
 }
 
 export async function createChangeRequest(projectId: string) {
-  await requireSession();
+  const user = await requireModuleWrite(projectId, "CR_LOG");
 
   const existing = await prisma.changeRequest.findMany({ where: { projectId }, select: { crCode: true } });
   const maxNum = existing.reduce((max, cr) => {
@@ -23,12 +21,13 @@ export async function createChangeRequest(projectId: string) {
   }, 0);
   const crCode = `CR-${String(maxNum + 1).padStart(3, "0")}`;
 
-  await prisma.changeRequest.create({
+  const created = await prisma.changeRequest.create({
     data: { projectId, crCode, title: "New change request" },
   });
 
-  revalidatePath(`/projects/${projectId}/change-requests`);
-  revalidatePath(`/projects/${projectId}/dashboard`);
+  await writeAudit({ actor: user, projectId, action: "create", entityType: "ChangeRequest", entityId: created.id, summary: `Added ${crCode}` });
+
+  revalidateCrLog(projectId);
 }
 
 export async function updateChangeRequest(
@@ -48,7 +47,9 @@ export async function updateChangeRequest(
     notes: string;
   }>
 ) {
-  await requireSession();
+  // Guessed-ID fix: authorize against the CR's real project.
+  const existing = await prisma.changeRequest.findUniqueOrThrow({ where: { id } });
+  const user = await requireModuleWrite(existing.projectId, "CR_LOG");
 
   await prisma.changeRequest.update({
     where: { id },
@@ -67,13 +68,34 @@ export async function updateChangeRequest(
     },
   });
 
-  revalidatePath(`/projects/${projectId}/change-requests`);
-  revalidatePath(`/projects/${projectId}/dashboard`);
+  await writeAudit({
+    actor: user,
+    projectId: existing.projectId,
+    action: "update",
+    entityType: "ChangeRequest",
+    entityId: id,
+    summary: `Updated ${existing.crCode}`,
+    diff: { before: existing, changes: data },
+  });
+
+  revalidateCrLog(existing.projectId);
 }
 
-export async function deleteChangeRequest(id: string, projectId: string) {
-  await requireSession();
+export async function deleteChangeRequest(id: string, _projectId: string) {
+  const existing = await prisma.changeRequest.findUniqueOrThrow({ where: { id } });
+  const user = await requireModuleWrite(existing.projectId, "CR_LOG");
+
   await prisma.changeRequest.delete({ where: { id } });
-  revalidatePath(`/projects/${projectId}/change-requests`);
-  revalidatePath(`/projects/${projectId}/dashboard`);
+
+  await writeAudit({
+    actor: user,
+    projectId: existing.projectId,
+    action: "delete",
+    entityType: "ChangeRequest",
+    entityId: id,
+    summary: `Deleted ${existing.crCode}`,
+    diff: { before: existing },
+  });
+
+  revalidateCrLog(existing.projectId);
 }

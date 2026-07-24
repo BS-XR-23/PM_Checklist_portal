@@ -1,11 +1,14 @@
 "use client";
 
 import { InlineText, InlineDate, InlineSelect } from "@/components/ui/inline-edit";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { STATUS_COLORS, SLIPPED_FLAG_COLOR } from "@/lib/colors";
 import { ITEM_STATUSES, type ChecklistType, type ItemStatus } from "@/lib/constants";
-import { formatPct, toDateInputValue } from "@/lib/format";
+import { formatPct, formatDate, toDateInputValue } from "@/lib/format";
 import { isSlipped } from "@/lib/calculations";
 import { updateChecklistItem } from "@/app/projects/[projectId]/checklist-actions";
+import { TpmOverrideChecklistModal } from "@/components/rbac/tpm-override-checklist-modal";
+import type { AccessLevel, Role } from "@prisma/client";
 
 export type ChecklistTableItem = {
   id: string;
@@ -17,7 +20,7 @@ export type ChecklistTableItem = {
   plannedDate: Date | null;
   forecastDate: Date | null;
   status: string;
-  notes: string | null;
+  notes: string | null; // null when stripped by READ_LIMITED access
 };
 
 export function ChecklistTable({
@@ -26,13 +29,21 @@ export function ChecklistTable({
   items,
   stageOrder,
   stageLabel = "Stage",
+  access,
+  viewerRole,
 }: {
   projectId: string;
   checklistType: ChecklistType;
   items: ChecklistTableItem[];
   stageOrder: readonly string[];
   stageLabel?: string;
+  access: AccessLevel;
+  viewerRole: Role;
 }) {
+  const canWrite = access === "WRITE";
+  const notesHidden = access === "READ_LIMITED";
+  const canOverride = viewerRole === "TPM" && access === "READ_FULL";
+
   const groups = stageOrder
     .map((stage) => ({ stage, rows: items.filter((i) => i.stage === stage) }))
     .filter((g) => g.rows.length > 0);
@@ -62,7 +73,8 @@ export function ChecklistTable({
                     <th className="px-3 py-2 font-medium w-40">Planned Date</th>
                     <th className="px-3 py-2 font-medium w-40">Forecast Date</th>
                     <th className="px-3 py-2 font-medium w-36">Status</th>
-                    <th className="px-3 py-2 font-medium min-w-[200px]">Notes</th>
+                    {!notesHidden && <th className="px-3 py-2 font-medium min-w-[200px]">Notes</th>}
+                    {canOverride && <th className="px-3 py-2 font-medium w-24" />}
                   </tr>
                 </thead>
                 <tbody>
@@ -79,56 +91,87 @@ export function ChecklistTable({
                             </span>
                           )}
                         </td>
-                        <td className="px-3 py-1.5">
-                          <InlineText
-                            value={item.owner ?? ""}
-                            placeholder="—"
-                            onSave={(v) => updateChecklistItem(item.id, projectId, checklistType, { owner: v })}
-                          />
-                        </td>
-                        <td className="px-3 py-1.5">
-                          <InlineDate
-                            value={toDateInputValue(item.plannedDate)}
-                            onSave={(v) => updateChecklistItem(item.id, projectId, checklistType, { plannedDate: v })}
-                          />
-                        </td>
-                        <td className="px-3 py-1.5">
-                          <div className="flex items-center gap-1">
-                            <InlineDate
-                              value={toDateInputValue(item.forecastDate)}
-                              onSave={(v) => updateChecklistItem(item.id, projectId, checklistType, { forecastDate: v })}
-                            />
-                            {slipped && (
-                              <span
-                                title="Forecast Date has slipped past Planned Date"
-                                className="text-xs font-bold shrink-0"
-                                style={{ color: SLIPPED_FLAG_COLOR }}
-                              >
-                                ⚠
-                              </span>
+                        {canWrite ? (
+                          <>
+                            <td className="px-3 py-1.5">
+                              <InlineText
+                                value={item.owner ?? ""}
+                                placeholder="—"
+                                onSave={(v) => updateChecklistItem(item.id, projectId, checklistType, { owner: v })}
+                              />
+                            </td>
+                            <td className="px-3 py-1.5">
+                              <InlineDate
+                                value={toDateInputValue(item.plannedDate)}
+                                onSave={(v) => updateChecklistItem(item.id, projectId, checklistType, { plannedDate: v })}
+                              />
+                            </td>
+                            <td className="px-3 py-1.5">
+                              <div className="flex items-center gap-1">
+                                <InlineDate
+                                  value={toDateInputValue(item.forecastDate)}
+                                  onSave={(v) => updateChecklistItem(item.id, projectId, checklistType, { forecastDate: v })}
+                                />
+                                {slipped && (
+                                  <span
+                                    title="Forecast Date has slipped past Planned Date"
+                                    className="text-xs font-bold shrink-0"
+                                    style={{ color: SLIPPED_FLAG_COLOR }}
+                                  >
+                                    ⚠
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-3 py-1.5">
+                              <InlineSelect
+                                value={item.status}
+                                options={ITEM_STATUSES}
+                                renderOption={(s) => STATUS_COLORS[s as ItemStatus].label}
+                                className="w-full rounded px-2 py-1 text-xs font-medium border-0 focus:outline-none focus:ring-1 focus:ring-slate-400 cursor-pointer"
+                                style={{
+                                  backgroundColor: STATUS_COLORS[item.status as ItemStatus].bg,
+                                  color: STATUS_COLORS[item.status as ItemStatus].text,
+                                }}
+                                onSave={(v) => updateChecklistItem(item.id, projectId, checklistType, { status: v as ItemStatus })}
+                              />
+                            </td>
+                          </>
+                        ) : (
+                          <>
+                            <td className="px-3 py-1.5 text-slate-600">{item.owner || "—"}</td>
+                            <td className="px-3 py-1.5 text-slate-600 whitespace-nowrap">{formatDate(item.plannedDate)}</td>
+                            <td className="px-3 py-1.5 text-slate-600 whitespace-nowrap">
+                              {formatDate(item.forecastDate)}
+                              {slipped && (
+                                <span title="Forecast Date has slipped past Planned Date" className="ml-1 text-xs font-bold" style={{ color: SLIPPED_FLAG_COLOR }}>
+                                  ⚠
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-3 py-1.5">
+                              <StatusBadge status={item.status as ItemStatus} />
+                            </td>
+                          </>
+                        )}
+                        {!notesHidden && (
+                          <td className="px-3 py-1.5">
+                            {canWrite ? (
+                              <InlineText
+                                value={item.notes ?? ""}
+                                placeholder="—"
+                                onSave={(v) => updateChecklistItem(item.id, projectId, checklistType, { notes: v })}
+                              />
+                            ) : (
+                              <span className="text-slate-600">{item.notes || "—"}</span>
                             )}
-                          </div>
-                        </td>
-                        <td className="px-3 py-1.5">
-                          <InlineSelect
-                            value={item.status}
-                            options={ITEM_STATUSES}
-                            renderOption={(s) => STATUS_COLORS[s as ItemStatus].label}
-                            className="w-full rounded px-2 py-1 text-xs font-medium border-0 focus:outline-none focus:ring-1 focus:ring-slate-400 cursor-pointer"
-                            style={{
-                              backgroundColor: STATUS_COLORS[item.status as ItemStatus].bg,
-                              color: STATUS_COLORS[item.status as ItemStatus].text,
-                            }}
-                            onSave={(v) => updateChecklistItem(item.id, projectId, checklistType, { status: v as ItemStatus })}
-                          />
-                        </td>
-                        <td className="px-3 py-1.5">
-                          <InlineText
-                            value={item.notes ?? ""}
-                            placeholder="—"
-                            onSave={(v) => updateChecklistItem(item.id, projectId, checklistType, { notes: v })}
-                          />
-                        </td>
+                          </td>
+                        )}
+                        {canOverride && (
+                          <td className="px-3 py-1.5">
+                            <TpmOverrideChecklistModal projectId={projectId} checklistType={checklistType} item={item} />
+                          </td>
+                        )}
                       </tr>
                     );
                   })}

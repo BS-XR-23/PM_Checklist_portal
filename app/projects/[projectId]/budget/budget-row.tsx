@@ -2,7 +2,7 @@
 
 import { useTransition } from "react";
 import { InlineDate, InlineNumber, InlinePercent, InlineText } from "@/components/ui/inline-edit";
-import { formatMoney, toDateInputValue } from "@/lib/format";
+import { formatMoney, formatDate, formatPct, toDateInputValue } from "@/lib/format";
 import { INDEX_FAVORABLE_COLOR, INDEX_UNFAVORABLE_COLOR } from "@/lib/colors";
 import type { EvmPoint } from "@/lib/calculations";
 import { updateBudgetEntry, deleteBudgetEntry } from "./budget-actions";
@@ -26,8 +26,45 @@ function IndexValue({ value }: { value: number | null }) {
   );
 }
 
-export function BudgetRow({ projectId, entry, evm }: { projectId: string; entry: BudgetEntryData; evm: EvmPoint }) {
+export function BudgetRow({
+  projectId,
+  entry,
+  evm,
+  canWrite,
+  costHidden,
+}: {
+  projectId: string;
+  entry: BudgetEntryData;
+  evm: EvmPoint;
+  canWrite: boolean;
+  costHidden: boolean;
+}) {
   const [pending, startTransition] = useTransition();
+
+  if (!canWrite) {
+    return (
+      <tr className="border-b border-slate-50 last:border-0 align-top">
+        <td className="px-3 py-1.5 text-slate-600 whitespace-nowrap">{formatDate(entry.weekEnding)}</td>
+        <td className="px-3 py-1.5 text-slate-600">{formatPct(entry.pctPlannedComplete)}</td>
+        <td className="px-3 py-1.5 text-slate-600">{formatPct(entry.pctActualComplete)}</td>
+        <td className="px-3 py-1.5 text-slate-600 whitespace-nowrap">{formatMoney(evm.pv)}</td>
+        <td className="px-3 py-1.5 text-slate-600 whitespace-nowrap">{formatMoney(evm.ev)}</td>
+        {!costHidden && <td className="px-3 py-1.5 text-slate-600 whitespace-nowrap">{formatMoney(entry.actualCost)}</td>}
+        {!costHidden && <td className="px-3 py-1.5 text-slate-600 whitespace-nowrap">{formatMoney(evm.cv)}</td>}
+        {!costHidden && (
+          <td className="px-3 py-1.5 whitespace-nowrap">
+            <IndexValue value={evm.spi} />
+          </td>
+        )}
+        {!costHidden && (
+          <td className="px-3 py-1.5 whitespace-nowrap">
+            <IndexValue value={evm.cpi} />
+          </td>
+        )}
+        <td className="px-3 py-1.5 text-slate-600">{entry.notes || "—"}</td>
+      </tr>
+    );
+  }
 
   return (
     <tr className="border-b border-slate-50 last:border-0 align-top">

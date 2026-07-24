@@ -1,12 +1,20 @@
 import { prisma } from "@/lib/prisma";
 import { ChecklistTable } from "@/components/checklist/checklist-table";
 import { PM_STAGES } from "@/lib/seed-data";
+import { requireModuleAccess, getCurrentUser } from "@/lib/rbac";
 
 export default async function PmChecklistPage({ params }: { params: { projectId: string } }) {
+  const [access, user] = await Promise.all([
+    requireModuleAccess(params.projectId, "PM_CHECKLIST", "READ_LIMITED"),
+    getCurrentUser(),
+  ]);
+
   const items = await prisma.checklistItem.findMany({
     where: { projectId: params.projectId, type: "PM" },
     orderBy: { order: "asc" },
   });
+
+  const visibleItems = access === "READ_LIMITED" ? items.map((i) => ({ ...i, notes: null })) : items;
 
   return (
     <div>
@@ -17,9 +25,11 @@ export default async function PmChecklistPage({ params }: { params: { projectId:
       <ChecklistTable
         projectId={params.projectId}
         checklistType="PM"
-        items={items}
+        items={visibleItems}
         stageOrder={PM_STAGES}
         stageLabel="Stage"
+        access={access}
+        viewerRole={user!.role}
       />
     </div>
   );

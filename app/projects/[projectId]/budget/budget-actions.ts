@@ -1,30 +1,29 @@
 "use server";
 
-import { getServerSession } from "next-auth";
-import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { parseDateInput } from "@/lib/format";
+import { requireModuleWrite, writeAudit } from "@/lib/rbac";
 
-async function requireSession() {
-  const session = await getServerSession(authOptions);
-  if (!session) redirect("/login");
-  return session;
+function revalidateBudget(projectId: string) {
+  revalidatePath(`/projects/${projectId}/budget`);
+  revalidatePath(`/projects/${projectId}/dashboard`);
+  revalidatePath(`/projects/${projectId}/activity`);
 }
 
 export async function createBudgetEntry(projectId: string) {
-  await requireSession();
+  const user = await requireModuleWrite(projectId, "BUDGET_TRACKER");
 
   const last = await prisma.budgetEntry.findFirst({ where: { projectId }, orderBy: { weekEnding: "desc" } });
   const nextWeek = last ? new Date(last.weekEnding.getTime() + 7 * 24 * 60 * 60 * 1000) : new Date();
 
-  await prisma.budgetEntry.create({
+  const created = await prisma.budgetEntry.create({
     data: { projectId, weekEnding: nextWeek, pctPlannedComplete: 0, pctActualComplete: 0, actualCost: 0 },
   });
 
-  revalidatePath(`/projects/${projectId}/budget`);
-  revalidatePath(`/projects/${projectId}/dashboard`);
+  await writeAudit({ actor: user, projectId, action: "create", entityType: "BudgetEntry", entityId: created.id, summary: "Added a weekly budget entry" });
+
+  revalidateBudget(projectId);
 }
 
 export async function updateBudgetEntry(
@@ -32,7 +31,9 @@ export async function updateBudgetEntry(
   projectId: string,
   data: Partial<{ weekEnding: string; pctPlannedComplete: number; pctActualComplete: number; actualCost: number; notes: string }>
 ) {
-  await requireSession();
+  // Guessed-ID fix: authorize against the entry's real project.
+  const existing = await prisma.budgetEntry.findUniqueOrThrow({ where: { id } });
+  const user = await requireModuleWrite(existing.projectId, "BUDGET_TRACKER");
 
   await prisma.budgetEntry.update({
     where: { id },
@@ -45,13 +46,34 @@ export async function updateBudgetEntry(
     },
   });
 
-  revalidatePath(`/projects/${projectId}/budget`);
-  revalidatePath(`/projects/${projectId}/dashboard`);
+  await writeAudit({
+    actor: user,
+    projectId: existing.projectId,
+    action: "update",
+    entityType: "BudgetEntry",
+    entityId: id,
+    summary: `Updated budget entry for week ending ${existing.weekEnding.toISOString().slice(0, 10)}`,
+    diff: { before: existing, changes: data },
+  });
+
+  revalidateBudget(existing.projectId);
 }
 
-export async function deleteBudgetEntry(id: string, projectId: string) {
-  await requireSession();
+export async function deleteBudgetEntry(id: string, _projectId: string) {
+  const existing = await prisma.budgetEntry.findUniqueOrThrow({ where: { id } });
+  const user = await requireModuleWrite(existing.projectId, "BUDGET_TRACKER");
+
   await prisma.budgetEntry.delete({ where: { id } });
-  revalidatePath(`/projects/${projectId}/budget`);
-  revalidatePath(`/projects/${projectId}/dashboard`);
+
+  await writeAudit({
+    actor: user,
+    projectId: existing.projectId,
+    action: "delete",
+    entityType: "BudgetEntry",
+    entityId: id,
+    summary: `Deleted budget entry for week ending ${existing.weekEnding.toISOString().slice(0, 10)}`,
+    diff: { before: existing },
+  });
+
+  revalidateBudget(existing.projectId);
 }

@@ -1,6 +1,7 @@
 import { getDashboardData } from "@/lib/dashboard-data";
 import { formatPct, formatMoney, formatDate } from "@/lib/format";
 import { STATUS_COLORS, INDEX_FAVORABLE_COLOR, INDEX_UNFAVORABLE_COLOR } from "@/lib/colors";
+import { requireModuleAccess } from "@/lib/rbac";
 import { StatTile } from "@/components/ui/stat-tile";
 import { StatusPieChart } from "@/components/charts/status-pie-chart";
 import { CompletionBarChart } from "@/components/charts/completion-bar-chart";
@@ -8,6 +9,11 @@ import { EvmLineChart } from "@/components/charts/evm-line-chart";
 import { TimelineStrip } from "@/components/dashboard/timeline-strip";
 
 export default async function DashboardPage({ params }: { params: { projectId: string } }) {
+  const access = await requireModuleAccess(params.projectId, "DASHBOARD", "READ_LIMITED");
+  // READ_LIMITED (the Client default): overall progress only — no financial/
+  // risk snapshot, no cost-bearing budget-burn chart.
+  const financialsVisible = access !== "READ_LIMITED";
+
   const data = await getDashboardData(params.projectId);
   const { financial } = data;
 
@@ -28,19 +34,21 @@ export default async function DashboardPage({ params }: { params: { projectId: s
         </div>
       </div>
 
-      <div className="grid sm:grid-cols-3 lg:grid-cols-5 gap-4">
-        <StatTile label="Latest SPI" value={financial.latestSpi != null ? financial.latestSpi.toFixed(2) : "—"} valueColor={financial.latestSpi != null ? (financial.latestSpi >= 1 ? INDEX_FAVORABLE_COLOR : INDEX_UNFAVORABLE_COLOR) : undefined} />
-        <StatTile label="Latest CPI" value={financial.latestCpi != null ? financial.latestCpi.toFixed(2) : "—"} valueColor={financial.latestCpi != null ? (financial.latestCpi >= 1 ? INDEX_FAVORABLE_COLOR : INDEX_UNFAVORABLE_COLOR) : undefined} />
-        <StatTile label="Open High Risks" value={String(financial.openHighRisks)} valueColor={financial.openHighRisks > 0 ? INDEX_UNFAVORABLE_COLOR : undefined} />
-        <StatTile label="Active CR Value (man-days)" value={String(financial.activeCRValue)} />
-        <StatTile
-          label="Next Payment Due"
-          value={financial.nextPaymentDue ? formatDate(financial.nextPaymentDue) : "—"}
-          hint={financial.nextPaymentDue ? formatMoney(financial.nextPaymentAmount) : undefined}
-        />
-      </div>
+      {financialsVisible && (
+        <div className="grid sm:grid-cols-3 lg:grid-cols-5 gap-4">
+          <StatTile label="Latest SPI" value={financial.latestSpi != null ? financial.latestSpi.toFixed(2) : "—"} valueColor={financial.latestSpi != null ? (financial.latestSpi >= 1 ? INDEX_FAVORABLE_COLOR : INDEX_UNFAVORABLE_COLOR) : undefined} />
+          <StatTile label="Latest CPI" value={financial.latestCpi != null ? financial.latestCpi.toFixed(2) : "—"} valueColor={financial.latestCpi != null ? (financial.latestCpi >= 1 ? INDEX_FAVORABLE_COLOR : INDEX_UNFAVORABLE_COLOR) : undefined} />
+          <StatTile label="Open High Risks" value={String(financial.openHighRisks)} valueColor={financial.openHighRisks > 0 ? INDEX_UNFAVORABLE_COLOR : undefined} />
+          <StatTile label="Active CR Value (man-days)" value={String(financial.activeCRValue)} />
+          <StatTile
+            label="Next Payment Due"
+            value={financial.nextPaymentDue ? formatDate(financial.nextPaymentDue) : "—"}
+            hint={financial.nextPaymentDue ? formatMoney(financial.nextPaymentAmount) : undefined}
+          />
+        </div>
+      )}
 
-      <div className="grid lg:grid-cols-3 gap-4">
+      <div className={financialsVisible ? "grid lg:grid-cols-3 gap-4" : "grid lg:grid-cols-2 gap-4"}>
         <div className="rounded-lg border border-slate-200 bg-white p-4">
           <h3 className="text-sm font-semibold text-slate-700 mb-2">Status Breakdown (All Checklists)</h3>
           <StatusPieChart data={data.statusBreakdown} />
@@ -49,10 +57,12 @@ export default async function DashboardPage({ params }: { params: { projectId: s
           <h3 className="text-sm font-semibold text-slate-700 mb-2">% Complete by Checklist</h3>
           <CompletionBarChart data={data.perChecklistSummary.map((c) => ({ name: c.name, pct: c.pct }))} />
         </div>
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <h3 className="text-sm font-semibold text-slate-700 mb-2">Budget Burn (PV / EV / AC)</h3>
-          <EvmLineChart data={data.evmChartData} />
-        </div>
+        {financialsVisible && (
+          <div className="rounded-lg border border-slate-200 bg-white p-4">
+            <h3 className="text-sm font-semibold text-slate-700 mb-2">Budget Burn (PV / EV / AC)</h3>
+            <EvmLineChart data={data.evmChartData} />
+          </div>
+        )}
       </div>
 
       <div className="grid lg:grid-cols-2 gap-4">

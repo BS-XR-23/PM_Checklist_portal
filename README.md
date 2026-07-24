@@ -17,6 +17,29 @@ Every project you create gets a fresh instance of all 8 modules. Status colors, 
 Forecast-slipped-past-Planned flag, risk severity, and SPI/CPI favorability all use
 the exact hex values from the source spreadsheet's conditional formatting.
 
+## Roles & access
+
+Six roles, enforced server-side (not just hidden UI): **Admin** (full control, manages
+users/roles/projects), **TPM** (read-everywhere, writes only through the Escalations
+tab or an explicit "TPM Override" — always logged and tagged distinctly from a PM's
+own edits), **Program Manager** (portfolio-only RAG rollup at `/portfolio`, never
+project detail), **Client** (hard-isolated to their assigned project(s), locked-down
+default visibility — no Risk Register/CR Log/Budget, no internal notes), **PM**
+(full read/write on their assigned project(s) only), **Limited** (per-project,
+per-module access an Admin configures by hand, starts at nothing).
+
+`lib/rbac.ts` is the single authorization module every page and server action goes
+through — `Admin > Users` sets a user's global role; a project's `Team` tab assigns
+them to specific projects and (for Client/Limited) configures per-module access.
+Every write is recorded in `AuditLog`, visible per-project (`Activity` tab) and
+globally (`Admin > Audit Log`).
+
+```bash
+npm test              # unit tests (role x module matrix) + isolation integration test
+npm run test:unit      # just the fast, DB-free logic tests
+npm run test:isolation # just the Supabase-backed cross-project isolation test
+```
+
 ## Local development
 
 ```bash

@@ -4,7 +4,7 @@ import { useTransition } from "react";
 import { InlineText, InlineTextarea, InlineSelect, InlineDate, InlineNumber } from "@/components/ui/inline-edit";
 import { CR_TYPES, CR_SIGNOFF_STATUSES, CR_WBS_UPDATED, CR_STATUSES } from "@/lib/constants";
 import { crAmount } from "@/lib/calculations";
-import { formatMoney, toDateInputValue } from "@/lib/format";
+import { formatMoney, formatDate, toDateInputValue } from "@/lib/format";
 import { updateChangeRequest, deleteChangeRequest } from "./cr-actions";
 
 export type CrRowData = {
@@ -15,7 +15,7 @@ export type CrRowData = {
   description: string | null;
   manDaysPlanned: number | null;
   billableManDays: number | null;
-  rate: number | null;
+  rate: number | null; // null when stripped by READ_LIMITED access
   type: string;
   clientSignoff: string;
   wbsUpdated: string;
@@ -23,9 +23,39 @@ export type CrRowData = {
   notes: string | null;
 };
 
-export function CrRow({ projectId, cr }: { projectId: string; cr: CrRowData }) {
+export function CrRow({
+  projectId,
+  cr,
+  canWrite,
+  financialsHidden,
+}: {
+  projectId: string;
+  cr: CrRowData;
+  canWrite: boolean;
+  financialsHidden: boolean;
+}) {
   const [pending, startTransition] = useTransition();
   const amount = crAmount(cr.billableManDays, cr.rate);
+
+  if (!canWrite) {
+    return (
+      <tr className="border-b border-slate-50 last:border-0 align-top">
+        <td className="px-3 py-1.5 text-slate-500 whitespace-nowrap font-medium">{cr.crCode}</td>
+        <td className="px-3 py-1.5 text-slate-800">{cr.title}</td>
+        <td className="px-3 py-1.5 text-slate-600 whitespace-nowrap">{formatDate(cr.dateRaised)}</td>
+        <td className="px-3 py-1.5 text-slate-600">{cr.description || "—"}</td>
+        <td className="px-3 py-1.5 text-slate-600">{cr.manDaysPlanned ?? "—"}</td>
+        <td className="px-3 py-1.5 text-slate-600">{cr.billableManDays ?? "—"}</td>
+        {!financialsHidden && <td className="px-3 py-1.5 text-slate-600">{cr.rate ?? "—"}</td>}
+        {!financialsHidden && <td className="px-3 py-1.5 text-slate-700 whitespace-nowrap">{amount == null ? "—" : formatMoney(amount)}</td>}
+        <td className="px-3 py-1.5 text-slate-600">{cr.type}</td>
+        <td className="px-3 py-1.5 text-slate-600">{cr.clientSignoff}</td>
+        <td className="px-3 py-1.5 text-slate-600">{cr.wbsUpdated}</td>
+        <td className="px-3 py-1.5 text-slate-600">{cr.status}</td>
+        <td className="px-3 py-1.5 text-slate-600">{cr.notes || "—"}</td>
+      </tr>
+    );
+  }
 
   return (
     <tr className="border-b border-slate-50 last:border-0 align-top">

@@ -1,14 +1,15 @@
 "use server";
 
-import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { authOptions } from "@/lib/auth";
 import { createProject } from "@/lib/create-project";
+import { requireUser, writeAudit } from "@/lib/rbac";
 
 export async function createProjectAction(formData: FormData) {
-  const session = await getServerSession(authOptions);
-  if (!session) redirect("/login");
+  const user = await requireUser();
+  if (user.role !== "ADMIN") {
+    throw new Error("Only an Admin can create projects.");
+  }
 
   const name = String(formData.get("name") ?? "").trim();
   if (!name) throw new Error("Project name is required.");
@@ -18,6 +19,15 @@ export async function createProjectAction(formData: FormData) {
   const plannedManDays = Number(formData.get("plannedManDays") ?? 0);
 
   const project = await createProject({ name, client, contractValue, plannedManDays });
+
+  await writeAudit({
+    actor: user,
+    projectId: project.id,
+    action: "create",
+    entityType: "Project",
+    entityId: project.id,
+    summary: `Created project "${project.name}"`,
+  });
 
   revalidatePath("/projects");
   redirect(`/projects/${project.id}/dashboard`);

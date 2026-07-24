@@ -12,7 +12,7 @@ export type MilestoneRowData = {
   paymentPct: number;
   invoiceStatus: string;
   clientSignoff: string;
-  notes: string | null;
+  notes: string | null; // null when stripped by READ_LIMITED access
   sourceChecklist: string;
   stage: string;
   milestoneName: string;
@@ -24,10 +24,14 @@ export function MilestoneRow({
   projectId,
   contractValue,
   milestone,
+  canWrite,
+  notesHidden,
 }: {
   projectId: string;
   contractValue: number;
   milestone: MilestoneRowData;
+  canWrite: boolean;
+  notesHidden: boolean;
 }) {
   const statusColor = STATUS_COLORS[milestone.status];
 
@@ -45,36 +49,44 @@ export function MilestoneRow({
           {statusColor.label}
         </span>
       </td>
-      <td className="px-3 py-1.5">
-        <InlinePercent
-          value={milestone.paymentPct}
-          onSave={(v) => updateMilestonePayment(milestone.id, projectId, { paymentPct: v })}
-        />
-      </td>
-      <td className="px-3 py-1.5 text-slate-700 whitespace-nowrap">
-        {formatMoney(trancheAmount(contractValue, milestone.paymentPct))}
-      </td>
-      <td className="px-3 py-1.5">
-        <InlineSelect
-          value={milestone.invoiceStatus}
-          options={INVOICE_STATUSES}
-          onSave={(v) => updateMilestonePayment(milestone.id, projectId, { invoiceStatus: v })}
-        />
-      </td>
-      <td className="px-3 py-1.5">
-        <InlineSelect
-          value={milestone.clientSignoff}
-          options={SIGNOFF_STATUSES}
-          onSave={(v) => updateMilestonePayment(milestone.id, projectId, { clientSignoff: v })}
-        />
-      </td>
-      <td className="px-3 py-1.5">
-        <InlineText
-          value={milestone.notes ?? ""}
-          placeholder="—"
-          onSave={(v) => updateMilestonePayment(milestone.id, projectId, { notes: v })}
-        />
-      </td>
+      {canWrite ? (
+        <>
+          <td className="px-3 py-1.5">
+            <InlinePercent value={milestone.paymentPct} onSave={(v) => updateMilestonePayment(milestone.id, projectId, { paymentPct: v })} />
+          </td>
+          <td className="px-3 py-1.5 text-slate-700 whitespace-nowrap">{formatMoney(trancheAmount(contractValue, milestone.paymentPct))}</td>
+          <td className="px-3 py-1.5">
+            <InlineSelect
+              value={milestone.invoiceStatus}
+              options={INVOICE_STATUSES}
+              onSave={(v) => updateMilestonePayment(milestone.id, projectId, { invoiceStatus: v })}
+            />
+          </td>
+          <td className="px-3 py-1.5">
+            <InlineSelect
+              value={milestone.clientSignoff}
+              options={SIGNOFF_STATUSES}
+              onSave={(v) => updateMilestonePayment(milestone.id, projectId, { clientSignoff: v })}
+            />
+          </td>
+        </>
+      ) : (
+        <>
+          <td className="px-3 py-1.5 text-slate-600">{Math.round(milestone.paymentPct * 1000) / 10}%</td>
+          <td className="px-3 py-1.5 text-slate-700 whitespace-nowrap">{formatMoney(trancheAmount(contractValue, milestone.paymentPct))}</td>
+          <td className="px-3 py-1.5 text-slate-600">{milestone.invoiceStatus}</td>
+          <td className="px-3 py-1.5 text-slate-600">{milestone.clientSignoff}</td>
+        </>
+      )}
+      {!notesHidden && (
+        <td className="px-3 py-1.5">
+          {canWrite ? (
+            <InlineText value={milestone.notes ?? ""} placeholder="—" onSave={(v) => updateMilestonePayment(milestone.id, projectId, { notes: v })} />
+          ) : (
+            <span className="text-slate-600">{milestone.notes || "—"}</span>
+          )}
+        </td>
+      )}
     </tr>
   );
 }

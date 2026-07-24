@@ -8,12 +8,44 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
+enum Role {
+  ADMIN
+  TPM
+  PROGRAM_MANAGER
+  CLIENT
+  PM
+  LIMITED
+}
+
+enum ModuleName {
+  DASHBOARD
+  PM_CHECKLIST
+  DEVOPS_CHECKLIST
+  MILESTONES
+  RISK_REGISTER
+  CR_LOG
+  BUDGET_TRACKER
+  PM_PLAN
+}
+
+enum AccessLevel {
+  NONE
+  READ_LIMITED
+  READ_FULL
+  WRITE
+}
+
 model User {
   id           String   @id @default(cuid())
   email        String   @unique
   passwordHash String
   name         String
+  role         Role     @default(LIMITED)
   createdAt    DateTime @default(now())
+
+  memberships      ProjectMembership[]
+  auditLogs        AuditLog[]
+  escalationsRaised EscalationItem[]
 }
 
 model Project {
@@ -31,6 +63,69 @@ model Project {
   changeRequests  ChangeRequest[]
   budgetEntries   BudgetEntry[]
   pmPlan          PMPlan?
+  memberships     ProjectMembership[]
+  auditLogs       AuditLog[]
+  escalations     EscalationItem[]
+}
+
+/// A user's access to one specific project. Only meaningful for PM/CLIENT/LIMITED
+/// roles — ADMIN/TPM/PROGRAM_MANAGER get their scope from their global Role alone
+/// and don't need a row here.
+model ProjectMembership {
+  id        String   @id @default(cuid())
+  userId    String
+  projectId String
+  role      Role
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  permissions ModulePermission[]
+
+  @@unique([userId, projectId])
+}
+
+/// Per-module access override, consulted only for CLIENT / LIMITED members.
+/// Absence of a row means NONE (secure by default).
+model ModulePermission {
+  id           String            @id @default(cuid())
+  membershipId String
+  membership   ProjectMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  module       ModuleName
+  access       AccessLevel
+
+  @@unique([membershipId, module])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String
+  actor      User     @relation(fields: [actorId], references: [id])
+  actorRole  Role
+  projectId  String?
+  project    Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  action     String
+  entityType String
+  entityId   String?
+  summary    String
+  diff       Json?
+  isOverride Boolean  @default(false)
+  createdAt  DateTime @default(now())
+}
+
+/// TPM's dedicated write surface — deliberately never touches the 7 project-data
+/// tables, so a TPM cannot silently edit a PM's checklist/milestone/risk/CR/budget.
+model EscalationItem {
+  id          String   @id @default(cuid())
+  projectId   String?
+  project     Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  type        String
+  title       String
+  notes       String?
+  status      String   @default("Open")
+  createdById String
+  createdBy   User     @relation(fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
 }
 
 model ChecklistItem {

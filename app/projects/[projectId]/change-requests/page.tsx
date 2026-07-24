@@ -1,15 +1,21 @@
 import { prisma } from "@/lib/prisma";
 import { computeCrKpis } from "@/lib/calculations";
+import { requireModuleAccess } from "@/lib/rbac";
 import { AddCrButton } from "./add-cr-button";
 import { CrRow } from "./cr-row";
 
 export default async function CrLogPage({ params }: { params: { projectId: string } }) {
+  const access = await requireModuleAccess(params.projectId, "CR_LOG", "READ_LIMITED");
+  const canWrite = access === "WRITE";
+  const financialsHidden = access === "READ_LIMITED";
+
   const crs = await prisma.changeRequest.findMany({
     where: { projectId: params.projectId },
     orderBy: { crCode: "asc" },
   });
 
   const kpis = computeCrKpis(crs);
+  const visibleCrs = financialsHidden ? crs.map((cr) => ({ ...cr, rate: null })) : crs;
 
   return (
     <div className="space-y-4">
@@ -21,7 +27,7 @@ export default async function CrLogPage({ params }: { params: { projectId: strin
             (Planning stage).
           </p>
         </div>
-        <AddCrButton projectId={params.projectId} />
+        {canWrite && <AddCrButton projectId={params.projectId} />}
       </div>
 
       <div className="grid sm:grid-cols-3 gap-4">
@@ -40,19 +46,19 @@ export default async function CrLogPage({ params }: { params: { projectId: strin
               <th className="px-3 py-2 font-medium min-w-[180px]">Description</th>
               <th className="px-3 py-2 font-medium w-28">Man-Days Planned</th>
               <th className="px-3 py-2 font-medium w-28">Billable Man-Days</th>
-              <th className="px-3 py-2 font-medium w-20">Rate</th>
-              <th className="px-3 py-2 font-medium w-28">Amount</th>
+              {!financialsHidden && <th className="px-3 py-2 font-medium w-20">Rate</th>}
+              {!financialsHidden && <th className="px-3 py-2 font-medium w-28">Amount</th>}
               <th className="px-3 py-2 font-medium w-24">Type</th>
               <th className="px-3 py-2 font-medium w-32">Client Sign-off</th>
               <th className="px-3 py-2 font-medium w-24">WBS Updated</th>
               <th className="px-3 py-2 font-medium w-28">Status</th>
               <th className="px-3 py-2 font-medium min-w-[160px]">Notes</th>
-              <th className="px-3 py-2 font-medium w-8" />
+              {canWrite && <th className="px-3 py-2 font-medium w-8" />}
             </tr>
           </thead>
           <tbody>
-            {crs.map((cr) => (
-              <CrRow key={cr.id} projectId={params.projectId} cr={cr} />
+            {visibleCrs.map((cr) => (
+              <CrRow key={cr.id} projectId={params.projectId} cr={cr} canWrite={canWrite} financialsHidden={financialsHidden} />
             ))}
           </tbody>
         </table>

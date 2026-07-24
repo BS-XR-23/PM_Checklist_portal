@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { computeEvm, manDayRate } from "@/lib/calculations";
 import { formatMoney } from "@/lib/format";
+import { requireModuleAccess } from "@/lib/rbac";
 import { EvmLineChart } from "@/components/charts/evm-line-chart";
 import { SpiCpiChart } from "@/components/charts/spi-cpi-chart";
 import { ContractInputsForm } from "./contract-inputs-form";
@@ -8,6 +9,10 @@ import { AddEntryButton } from "./add-entry-button";
 import { BudgetRow } from "./budget-row";
 
 export default async function BudgetTrackerPage({ params }: { params: { projectId: string } }) {
+  const access = await requireModuleAccess(params.projectId, "BUDGET_TRACKER", "READ_LIMITED");
+  const canWrite = access === "WRITE";
+  const costHidden = access === "READ_LIMITED"; // strips AC / CV / SPI / CPI — cost-side detail
+
   const project = await prisma.project.findUniqueOrThrow({ where: { id: params.projectId } });
   const entries = await prisma.budgetEntry.findMany({
     where: { projectId: params.projectId },
@@ -36,28 +41,41 @@ export default async function BudgetTrackerPage({ params }: { params: { projectI
       </div>
 
       <div className="rounded-lg border border-slate-200 bg-white p-4">
-        <ContractInputsForm
-          projectId={project.id}
-          contractValue={project.contractValue}
-          plannedManDays={project.plannedManDays}
-        />
-        <p className="mt-2 text-xs text-slate-500">Man-Day Rate (auto): {formatMoney(rate)}</p>
+        {canWrite ? (
+          <>
+            <ContractInputsForm projectId={project.id} contractValue={project.contractValue} plannedManDays={project.plannedManDays} />
+            <p className="mt-2 text-xs text-slate-500">Man-Day Rate (auto): {formatMoney(rate)}</p>
+          </>
+        ) : (
+          <div className="grid sm:grid-cols-2 gap-4 max-w-md text-sm">
+            <div>
+              <p className="text-xs font-medium text-slate-600">Total Contract Value</p>
+              <p className="text-slate-800">{formatMoney(project.contractValue)}</p>
+            </div>
+            <div>
+              <p className="text-xs font-medium text-slate-600">Total Planned Man-Days</p>
+              <p className="text-slate-800">{project.plannedManDays}</p>
+            </div>
+          </div>
+        )}
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-4">
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <h3 className="text-sm font-semibold text-slate-700 mb-2">Budget Burn: PV vs EV vs AC</h3>
-          <EvmLineChart data={chartData} />
+      {!costHidden && (
+        <div className="grid lg:grid-cols-2 gap-4">
+          <div className="rounded-lg border border-slate-200 bg-white p-4">
+            <h3 className="text-sm font-semibold text-slate-700 mb-2">Budget Burn: PV vs EV vs AC</h3>
+            <EvmLineChart data={chartData} />
+          </div>
+          <div className="rounded-lg border border-slate-200 bg-white p-4">
+            <h3 className="text-sm font-semibold text-slate-700 mb-2">SPI / CPI Trend</h3>
+            <SpiCpiChart data={spiCpiData} />
+          </div>
         </div>
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <h3 className="text-sm font-semibold text-slate-700 mb-2">SPI / CPI Trend</h3>
-          <SpiCpiChart data={spiCpiData} />
-        </div>
-      </div>
+      )}
 
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-slate-700">Weekly Entries</h3>
-        <AddEntryButton projectId={project.id} />
+        {canWrite && <AddEntryButton projectId={project.id} />}
       </div>
 
       <div className="rounded-lg border border-slate-200 bg-white overflow-x-auto">
@@ -69,17 +87,17 @@ export default async function BudgetTrackerPage({ params }: { params: { projectI
               <th className="px-3 py-2 font-medium w-40">% Actual Complete (Cum.)</th>
               <th className="px-3 py-2 font-medium w-28">PV</th>
               <th className="px-3 py-2 font-medium w-28">EV</th>
-              <th className="px-3 py-2 font-medium w-32">AC (Actual Cost)</th>
-              <th className="px-3 py-2 font-medium w-28">CV (EV-AC)</th>
-              <th className="px-3 py-2 font-medium w-24">SPI</th>
-              <th className="px-3 py-2 font-medium w-24">CPI</th>
+              {!costHidden && <th className="px-3 py-2 font-medium w-32">AC (Actual Cost)</th>}
+              {!costHidden && <th className="px-3 py-2 font-medium w-28">CV (EV-AC)</th>}
+              {!costHidden && <th className="px-3 py-2 font-medium w-24">SPI</th>}
+              {!costHidden && <th className="px-3 py-2 font-medium w-24">CPI</th>}
               <th className="px-3 py-2 font-medium min-w-[160px]">Notes</th>
-              <th className="px-3 py-2 font-medium w-8" />
+              {canWrite && <th className="px-3 py-2 font-medium w-8" />}
             </tr>
           </thead>
           <tbody>
             {evm.map((e, i) => (
-              <BudgetRow key={entries[i].id} projectId={project.id} entry={entries[i]} evm={e} />
+              <BudgetRow key={entries[i].id} projectId={project.id} entry={entries[i]} evm={e} canWrite={canWrite} costHidden={costHidden} />
             ))}
           </tbody>
         </table>
