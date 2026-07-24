@@ -1,0 +1,197 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime @default(now())
+}
+
+model Project {
+  id             String   @id @default(cuid())
+  name           String
+  client         String?
+  contractValue  Float    @default(0)
+  plannedManDays Float    @default(0)
+  crRate         Float    @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  checklistItems  ChecklistItem[]
+  risks           RiskItem[]
+  changeRequests  ChangeRequest[]
+  budgetEntries   BudgetEntry[]
+  pmPlan          PMPlan?
+}
+
+model ChecklistItem {
+  id            String    @id @default(cuid())
+  projectId     String
+  project       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  type          String // "PM" | "DEVOPS" -- see lib/constants.ts
+  order         Int
+  stage         String
+  itemText      String
+  milestoneName String?
+  owner         String?
+  plannedDate   DateTime?
+  forecastDate  DateTime?
+  status        String    @default("NOT_STARTED") // see ItemStatus in lib/constants.ts
+  notes         String?
+
+  milestonePayment MilestonePayment?
+
+  @@unique([projectId, type, order])
+}
+
+model MilestonePayment {
+  id              String        @id @default(cuid())
+  checklistItemId String        @unique
+  checklistItem   ChecklistItem @relation(fields: [checklistItemId], references: [id], onDelete: Cascade)
+  paymentPct      Float         @default(0)
+  invoiceStatus   String        @default("Not Invoiced")
+  clientSignoff   String        @default("Pending")
+  notes           String?
+}
+
+model RiskItem {
+  id          String    @id @default(cuid())
+  projectId   String
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  type        String    @default("Risk")
+  category    String?
+  description String
+  probability String    @default("Medium")
+  impact      String    @default("Medium")
+  owner       String?
+  mitigation  String?
+  status      String    @default("Open")
+  dateRaised  DateTime?
+  dateClosed  DateTime?
+  notes       String?
+  order       Int       @default(0)
+}
+
+model ChangeRequest {
+  id              String    @id @default(cuid())
+  projectId       String
+  project         Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  crCode          String
+  title           String
+  dateRaised      DateTime?
+  description     String?
+  manDaysPlanned  Float?
+  billableManDays Float?
+  rate            Float?
+  type            String    @default("Paid")
+  clientSignoff   String    @default("Pending")
+  wbsUpdated      String    @default("No")
+  status          String    @default("Proposed")
+  notes           String?
+
+  @@unique([projectId, crCode])
+}
+
+model BudgetEntry {
+  id                 String   @id @default(cuid())
+  projectId          String
+  project            Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  weekEnding         DateTime
+  pctPlannedComplete Float
+  pctActualComplete  Float
+  actualCost         Float
+  notes              String?
+
+  @@unique([projectId, weekEnding])
+}
+
+model PMPlan {
+  id         String    @id @default(cuid())
+  projectId  String    @unique
+  project    Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  preparedBy String?
+  planDate   DateTime?
+  version    String    @default("1.0")
+  rationale  String?
+
+  charterObjective       String?
+  charterScopeIn         String?
+  charterScopeOut        String?
+  charterSuccessCriteria String?
+  charterTimeline        String?
+  charterBudget          String?
+  charterAssumptions     String?
+  charterPmAuthority     String?
+
+  methodApproach     String?
+  methodCadence      String?
+  methodCeremonies   String?
+  methodTools        String?
+  methodRoles        String?
+  methodChangeMgmt   String?
+
+  testLevels        String?
+  testEnvironments  String?
+  testEntryCriteria String?
+  testExitCriteria  String?
+  testDefectMgmt    String?
+  testUatProcess    String?
+  testDeliverables  String?
+
+  deployEnvironments    String?
+  deployReleaseStrategy String?
+  deploySteps           String?
+  deployRollback        String?
+  deployGoliveChecklist String?
+  deployMonitoring      String?
+
+  escalationPath String?
+
+  stakeholders StakeholderRow[]
+  commsRows    CommsRow[]
+  raciRows     RaciRow[]
+}
+
+model StakeholderRow {
+  id             String @id @default(cuid())
+  pmPlanId       String
+  pmPlan         PMPlan @relation(fields: [pmPlanId], references: [id], onDelete: Cascade)
+  order          Int
+  stakeholder    String
+  role           String
+  responsibility String
+  accessRequired String
+}
+
+model CommsRow {
+  id        String @id @default(cuid())
+  pmPlanId  String
+  pmPlan    PMPlan @relation(fields: [pmPlanId], references: [id], onDelete: Cascade)
+  order     Int
+  audience  String
+  frequency String
+  channel   String
+  content   String
+}
+
+model RaciRow {
+  id           String @id @default(cuid())
+  pmPlanId     String
+  pmPlan       PMPlan @relation(fields: [pmPlanId], references: [id], onDelete: Cascade)
+  order        Int
+  activity     String
+  pm           String
+  tl           String
+  ba           String
+  leadEng      String
+  creativeLead String
+}

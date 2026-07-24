@@ -1,0 +1,14 @@
+services:
+  portal:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?set your Supabase pooled connection string in .env}
+      DIRECT_URL: ${DIRECT_URL:?set your Supabase direct connection string in .env}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?set a long random string in .env}
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-}
+      SEED_ADMIN_NAME: ${SEED_ADMIN_NAME:-}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-}
+    restart: unless-stopped
