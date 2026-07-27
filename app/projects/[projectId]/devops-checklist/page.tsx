@@ -9,12 +9,17 @@ export default async function DevOpsChecklistPage({ params }: { params: { projec
     getCurrentUser(),
   ]);
 
-  const items = await prisma.checklistItem.findMany({
-    where: { projectId: params.projectId, type: "DEVOPS" },
-    orderBy: { order: "asc" },
-  });
+  const [items, people] = await Promise.all([
+    prisma.checklistItem.findMany({
+      where: { projectId: params.projectId, type: "DEVOPS" },
+      orderBy: { order: "asc" },
+      include: { ownerPerson: { select: { id: true, name: true } } },
+    }),
+    access === "WRITE" ? prisma.person.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }) : Promise.resolve([]),
+  ]);
 
-  const visibleItems = access === "READ_LIMITED" ? items.map((i) => ({ ...i, notes: null })) : items;
+  const withOwnerName = items.map((i) => ({ ...i, ownerPersonName: i.ownerPerson?.name ?? null }));
+  const visibleItems = access === "READ_LIMITED" ? withOwnerName.map((i) => ({ ...i, notes: null })) : withOwnerName;
 
   return (
     <div>
@@ -30,6 +35,7 @@ export default async function DevOpsChecklistPage({ params }: { params: { projec
         stageLabel="Category"
         access={access}
         viewerRole={user!.role}
+        people={people}
       />
     </div>
   );

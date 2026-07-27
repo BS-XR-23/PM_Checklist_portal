@@ -80,7 +80,7 @@ export async function addStakeholderRow(pmPlanId: string, _projectId: string) {
 export async function updateStakeholderRow(
   id: string,
   projectId: string,
-  data: Partial<{ stakeholder: string; role: string; responsibility: string; accessRequired: string }>
+  data: Partial<{ stakeholder: string; personId: string | null; role: string; responsibility: string; accessRequired: string }>
 ) {
   const existing = await prisma.stakeholderRow.findUniqueOrThrow({ where: { id }, include: { pmPlan: true } });
   const user = await requireModuleWrite(existing.pmPlan.projectId, "PM_PLAN");

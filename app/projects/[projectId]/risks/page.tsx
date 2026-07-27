@@ -7,10 +7,15 @@ export default async function RiskRegisterPage({ params }: { params: { projectId
   const access = await requireModuleAccess(params.projectId, "RISK_REGISTER", "READ_LIMITED");
   const canWrite = access === "WRITE";
 
-  const risks = await prisma.riskItem.findMany({
-    where: { projectId: params.projectId },
-    orderBy: { order: "asc" },
-  });
+  const [rawRisks, people] = await Promise.all([
+    prisma.riskItem.findMany({
+      where: { projectId: params.projectId },
+      orderBy: { order: "asc" },
+      include: { ownerPerson: { select: { id: true, name: true } } },
+    }),
+    canWrite ? prisma.person.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }) : Promise.resolve([]),
+  ]);
+  const risks = rawRisks.map((r) => ({ ...r, ownerPersonName: r.ownerPerson?.name ?? null }));
 
   return (
     <div className="space-y-4">
@@ -45,7 +50,7 @@ export default async function RiskRegisterPage({ params }: { params: { projectId
           </thead>
           <tbody>
             {risks.map((r) => (
-              <RiskRow key={r.id} projectId={params.projectId} risk={r} canWrite={canWrite} />
+              <RiskRow key={r.id} projectId={params.projectId} risk={r} canWrite={canWrite} people={people} />
             ))}
           </tbody>
         </table>

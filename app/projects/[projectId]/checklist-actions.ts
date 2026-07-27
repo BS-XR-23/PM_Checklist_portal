@@ -21,6 +21,7 @@ function revalidateChecklist(projectId: string, checklistType: ChecklistType) {
 
 type ChecklistUpdateData = Partial<{
   owner: string;
+  ownerPersonId: string | null;
   plannedDate: string | null;
   forecastDate: string | null;
   status: ItemStatus;
@@ -30,6 +31,7 @@ type ChecklistUpdateData = Partial<{
 function toPrismaData(data: ChecklistUpdateData) {
   return {
     ...(data.owner !== undefined ? { owner: data.owner || null } : {}),
+    ...(data.ownerPersonId !== undefined ? { ownerPersonId: data.ownerPersonId } : {}),
     ...(data.plannedDate !== undefined ? { plannedDate: parseDateInput(data.plannedDate) } : {}),
     ...(data.forecastDate !== undefined ? { forecastDate: parseDateInput(data.forecastDate) } : {}),
     ...(data.status !== undefined ? { status: data.status } : {}),

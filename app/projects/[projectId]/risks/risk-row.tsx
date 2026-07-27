@@ -6,6 +6,7 @@ import { RISK_LEVELS, RISK_TYPES, RISK_STATUSES } from "@/lib/constants";
 import { RISK_SEVERITY_COLORS, riskScoreSeverity } from "@/lib/colors";
 import { riskScore } from "@/lib/calculations";
 import { formatDate, toDateInputValue } from "@/lib/format";
+import { PersonPicker } from "@/components/resourcing/person-picker";
 import { updateRisk, deleteRisk } from "./risk-actions";
 
 export type RiskRowData = {
@@ -16,6 +17,8 @@ export type RiskRowData = {
   probability: string;
   impact: string;
   owner: string | null;
+  ownerPersonId: string | null;
+  ownerPersonName: string | null;
   mitigation: string | null;
   status: string;
   dateRaised: Date | null;
@@ -23,7 +26,17 @@ export type RiskRowData = {
   notes: string | null;
 };
 
-export function RiskRow({ projectId, risk, canWrite }: { projectId: string; risk: RiskRowData; canWrite: boolean }) {
+export function RiskRow({
+  projectId,
+  risk,
+  canWrite,
+  people,
+}: {
+  projectId: string;
+  risk: RiskRowData;
+  canWrite: boolean;
+  people: { id: string; name: string }[];
+}) {
   const [pending, startTransition] = useTransition();
   const score = riskScore(risk.probability, risk.impact);
   const severity = RISK_SEVERITY_COLORS[riskScoreSeverity(score)];
@@ -41,7 +54,7 @@ export function RiskRow({ projectId, risk, canWrite }: { projectId: string; risk
             {score}
           </span>
         </td>
-        <td className="px-3 py-1.5 text-slate-600">{risk.owner || "—"}</td>
+        <td className="px-3 py-1.5 text-slate-600">{risk.ownerPersonName || risk.owner || "—"}</td>
         <td className="px-3 py-1.5 text-slate-600">{risk.mitigation || "—"}</td>
         <td className="px-3 py-1.5 text-slate-600">{risk.status}</td>
         <td className="px-3 py-1.5 text-slate-600 whitespace-nowrap">{formatDate(risk.dateRaised)}</td>
@@ -81,7 +94,12 @@ export function RiskRow({ projectId, risk, canWrite }: { projectId: string; risk
         </span>
       </td>
       <td className="px-3 py-1.5">
-        <InlineText value={risk.owner ?? ""} onSave={(v) => updateRisk(risk.id, projectId, { owner: v })} />
+        <PersonPicker
+          personId={risk.ownerPersonId}
+          legacyText={risk.owner}
+          people={people}
+          onSave={(personId) => updateRisk(risk.id, projectId, { ownerPersonId: personId })}
+        />
       </td>
       <td className="px-3 py-1.5">
         <InlineTextarea value={risk.mitigation ?? ""} onSave={(v) => updateRisk(risk.id, projectId, { mitigation: v })} />

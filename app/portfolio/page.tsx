@@ -1,9 +1,11 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/rbac";
+import { canViewPortfolioOverload } from "@/lib/resourcing-rbac";
 import { computeProjectRag, RAG_COLORS } from "@/lib/rag";
-import { formatMoney } from "@/lib/format";
-import { SignOutLink } from "@/components/ui/sign-out-link";
+import { computePersonLoad, findOverlapConflicts, type EngagementLike } from "@/lib/overload";
+import { formatMoney, formatDate } from "@/lib/format";
+import { AppShell } from "@/components/layout/app-shell";
 
 export const dynamic = "force-dynamic";
 
@@ -33,25 +35,44 @@ export default async function PortfolioPage() {
   const exceptions = rows.filter((r) => r.rag === "RED");
   const totalContractValue = rows.reduce((sum, r) => sum + r.contractValue, 0);
 
+  const showOverload = canViewPortfolioOverload(user.role);
+  const overloadedPeople: { personName: string; totalActivePct: number; breakdown: string }[] = [];
+  const conflictPairs: { personName: string; a: EngagementLike; b: EngagementLike }[] = [];
+
+  if (showOverload) {
+    const people = await prisma.person.findMany({ include: { engagements: { include: { project: true } } } });
+    for (const p of people) {
+      const engagements: EngagementLike[] = p.engagements.map((e) => ({
+        id: e.id,
+        projectId: e.projectId,
+        projectName: e.project.name,
+        roleOnProject: e.roleOnProject,
+        intensityPct: e.intensityPct,
+        startDate: e.startDate,
+        endDate: e.endDate,
+      }));
+      const load = computePersonLoad(engagements);
+      if (load.isOverloaded) {
+        overloadedPeople.push({
+          personName: p.name,
+          totalActivePct: load.totalActivePct,
+          breakdown: load.activeEngagements.map((e) => `${e.projectName} (${e.intensityPct}%)`).join(", "),
+        });
+      }
+      for (const c of findOverlapConflicts(engagements)) {
+        conflictPairs.push({ personName: p.name, a: c.a, b: c.b });
+      }
+    }
+  }
+
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="border-b border-slate-200 bg-white px-4 sm:px-6 py-4 flex items-start justify-between">
-        <div>
-          <h1 className="text-lg font-semibold text-slate-900">Portfolio Summary</h1>
-          <p className="text-sm text-slate-500">
-            RAG status and rollup budget/schedule health across every project — no item-level detail. That lives in
-            each project&apos;s own modules, which this view intentionally doesn&apos;t link into.
-          </p>
-        </div>
-        <div className="flex items-center gap-4 shrink-0">
-          {(user.role === "ADMIN" || user.role === "TPM") && (
-            <a href="/projects" className="text-sm font-medium text-slate-500 hover:text-slate-800">
-              Project List
-            </a>
-          )}
-          <span className="text-xs font-medium text-slate-500 bg-slate-100 rounded-full px-2.5 py-1">{user.role.replace("_", " ")}</span>
-          <SignOutLink />
-        </div>
+    <AppShell user={user}>
+      <header className="border-b border-slate-200 bg-white px-4 sm:px-6 py-4">
+        <h1 className="text-lg font-semibold text-slate-900">Portfolio Summary</h1>
+        <p className="text-sm text-slate-500">
+          RAG status and rollup budget/schedule health across every project — no item-level detail. That lives in
+          each project&apos;s own modules, which this view intentionally doesn&apos;t link into.
+        </p>
       </header>
 
       <main className="max-w-6xl mx-auto p-4 sm:p-6 space-y-6">
@@ -85,6 +106,40 @@ export default async function PortfolioPage() {
                 </li>
               ))}
             </ul>
+          </div>
+        )}
+
+        {showOverload && (overloadedPeople.length > 0 || conflictPairs.length > 0) && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-3">
+            <h3 className="text-sm font-semibold text-amber-900">Overload &amp; Conflicts</h3>
+            {overloadedPeople.length > 0 && (
+              <div>
+                <p className="text-xs font-medium text-amber-800 mb-1">Over threshold (combined active allocation &gt; 100%)</p>
+                <ul className="text-sm text-amber-900 space-y-1">
+                  {overloadedPeople.map((o) => (
+                    <li key={o.personName}>
+                      <span className="font-medium">{o.personName}</span> — {o.totalActivePct}% total ({o.breakdown})
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {conflictPairs.length > 0 && (
+              <div>
+                <p className="text-xs font-medium text-amber-800 mb-1">
+                  High-intensity engagements with overlapping dates (regardless of total)
+                </p>
+                <ul className="text-sm text-amber-900 space-y-1">
+                  {conflictPairs.map((c, i) => (
+                    <li key={i}>
+                      <span className="font-medium">{c.personName}</span> — {c.a.roleOnProject} on {c.a.projectName} ({c.a.intensityPct}%,{" "}
+                      {formatDate(c.a.startDate)}–{formatDate(c.a.endDate)}) overlaps {c.b.roleOnProject} on {c.b.projectName} (
+                      {c.b.intensityPct}%, {formatDate(c.b.startDate)}–{formatDate(c.b.endDate)})
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         )}
 
@@ -128,6 +183,6 @@ export default async function PortfolioPage() {
           {rows.length === 0 && <p className="text-sm text-slate-400 p-4">No projects yet.</p>}
         </div>
       </main>
-    </div>
+    </AppShell>
   );
 }

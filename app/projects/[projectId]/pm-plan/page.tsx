@@ -11,14 +11,17 @@ export default async function PmPlanPage({ params }: { params: { projectId: stri
   const access = await requireModuleAccess(params.projectId, "PM_PLAN", "READ_LIMITED");
   const canWrite = access === "WRITE";
 
-  const pmPlan = await prisma.pMPlan.findUniqueOrThrow({
-    where: { projectId: params.projectId },
-    include: {
-      stakeholders: { orderBy: { order: "asc" } },
-      commsRows: { orderBy: { order: "asc" } },
-      raciRows: { orderBy: { order: "asc" } },
-    },
-  });
+  const [pmPlan, people] = await Promise.all([
+    prisma.pMPlan.findUniqueOrThrow({
+      where: { projectId: params.projectId },
+      include: {
+        stakeholders: { orderBy: { order: "asc" } },
+        commsRows: { orderBy: { order: "asc" } },
+        raciRows: { orderBy: { order: "asc" } },
+      },
+    }),
+    canWrite ? prisma.person.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }) : Promise.resolve([]),
+  ]);
 
   const projectId = params.projectId;
   const pmPlanId = pmPlan.id;
@@ -62,7 +65,7 @@ export default async function PmPlanPage({ params }: { params: { projectId: stri
 
       <Section title="2. Stakeholders & Access" hint="Add/remove rows per the actual project org chart. Define access levels per system.">
         {canWrite ? (
-          <StakeholdersTable pmPlanId={pmPlanId} projectId={projectId} rows={pmPlan.stakeholders} />
+          <StakeholdersTable pmPlanId={pmPlanId} projectId={projectId} rows={pmPlan.stakeholders} people={people} />
         ) : (
           <ReadOnlyTable
             columns={["Stakeholder", "Role", "Responsibility", "Access Required"]}

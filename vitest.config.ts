@@ -9,5 +9,9 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    // Integration tests hit the real (remote, pooled) Supabase DB with
+    // several sequential round trips per test; the 5s default is too tight
+    // under normal network latency.
+    testTimeout: 15000,
   },
 });

@@ -2,7 +2,9 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { HeaderBar } from "@/components/ui/header-bar";
 import { NavTabs } from "@/components/ui/nav-tabs";
+import { AppShell } from "@/components/layout/app-shell";
 import { getProjectContext } from "@/lib/rbac";
+import { canViewResourcing } from "@/lib/resourcing-rbac";
 import type { ModuleName } from "@prisma/client";
 
 const MODULE_TABS: { href: string; label: string; module: ModuleName }[] = [
@@ -36,17 +38,21 @@ export default async function ProjectLayout({
 
   const canSeeTeam = user.role === "ADMIN" || user.role === "TPM" || user.role === "PM";
   const canSeeActivity = user.role === "ADMIN" || user.role === "TPM" || user.role === "PM";
+  const canSeeResourcing = canViewResourcing(user.role);
   if (canSeeTeam) visibleTabs.push({ href: "/team", label: "Team", module: "DASHBOARD" });
+  if (canSeeResourcing) visibleTabs.push({ href: "/resourcing", label: "Resourcing", module: "DASHBOARD" });
   if (canSeeActivity) visibleTabs.push({ href: "/activity", label: "Activity", module: "DASHBOARD" });
   if (user.role === "TPM" || user.role === "ADMIN") {
     visibleTabs.push({ href: "/escalations", label: "Escalations", module: "DASHBOARD" });
   }
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <HeaderBar title={project.name} subtitle={project.client ?? undefined} roleBadge={user.role} />
-      <NavTabs projectId={project.id} tabs={visibleTabs} />
-      <main className="flex-1 p-4 sm:p-6">{children}</main>
-    </div>
+    <AppShell user={user}>
+      <div className="min-h-screen flex flex-col">
+        <HeaderBar title={project.name} subtitle={project.client ?? undefined} />
+        <NavTabs projectId={project.id} tabs={visibleTabs} />
+        <main className="flex-1 p-4 sm:p-6">{children}</main>
+      </div>
+    </AppShell>
   );
 }

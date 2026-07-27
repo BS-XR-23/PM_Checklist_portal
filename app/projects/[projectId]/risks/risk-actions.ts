@@ -41,6 +41,7 @@ export async function updateRisk(
     probability: string;
     impact: string;
     owner: string;
+    ownerPersonId: string | null;
     mitigation: string;
     status: string;
     dateRaised: string | null;
@@ -61,6 +62,7 @@ export async function updateRisk(
       ...(data.probability !== undefined ? { probability: data.probability } : {}),
       ...(data.impact !== undefined ? { impact: data.impact } : {}),
       ...(data.owner !== undefined ? { owner: data.owner || null } : {}),
+      ...(data.ownerPersonId !== undefined ? { ownerPersonId: data.ownerPersonId } : {}),
       ...(data.mitigation !== undefined ? { mitigation: data.mitigation || null } : {}),
       ...(data.status !== undefined ? { status: data.status } : {}),
       ...(data.dateRaised !== undefined ? { dateRaised: parseDateInput(data.dateRaised) } : {}),

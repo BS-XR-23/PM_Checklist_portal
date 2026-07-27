@@ -34,3 +34,17 @@ export const CR_TYPES = ["Paid", "Free", "Exchange"] as const;
 export const CR_SIGNOFF_STATUSES = ["Pending", "Signed", "Email Acknowledgement"] as const;
 export const CR_WBS_UPDATED = ["Yes", "No"] as const;
 export const CR_STATUSES = ["Proposed", "Approved", "In Progress", "Completed", "Rejected"] as const;
+
+// Resourcing / engagement intensity. Stored as a 0-100 percentage so the
+// overload sum-threshold below is plain arithmetic; the UI offers these as
+// Low/Med/High presets plus free numeric entry.
+export const INTENSITY_PRESETS = { Low: 25, Med: 50, High: 90 } as const;
+
+// A person's combined intensity across currently-active engagements above
+// this is "overloaded". Change this single constant to retune it.
+export const OVERLOAD_THRESHOLD_PCT = 100;
+
+// An individual engagement at or above this intensity counts as "high" for
+// the overlapping-date-range conflict check (item 5b), independent of the
+// person's total.
+export const HIGH_INTENSITY_THRESHOLD_PCT = 60;

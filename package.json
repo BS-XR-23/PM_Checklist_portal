@@ -11,9 +11,14 @@
     "db:generate": "prisma generate",
     "db:seed": "tsx prisma/seed.ts",
     "create-user": "tsx scripts/create-user.ts",
+    "match-people": "tsx scripts/match-people.ts",
+    "apply-people-matches": "tsx scripts/apply-people-matches.ts",
+    "seed-demo": "tsx scripts/seed-demo.ts",
+    "seed-demo-complete": "tsx scripts/seed-demo-complete.ts",
     "test": "vitest run",
-    "test:unit": "vitest run lib/rbac.test.ts",
-    "test:isolation": "vitest run tests/isolation.integration.test.ts"
+    "test:unit": "vitest run lib/rbac.test.ts lib/overload.test.ts lib/resourcing-rbac.test.ts",
+    "test:isolation": "vitest run tests/isolation.integration.test.ts",
+    "test:resourcing": "vitest run tests/resourcing.integration.test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

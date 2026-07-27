@@ -43,9 +43,10 @@ model User {
   role         Role     @default(LIMITED)
   createdAt    DateTime @default(now())
 
-  memberships      ProjectMembership[]
-  auditLogs        AuditLog[]
+  memberships       ProjectMembership[]
+  auditLogs         AuditLog[]
   escalationsRaised EscalationItem[]
+  person            Person?
 }
 
 model Project {
@@ -58,14 +59,15 @@ model Project {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  checklistItems  ChecklistItem[]
-  risks           RiskItem[]
-  changeRequests  ChangeRequest[]
-  budgetEntries   BudgetEntry[]
-  pmPlan          PMPlan?
-  memberships     ProjectMembership[]
-  auditLogs       AuditLog[]
-  escalations     EscalationItem[]
+  checklistItems ChecklistItem[]
+  risks          RiskItem[]
+  changeRequests ChangeRequest[]
+  budgetEntries  BudgetEntry[]
+  pmPlan         PMPlan?
+  memberships    ProjectMembership[]
+  auditLogs      AuditLog[]
+  escalations    EscalationItem[]
+  engagements    ProjectEngagement[]
 }
 
 /// A user's access to one specific project. Only meaningful for PM/CLIENT/LIMITED
@@ -137,7 +139,9 @@ model ChecklistItem {
   stage         String
   itemText      String
   milestoneName String?
-  owner         String?
+  owner         String? // legacy free-text name; prefer ownerPersonId once set
+  ownerPersonId String?
+  ownerPerson   Person?   @relation(fields: [ownerPersonId], references: [id], onDelete: SetNull)
   plannedDate   DateTime?
   forecastDate  DateTime?
   status        String    @default("NOT_STARTED") // see ItemStatus in lib/constants.ts
@@ -159,21 +163,23 @@ model MilestonePayment {
 }
 
 model RiskItem {
-  id          String    @id @default(cuid())
-  projectId   String
-  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  type        String    @default("Risk")
-  category    String?
-  description String
-  probability String    @default("Medium")
-  impact      String    @default("Medium")
-  owner       String?
-  mitigation  String?
-  status      String    @default("Open")
-  dateRaised  DateTime?
-  dateClosed  DateTime?
-  notes       String?
-  order       Int       @default(0)
+  id            String    @id @default(cuid())
+  projectId     String
+  project       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  type          String    @default("Risk")
+  category      String?
+  description   String
+  probability   String    @default("Medium")
+  impact        String    @default("Medium")
+  owner         String? // legacy free-text name; prefer ownerPersonId once set
+  ownerPersonId String?
+  ownerPerson   Person?   @relation(fields: [ownerPersonId], references: [id], onDelete: SetNull)
+  mitigation    String?
+  status        String    @default("Open")
+  dateRaised    DateTime?
+  dateClosed    DateTime?
+  notes         String?
+  order         Int       @default(0)
 }
 
 model ChangeRequest {
@@ -227,12 +233,12 @@ model PMPlan {
   charterAssumptions     String?
   charterPmAuthority     String?
 
-  methodApproach     String?
-  methodCadence      String?
-  methodCeremonies   String?
-  methodTools        String?
-  methodRoles        String?
-  methodChangeMgmt   String?
+  methodApproach   String?
+  methodCadence    String?
+  methodCeremonies String?
+  methodTools      String?
+  methodRoles      String?
+  methodChangeMgmt String?
 
   testLevels        String?
   testEnvironments  String?
@@ -257,11 +263,13 @@ model PMPlan {
 }
 
 model StakeholderRow {
-  id             String @id @default(cuid())
+  id             String  @id @default(cuid())
   pmPlanId       String
-  pmPlan         PMPlan @relation(fields: [pmPlanId], references: [id], onDelete: Cascade)
+  pmPlan         PMPlan  @relation(fields: [pmPlanId], references: [id], onDelete: Cascade)
   order          Int
-  stakeholder    String
+  stakeholder    String // legacy free-text name/label; prefer personId once set
+  personId       String?
+  person         Person? @relation(fields: [personId], references: [id], onDelete: SetNull)
   role           String
   responsibility String
   accessRequired String
@@ -289,4 +297,40 @@ model RaciRow {
   ba           String
   leadEng      String
   creativeLead String
+}
+
+/// Canonical registry of a real person — the single source of truth that
+/// checklist "Owner", risk "Owner", and stakeholder names should reference
+/// instead of re-typing free text on every row.
+model Person {
+  id        String   @id @default(cuid())
+  name      String
+  title     String? // e.g. "Lead Engineer", "Creative Lead", "QA", "BA"
+  email     String?
+  phone     String?
+  userId    String?  @unique // linked portal account, if they have one (typically LIMITED)
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+
+  engagements     ProjectEngagement[]
+  checklistOwners ChecklistItem[]
+  riskOwners      RiskItem[]
+  stakeholderRows StakeholderRow[]
+}
+
+/// A person's lightweight staffing on one project: role, coarse intensity,
+/// and a date range. Not a scheduling tool — just enough to reason about how
+/// stretched someone is across projects.
+model ProjectEngagement {
+  id            String    @id @default(cuid())
+  personId      String
+  person        Person    @relation(fields: [personId], references: [id], onDelete: Cascade)
+  projectId     String
+  project       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  roleOnProject String // free text, defaults to Person.title, editable per engagement
+  intensityPct  Int // 0-100; UI presents Low/Med/High bands over this one number
+  startDate     DateTime?
+  endDate       DateTime?
+  notes         String?
+  createdAt     DateTime  @default(now())
 }

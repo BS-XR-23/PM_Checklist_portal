@@ -8,6 +8,7 @@ import { formatPct, formatDate, toDateInputValue } from "@/lib/format";
 import { isSlipped } from "@/lib/calculations";
 import { updateChecklistItem } from "@/app/projects/[projectId]/checklist-actions";
 import { TpmOverrideChecklistModal } from "@/components/rbac/tpm-override-checklist-modal";
+import { PersonPicker } from "@/components/resourcing/person-picker";
 import type { AccessLevel, Role } from "@prisma/client";
 
 export type ChecklistTableItem = {
@@ -17,6 +18,8 @@ export type ChecklistTableItem = {
   itemText: string;
   milestoneName: string | null;
   owner: string | null;
+  ownerPersonId: string | null;
+  ownerPersonName: string | null;
   plannedDate: Date | null;
   forecastDate: Date | null;
   status: string;
@@ -31,6 +34,7 @@ export function ChecklistTable({
   stageLabel = "Stage",
   access,
   viewerRole,
+  people,
 }: {
   projectId: string;
   checklistType: ChecklistType;
@@ -39,6 +43,7 @@ export function ChecklistTable({
   stageLabel?: string;
   access: AccessLevel;
   viewerRole: Role;
+  people: { id: string; name: string }[];
 }) {
   const canWrite = access === "WRITE";
   const notesHidden = access === "READ_LIMITED";
@@ -94,10 +99,11 @@ export function ChecklistTable({
                         {canWrite ? (
                           <>
                             <td className="px-3 py-1.5">
-                              <InlineText
-                                value={item.owner ?? ""}
-                                placeholder="—"
-                                onSave={(v) => updateChecklistItem(item.id, projectId, checklistType, { owner: v })}
+                              <PersonPicker
+                                personId={item.ownerPersonId}
+                                legacyText={item.owner}
+                                people={people}
+                                onSave={(personId) => updateChecklistItem(item.id, projectId, checklistType, { ownerPersonId: personId })}
                               />
                             </td>
                             <td className="px-3 py-1.5">
@@ -139,7 +145,7 @@ export function ChecklistTable({
                           </>
                         ) : (
                           <>
-                            <td className="px-3 py-1.5 text-slate-600">{item.owner || "—"}</td>
+                            <td className="px-3 py-1.5 text-slate-600">{item.ownerPersonName || item.owner || "—"}</td>
                             <td className="px-3 py-1.5 text-slate-600 whitespace-nowrap">{formatDate(item.plannedDate)}</td>
                             <td className="px-3 py-1.5 text-slate-600 whitespace-nowrap">
                               {formatDate(item.forecastDate)}

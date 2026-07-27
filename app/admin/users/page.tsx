@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/rbac";
-import { AdminHeader } from "../admin-header";
+import { AppShell } from "@/components/layout/app-shell";
 import { CreateUserForm } from "./create-user-form";
 import { UserRoleSelect } from "./user-role-select";
 
@@ -14,8 +14,10 @@ export default async function AdminUsersPage() {
   const users = await prisma.user.findMany({ orderBy: { createdAt: "asc" } });
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <AdminHeader title="Users" active="users" />
+    <AppShell user={currentUser}>
+      <header className="border-b border-slate-200 bg-white px-4 sm:px-6 py-4">
+        <h1 className="text-lg font-semibold text-slate-900">Users</h1>
+      </header>
       <main className="max-w-4xl mx-auto p-4 sm:p-6 space-y-6">
         <CreateUserForm />
 
@@ -46,6 +48,6 @@ export default async function AdminUsersPage() {
           here — role here is the global role only.
         </p>
       </main>
-    </div>
+    </AppShell>
   );
 }
