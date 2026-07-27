@@ -1,11 +1,13 @@
 import { prisma } from "@/lib/prisma";
 import { ChecklistTable } from "@/components/checklist/checklist-table";
+import { SubNav } from "@/components/ui/sub-nav";
 import { PM_STAGES } from "@/lib/seed-data";
-import { requireModuleAccess, getCurrentUser } from "@/lib/rbac";
+import { requireModuleAccess, getModuleAccess, getCurrentUser } from "@/lib/rbac";
 
 export default async function PmChecklistPage({ params }: { params: { projectId: string } }) {
-  const [access, user] = await Promise.all([
+  const [access, devopsAccess, user] = await Promise.all([
     requireModuleAccess(params.projectId, "PM_CHECKLIST", "READ_LIMITED"),
+    getModuleAccess(params.projectId, "DEVOPS_CHECKLIST"),
     getCurrentUser(),
   ]);
 
@@ -21,8 +23,14 @@ export default async function PmChecklistPage({ params }: { params: { projectId:
   const withOwnerName = items.map((i) => ({ ...i, ownerPersonName: i.ownerPerson?.name ?? null }));
   const visibleItems = access === "READ_LIMITED" ? withOwnerName.map((i) => ({ ...i, notes: null })) : withOwnerName;
 
+  const subNavOptions = [
+    { href: "/pm-checklist", label: "PM Checklist" },
+    ...(devopsAccess !== "NONE" ? [{ href: "/devops-checklist", label: "DevOps Checklist" }] : []),
+  ];
+
   return (
     <div>
+      <SubNav projectId={params.projectId} options={subNavOptions} />
       <div className="mb-4">
         <h2 className="text-base font-semibold text-slate-900">PM Checklist</h2>
         <p className="text-sm text-slate-500">51 items across 7 stages, aligned to the BS23 XR23 PM Process.</p>

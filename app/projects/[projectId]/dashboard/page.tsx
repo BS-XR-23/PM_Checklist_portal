@@ -48,6 +48,14 @@ export default async function DashboardPage({ params }: { params: { projectId: s
         </div>
       )}
 
+      {financialsVisible && (
+        <div className="grid sm:grid-cols-3 gap-4">
+          <StatTile label="Total Contract Value" value={formatMoney(financial.contractValue)} />
+          <StatTile label="Paid to Date" value={formatMoney(financial.paidAmount)} />
+          <StatTile label="Invoiced (Awaiting Payment)" value={formatMoney(financial.invoicedAmount)} />
+        </div>
+      )}
+
       <div className={financialsVisible ? "grid lg:grid-cols-3 gap-4" : "grid lg:grid-cols-2 gap-4"}>
         <div className="rounded-lg border border-slate-200 bg-white p-4">
           <h3 className="text-sm font-semibold text-slate-700 mb-2">Status Breakdown (All Checklists)</h3>

@@ -78,29 +78,31 @@ export default async function BudgetTrackerPage({ params }: { params: { projectI
         {canWrite && <AddEntryButton projectId={project.id} />}
       </div>
 
-      <div className="rounded-lg border border-slate-200 bg-white overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-xs text-slate-500 border-b border-slate-100 bg-slate-50">
-              <th className="px-3 py-2 font-medium w-36">Week Ending</th>
-              <th className="px-3 py-2 font-medium w-40">% Planned Complete (Cum.)</th>
-              <th className="px-3 py-2 font-medium w-40">% Actual Complete (Cum.)</th>
-              <th className="px-3 py-2 font-medium w-28">PV</th>
-              <th className="px-3 py-2 font-medium w-28">EV</th>
-              {!costHidden && <th className="px-3 py-2 font-medium w-32">AC (Actual Cost)</th>}
-              {!costHidden && <th className="px-3 py-2 font-medium w-28">CV (EV-AC)</th>}
-              {!costHidden && <th className="px-3 py-2 font-medium w-24">SPI</th>}
-              {!costHidden && <th className="px-3 py-2 font-medium w-24">CPI</th>}
-              <th className="px-3 py-2 font-medium min-w-[160px]">Notes</th>
-              {canWrite && <th className="px-3 py-2 font-medium w-8" />}
-            </tr>
-          </thead>
-          <tbody>
-            {evm.map((e, i) => (
-              <BudgetRow key={entries[i].id} projectId={project.id} entry={entries[i]} evm={e} canWrite={canWrite} costHidden={costHidden} />
-            ))}
-          </tbody>
-        </table>
+      <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+        <div className="overflow-x-auto max-h-[32rem] overflow-y-auto">
+          <table className="w-full text-sm">
+            <thead className="sticky top-0 z-10">
+              <tr className="text-left text-xs font-medium text-slate-500 border-b border-slate-200 bg-slate-50">
+                <th className="px-4 py-3 font-medium w-36">Week Ending</th>
+                <th className="px-4 py-3 font-medium w-40">% Planned Complete (Cum.)</th>
+                <th className="px-4 py-3 font-medium w-40">% Actual Complete (Cum.)</th>
+                <th className="px-4 py-3 font-medium w-28">PV</th>
+                <th className="px-4 py-3 font-medium w-28">EV</th>
+                {!costHidden && <th className="px-4 py-3 font-medium w-32">AC (Actual Cost)</th>}
+                {!costHidden && <th className="px-4 py-3 font-medium w-28">CV (EV-AC)</th>}
+                {!costHidden && <th className="px-4 py-3 font-medium w-24">SPI</th>}
+                {!costHidden && <th className="px-4 py-3 font-medium w-24">CPI</th>}
+                <th className="px-4 py-3 font-medium min-w-[160px]">Notes</th>
+                {canWrite && <th className="px-4 py-3 font-medium w-8" />}
+              </tr>
+            </thead>
+            <tbody>
+              {evm.map((e, i) => (
+                <BudgetRow key={entries[i].id} projectId={project.id} entry={entries[i]} evm={e} canWrite={canWrite} costHidden={costHidden} />
+              ))}
+            </tbody>
+          </table>
+        </div>
         {entries.length === 0 && <p className="text-sm text-slate-400 p-4">No weekly entries yet.</p>}
       </div>
     </div>

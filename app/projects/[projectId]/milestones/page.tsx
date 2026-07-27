@@ -53,46 +53,28 @@ export default async function MilestonesPage({ params }: { params: { projectId: 
         </div>
       )}
 
-      <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-xs text-slate-500 border-b border-slate-100 bg-slate-50">
-              <th className="px-3 py-2 font-medium">Source</th>
-              <th className="px-3 py-2 font-medium">Stage / Category</th>
-              <th className="px-3 py-2 font-medium">Milestone</th>
-              <th className="px-3 py-2 font-medium">Forecast Date</th>
-              <th className="px-3 py-2 font-medium">Status</th>
-              <th className="px-3 py-2 font-medium w-28">Payment %</th>
-              <th className="px-3 py-2 font-medium w-32">Tranche Amount</th>
-              <th className="px-3 py-2 font-medium w-36">Invoice Status</th>
-              <th className="px-3 py-2 font-medium w-36">Client Sign-off</th>
-              {!notesHidden && <th className="px-3 py-2 font-medium min-w-[160px]">Notes</th>}
-            </tr>
-          </thead>
-          <tbody>
-            {milestones.map((m) => (
-              <MilestoneRow
-                key={m.id}
-                projectId={project.id}
-                contractValue={project.contractValue}
-                canWrite={canWrite}
-                notesHidden={notesHidden}
-                milestone={{
-                  id: m.id,
-                  paymentPct: m.paymentPct,
-                  invoiceStatus: m.invoiceStatus,
-                  clientSignoff: m.clientSignoff,
-                  notes: notesHidden ? null : m.notes,
-                  sourceChecklist: m.checklistItem.type === "PM" ? "PM Checklist" : "DevOps Checklist",
-                  stage: m.checklistItem.stage,
-                  milestoneName: m.checklistItem.milestoneName ?? "",
-                  forecastDate: m.checklistItem.forecastDate,
-                  status: m.checklistItem.status as ItemStatus,
-                }}
-              />
-            ))}
-          </tbody>
-        </table>
+      <div className="space-y-3">
+        {milestones.map((m) => (
+          <MilestoneRow
+            key={m.id}
+            projectId={project.id}
+            contractValue={project.contractValue}
+            canWrite={canWrite}
+            notesHidden={notesHidden}
+            milestone={{
+              id: m.id,
+              paymentPct: m.paymentPct,
+              invoiceStatus: m.invoiceStatus,
+              clientSignoff: m.clientSignoff,
+              notes: notesHidden ? null : m.notes,
+              sourceChecklist: m.checklistItem.type === "PM" ? "PM Checklist" : "DevOps Checklist",
+              stage: m.checklistItem.stage,
+              milestoneName: m.checklistItem.milestoneName ?? "",
+              forecastDate: m.checklistItem.forecastDate,
+              status: m.checklistItem.status as ItemStatus,
+            }}
+          />
+        ))}
       </div>
 
       <div className="rounded-lg border border-slate-200 bg-white p-4 max-w-md">

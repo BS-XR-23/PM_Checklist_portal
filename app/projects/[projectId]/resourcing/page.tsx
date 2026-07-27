@@ -4,6 +4,7 @@ import { requireUser, requireProjectAccess } from "@/lib/rbac";
 import { canViewResourcing } from "@/lib/resourcing-rbac";
 import { computePersonLoad, findOverlapConflicts, type EngagementLike } from "@/lib/overload";
 import { toDateInputValue } from "@/lib/format";
+import { SubNav } from "@/components/ui/sub-nav";
 import { AssignEngagementForm } from "./assign-engagement-form";
 import { EngagementRow, type EngagementRowData } from "./engagement-row";
 
@@ -14,6 +15,12 @@ export default async function ResourcingPage({ params }: { params: { projectId: 
   await requireProjectAccess(params.projectId);
 
   if (!canViewResourcing(user.role)) redirect(`/projects/${params.projectId}/dashboard`);
+
+  const canSeeTeamTab = user.role === "ADMIN" || user.role === "TPM" || user.role === "PM";
+  const subNavOptions = [
+    ...(canSeeTeamTab ? [{ href: "/team", label: "Access" }] : []),
+    { href: "/resourcing", label: "Engagement" },
+  ];
 
   const membership =
     user.role === "PM"
@@ -74,6 +81,7 @@ export default async function ResourcingPage({ params }: { params: { projectId: 
 
   return (
     <div className="space-y-6">
+      <SubNav projectId={params.projectId} options={subNavOptions} />
       <div>
         <h2 className="text-base font-semibold text-slate-900">Resourcing</h2>
         <p className="text-sm text-slate-500">

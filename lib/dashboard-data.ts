@@ -89,6 +89,13 @@ export async function getDashboardData(projectId: string) {
         .reduce((sum, m) => sum + trancheAmount(project.contractValue, m.paymentPct), 0)
     : 0;
 
+  const paidAmount = milestones
+    .filter((m) => m.invoiceStatus === "Paid")
+    .reduce((sum, m) => sum + trancheAmount(project.contractValue, m.paymentPct), 0);
+  const invoicedAmount = milestones
+    .filter((m) => m.invoiceStatus === "Invoiced")
+    .reduce((sum, m) => sum + trancheAmount(project.contractValue, m.paymentPct), 0);
+
   return {
     project,
     totalItems,
@@ -109,6 +116,9 @@ export async function getDashboardData(projectId: string) {
       nextPaymentDue,
       nextPaymentAmount,
       totalAllocatedPct,
+      contractValue: project.contractValue,
+      paidAmount,
+      invoicedAmount,
     },
   };
 }
