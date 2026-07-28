@@ -18,7 +18,7 @@ export default async function ProjectsPage() {
 
   const canSeeAll = user.role === "ADMIN" || user.role === "TPM";
   const projects = await prisma.project.findMany({
-    where: canSeeAll ? {} : { memberships: { some: { userId: user.id } } },
+    where: canSeeAll ? {} : { memberships: { some: { userId: user.id } }, deletedAt: null },
     orderBy: { createdAt: "desc" },
     include: { checklistItems: { select: { type: true, stage: true, status: true, forecastDate: true } } },
   });
@@ -41,7 +41,7 @@ export default async function ProjectsPage() {
   });
 
   // Archived (done) projects shouldn't dilute "current portfolio" numbers.
-  const activeCards = cards.filter((c) => c.status === "ACTIVE");
+  const activeCards = cards.filter((c) => c.status === "ACTIVE" && c.deletedAt === null);
   const avgCompletion = activeCards.length ? activeCards.reduce((sum, c) => sum + c.pct, 0) / activeCards.length : 0;
   const totalContractValue = activeCards.reduce((sum, c) => sum + c.contractValue, 0);
 

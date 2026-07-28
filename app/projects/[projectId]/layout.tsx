@@ -16,7 +16,7 @@ export default async function ProjectLayout({
   params: { projectId: string };
 }) {
   const project = await prisma.project.findUnique({ where: { id: params.projectId } });
-  if (!project) notFound();
+  if (!project || project.deletedAt) notFound();
 
   // Coarse gate (404s if this user has no business being in this project at
   // all) plus every module's access level, computed once for nav filtering.

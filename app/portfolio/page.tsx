@@ -20,6 +20,7 @@ export default async function PortfolioPage() {
   }
 
   const projects = await prisma.project.findMany({
+    where: { deletedAt: null },
     orderBy: { name: "asc" },
     include: { budgetEntries: { orderBy: { weekEnding: "asc" } }, risks: true },
   });

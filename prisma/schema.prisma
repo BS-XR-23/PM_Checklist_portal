@@ -63,6 +63,7 @@ model Project {
   plannedManDays Float    @default(0)
   crRate         Float    @default(0)
   status         ProjectStatus @default(ACTIVE)
+  deletedAt      DateTime?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

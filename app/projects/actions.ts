@@ -55,3 +55,45 @@ export async function setProjectStatus(projectId: string, status: ProjectStatus)
 
   revalidatePath("/projects");
 }
+
+export async function deleteProject(projectId: string) {
+  const user = await requireUser();
+  if (user.role !== "ADMIN") {
+    throw new Error("Only an Admin can delete a project.");
+  }
+
+  const existing = await prisma.project.findUniqueOrThrow({ where: { id: projectId } });
+  await prisma.project.update({ where: { id: projectId }, data: { deletedAt: new Date() } });
+
+  await writeAudit({
+    actor: user,
+    projectId,
+    action: "update",
+    entityType: "Project",
+    entityId: projectId,
+    summary: `Deleted project "${existing.name}"`,
+  });
+
+  revalidatePath("/projects");
+}
+
+export async function restoreProject(projectId: string) {
+  const user = await requireUser();
+  if (user.role !== "ADMIN") {
+    throw new Error("Only an Admin can restore a project.");
+  }
+
+  const existing = await prisma.project.findUniqueOrThrow({ where: { id: projectId } });
+  await prisma.project.update({ where: { id: projectId }, data: { deletedAt: null } });
+
+  await writeAudit({
+    actor: user,
+    projectId,
+    action: "update",
+    entityType: "Project",
+    entityId: projectId,
+    summary: `Restored project "${existing.name}"`,
+  });
+
+  revalidatePath("/projects");
+}

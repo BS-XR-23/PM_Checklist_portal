@@ -6,6 +6,7 @@ import clsx from "clsx";
 import { formatMoney, formatDate, formatPct } from "@/lib/format";
 import { PM_STAGES } from "@/lib/seed-data";
 import { ArchiveButton } from "./archive-button";
+import { DeleteButton, RestoreButton } from "./delete-button";
 import type { ProjectStatus } from "@prisma/client";
 
 export type ProjectCardData = {
@@ -18,6 +19,7 @@ export type ProjectCardData = {
   completed: number;
   pct: number;
   status: ProjectStatus;
+  deletedAt: Date | null;
   pmStage: string; // one of PM_STAGES, or "Complete"
   endDate: Date | null; // derived — latest Forecast Date across the checklist
 };
@@ -41,27 +43,36 @@ function avatarColor(id: string) {
 const STAGE_OPTIONS = [...PM_STAGES, "Complete"];
 
 export function ProjectFilters({ cards, isAdmin }: { cards: ProjectCardData[]; isAdmin: boolean }) {
-  const [statusFilter, setStatusFilter] = useState<"ACTIVE" | "ARCHIVED" | "ALL">("ACTIVE");
+  const [statusFilter, setStatusFilter] = useState<"ACTIVE" | "ARCHIVED" | "ALL" | "DELETED">("ACTIVE");
   const [stageFilter, setStageFilter] = useState<string>("ALL");
 
   const visible = cards
-    .filter((c) => statusFilter === "ALL" || c.status === statusFilter)
+    .filter((c) => (statusFilter === "DELETED" ? c.deletedAt !== null : c.deletedAt === null))
+    .filter((c) => statusFilter === "ALL" || statusFilter === "DELETED" || c.status === statusFilter)
     .filter((c) => stageFilter === "ALL" || c.pmStage === stageFilter);
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-1.5">
           <FilterPill label="Active" active={statusFilter === "ACTIVE"} onClick={() => setStatusFilter("ACTIVE")} />
           <FilterPill label="Archived" active={statusFilter === "ARCHIVED"} onClick={() => setStatusFilter("ARCHIVED")} />
           <FilterPill label="All" active={statusFilter === "ALL"} onClick={() => setStatusFilter("ALL")} />
+          {isAdmin && <FilterPill label="Deleted" active={statusFilter === "DELETED"} onClick={() => setStatusFilter("DELETED")} />}
         </div>
-        <div className="flex flex-wrap gap-1.5">
-          <FilterPill label="All Stages" active={stageFilter === "ALL"} onClick={() => setStageFilter("ALL")} />
+        <select
+          value={stageFilter}
+          onChange={(e) => setStageFilter(e.target.value)}
+          aria-label="Filter by stage"
+          className="rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400 cursor-pointer"
+        >
+          <option value="ALL">All Stages</option>
           {STAGE_OPTIONS.map((s) => (
-            <FilterPill key={s} label={s} active={stageFilter === s} onClick={() => setStageFilter(s)} />
+            <option key={s} value={s}>
+              {s}
+            </option>
           ))}
-        </div>
+        </select>
       </div>
 
       {visible.length === 0 ? (
@@ -70,16 +81,10 @@ export function ProjectFilters({ cards, isAdmin }: { cards: ProjectCardData[]; i
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {visible.map((p) => {
             const color = avatarColor(p.id);
-            return (
-              <Link
-                key={p.id}
-                href={`/projects/${p.id}/dashboard`}
-                prefetch={false}
-                className={clsx(
-                  "block rounded-lg border border-slate-200 bg-white p-4 hover:border-slate-400 hover:shadow-sm transition-all",
-                  p.status === "ARCHIVED" && "opacity-60"
-                )}
-              >
+            const isDeleted = p.deletedAt !== null;
+
+            const cardBody = (
+              <>
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-start gap-3 min-w-0">
                     <span
@@ -94,10 +99,16 @@ export function ProjectFilters({ cards, isAdmin }: { cards: ProjectCardData[]; i
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
-                    {p.status === "ARCHIVED" && (
-                      <span className="inline-flex items-center rounded-full bg-slate-100 text-slate-500 px-2 py-0.5 text-xs font-medium">
-                        Archived
+                    {isDeleted ? (
+                      <span className="inline-flex items-center rounded-full bg-red-50 text-red-600 px-2 py-0.5 text-xs font-medium">
+                        Deleted
                       </span>
+                    ) : (
+                      p.status === "ARCHIVED" && (
+                        <span className="inline-flex items-center rounded-full bg-slate-100 text-slate-500 px-2 py-0.5 text-xs font-medium">
+                          Archived
+                        </span>
+                      )
                     )}
                     <span className="inline-flex items-center rounded-full bg-slate-100 text-slate-700 px-2.5 py-0.5 text-xs font-semibold">
                       {formatPct(p.pct)}
@@ -118,8 +129,41 @@ export function ProjectFilters({ cards, isAdmin }: { cards: ProjectCardData[]; i
 
                 <div className="mt-3 flex items-center justify-between gap-2">
                   <span className="text-xs text-slate-400">Stage: {p.pmStage}</span>
-                  {isAdmin && <ArchiveButton projectId={p.id} status={p.status} />}
+                  {isAdmin && (
+                    <div className="flex items-center gap-3">
+                      {isDeleted ? (
+                        <RestoreButton projectId={p.id} />
+                      ) : (
+                        <>
+                          <ArchiveButton projectId={p.id} status={p.status} />
+                          <DeleteButton projectId={p.id} />
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
+              </>
+            );
+
+            if (isDeleted) {
+              return (
+                <div key={p.id} className="rounded-lg border border-slate-200 bg-white p-4 opacity-60">
+                  {cardBody}
+                </div>
+              );
+            }
+
+            return (
+              <Link
+                key={p.id}
+                href={`/projects/${p.id}/dashboard`}
+                prefetch={false}
+                className={clsx(
+                  "block rounded-lg border border-slate-200 bg-white p-4 hover:border-slate-400 hover:shadow-sm transition-all",
+                  p.status === "ARCHIVED" && "opacity-60"
+                )}
+              >
+                {cardBody}
               </Link>
             );
           })}

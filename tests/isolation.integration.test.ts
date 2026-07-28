@@ -353,6 +353,25 @@ describe("isolation boundary", () => {
     expect((await prisma.project.findUniqueOrThrow({ where: { id: projectA.id } })).status).toBe("ACTIVE");
   });
 
+  it("deleteProject / restoreProject are Admin-only", async () => {
+    const { deleteProject, restoreProject } = await import("@/app/projects/actions");
+    actAs(pmAUserId);
+    await expect(deleteProject(projectA.id)).rejects.toThrow();
+    await expect(restoreProject(projectA.id)).rejects.toThrow();
+    expect((await prisma.project.findUniqueOrThrow({ where: { id: projectA.id } })).deletedAt).toBeNull();
+  });
+
+  it("sanity check: Admin CAN delete and restore a project", async () => {
+    const { deleteProject, restoreProject } = await import("@/app/projects/actions");
+    actAs(adminUserId);
+
+    await deleteProject(projectA.id);
+    expect((await prisma.project.findUniqueOrThrow({ where: { id: projectA.id } })).deletedAt).not.toBeNull();
+
+    await restoreProject(projectA.id);
+    expect((await prisma.project.findUniqueOrThrow({ where: { id: projectA.id } })).deletedAt).toBeNull();
+  });
+
   it("sanity check: Admin CAN manage the checklist template", async () => {
     const { createTemplateItem, updateTemplateItem, deleteTemplateItem } = await import("@/app/admin/checklist-template/template-actions");
     actAs(adminUserId);
