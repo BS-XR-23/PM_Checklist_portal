@@ -86,6 +86,23 @@ export function isSlipped(
   status: string
 ): boolean {
   if (!plannedDate || !forecastDate) return false;
-  if (status === "COMPLETED") return false;
+  if (status === "COMPLETED" || status === "NOT_APPLICABLE") return false;
   return forecastDate.getTime() > plannedDate.getTime();
+}
+
+/**
+ * App-derived (not from the spreadsheet): the first stage in stageOrder that
+ * still has an incomplete item, or null if everything's done. Shared by the
+ * Checklist page's default-open-tab logic and the Projects list's stage
+ * filter/label, so both definitions of "current stage" can't drift apart.
+ */
+export function currentStage(
+  items: { stage: string; status: string }[],
+  stageOrder: readonly string[]
+): string | null {
+  for (const stage of stageOrder) {
+    const rows = items.filter((i) => i.stage === stage);
+    if (rows.length > 0 && rows.some((r) => r.status !== "COMPLETED" && r.status !== "NOT_APPLICABLE")) return stage;
+  }
+  return null;
 }

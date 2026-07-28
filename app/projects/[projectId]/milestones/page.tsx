@@ -5,6 +5,7 @@ import type { ItemStatus } from "@/lib/constants";
 import { requireModuleAccess } from "@/lib/rbac";
 import { ContractValueField } from "./contract-value-field";
 import { MilestoneRow } from "./milestone-row";
+import { AddMilestoneModal } from "./add-milestone-modal";
 
 export default async function MilestonesPage({ params }: { params: { projectId: string } }) {
   const access = await requireModuleAccess(params.projectId, "MILESTONES", "READ_LIMITED");
@@ -34,12 +35,15 @@ export default async function MilestonesPage({ params }: { params: { projectId: 
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-base font-semibold text-slate-900">Milestones & Payments</h2>
-        <p className="text-sm text-slate-500">
-          Milestones are pulled automatically from the PM and DevOps checklists — set payment %, invoice status, and
-          sign-off here.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-base font-semibold text-slate-900">Milestones & Payments</h2>
+          <p className="text-sm text-slate-500">
+            Milestones are pulled automatically from the PM and DevOps checklists — set payment %, invoice status,
+            and sign-off here.
+          </p>
+        </div>
+        {canWrite && <AddMilestoneModal projectId={project.id} />}
       </div>
 
       {canWrite ? (
@@ -63,6 +67,7 @@ export default async function MilestonesPage({ params }: { params: { projectId: 
             notesHidden={notesHidden}
             milestone={{
               id: m.id,
+              checklistItemId: m.checklistItemId,
               paymentPct: m.paymentPct,
               invoiceStatus: m.invoiceStatus,
               clientSignoff: m.clientSignoff,

@@ -6,10 +6,11 @@ import { STATUS_COLORS } from "@/lib/colors";
 import { INVOICE_STATUSES, SIGNOFF_STATUSES, type ItemStatus } from "@/lib/constants";
 import { formatDate, formatMoney } from "@/lib/format";
 import { trancheAmount } from "@/lib/calculations";
-import { updateMilestonePayment } from "./milestone-actions";
+import { updateMilestonePayment, updateMilestoneName } from "./milestone-actions";
 
 export type MilestoneRowData = {
   id: string;
+  checklistItemId: string;
   paymentPct: number;
   invoiceStatus: string;
   clientSignoff: string;
@@ -39,8 +40,15 @@ export function MilestoneRow({
   return (
     <DataCard>
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-slate-900">{milestone.milestoneName}</p>
+        <div className="min-w-0 flex-1">
+          {canWrite ? (
+            <InlineText
+              value={milestone.milestoneName}
+              onSave={(v) => updateMilestoneName(milestone.checklistItemId, projectId, v)}
+            />
+          ) : (
+            <p className="text-sm font-medium text-slate-900">{milestone.milestoneName}</p>
+          )}
           <p className="text-xs text-slate-400">
             {milestone.sourceChecklist} — {milestone.stage}
           </p>

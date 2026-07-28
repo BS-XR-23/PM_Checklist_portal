@@ -34,6 +34,12 @@ export default async function DashboardPage({ params }: { params: { projectId: s
         </div>
       </div>
 
+      {/* Not financial data — visible to every role with dashboard access, same as the completion hero above. */}
+      <div className="grid sm:grid-cols-2 gap-4">
+        <StatTile label="Current Stage (PM Checklist)" value={data.pmStage} />
+        <StatTile label="End Date" value={data.endDate ? formatDate(data.endDate) : "—"} />
+      </div>
+
       {financialsVisible && (
         <div className="grid sm:grid-cols-3 lg:grid-cols-5 gap-4">
           <StatTile label="Latest SPI" value={financial.latestSpi != null ? financial.latestSpi.toFixed(2) : "—"} valueColor={financial.latestSpi != null ? (financial.latestSpi >= 1 ? INDEX_FAVORABLE_COLOR : INDEX_UNFAVORABLE_COLOR) : undefined} />

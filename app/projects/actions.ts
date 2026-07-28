@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createProject } from "@/lib/create-project";
 import { requireUser, writeAudit } from "@/lib/rbac";
+import { prisma } from "@/lib/prisma";
+import type { ProjectStatus } from "@prisma/client";
 
 export async function createProjectAction(formData: FormData) {
   const user = await requireUser();
@@ -31,4 +33,25 @@ export async function createProjectAction(formData: FormData) {
 
   revalidatePath("/projects");
   redirect(`/projects/${project.id}/dashboard`);
+}
+
+export async function setProjectStatus(projectId: string, status: ProjectStatus) {
+  const user = await requireUser();
+  if (user.role !== "ADMIN") {
+    throw new Error("Only an Admin can archive or unarchive a project.");
+  }
+
+  const existing = await prisma.project.findUniqueOrThrow({ where: { id: projectId } });
+  await prisma.project.update({ where: { id: projectId }, data: { status } });
+
+  await writeAudit({
+    actor: user,
+    projectId,
+    action: "update",
+    entityType: "Project",
+    entityId: projectId,
+    summary: `${status === "ARCHIVED" ? "Archived" : "Unarchived"} project "${existing.name}"`,
+  });
+
+  revalidatePath("/projects");
 }

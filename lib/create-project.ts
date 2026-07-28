@@ -1,28 +1,28 @@
 import { randomUUID } from "crypto";
 import { prisma } from "@/lib/prisma";
-import {
-  PM_CHECKLIST_SEED,
-  DEVOPS_CHECKLIST_SEED,
-  DEFAULT_STAKEHOLDER_ROWS,
-  DEFAULT_COMMS_ROWS,
-  DEFAULT_RACI_ROWS,
-} from "@/lib/seed-data";
+import { DEFAULT_STAKEHOLDER_ROWS, DEFAULT_COMMS_ROWS, DEFAULT_RACI_ROWS } from "@/lib/seed-data";
 
 /**
  * Creates a new project and a fresh instance of all 8 modules: the two
- * checklists (with their fixed milestone tags), the milestone/payment rows
- * derived from them, and a PM Plan pre-populated with the template's default
- * stakeholder/comms/RACI rows. Risk Register, CR Log, and Budget Tracker
- * start empty since the spreadsheet has no default rows for those.
+ * checklists (with their fixed milestone tags, read from the Admin-editable
+ * ChecklistTemplateItem table — see app/admin/checklist-template), the
+ * milestone/payment rows derived from them, and a PM Plan pre-populated with
+ * the template's default stakeholder/comms/RACI rows. Risk Register, CR Log,
+ * and Budget Tracker start empty since the spreadsheet has no default rows
+ * for those.
  *
  * IDs are pre-generated and every table is written with a single `createMany`
- * call (instead of one `create()` per row) so the whole thing is ~7 database
+ * call (instead of one `create()` per row) so the whole thing is ~8 database
  * round-trips instead of ~90 — this matters over a pooled connection to a
  * remote DB (e.g. Supabase), where an interactive transaction that holds the
  * connection open across dozens of sequential round-trips is prone to being
  * recycled mid-transaction ("Transaction not found").
  */
 export async function createProject(input: { name: string; client?: string; contractValue?: number; plannedManDays?: number; crRate?: number }) {
+  // Read-only reference data — fetched once, outside the transaction, so a
+  // template edit can never hold up (or race inside) project creation.
+  const templateItems = await prisma.checklistTemplateItem.findMany({ orderBy: [{ type: "asc" }, { order: "asc" }] });
+
   return prisma.$transaction(
     async (tx) => {
       const project = await tx.project.create({
@@ -35,10 +35,7 @@ export async function createProject(input: { name: string; client?: string; cont
         },
       });
 
-      const checklistItems = [
-        ...PM_CHECKLIST_SEED.map((item) => ({ ...item, type: "PM" as const })),
-        ...DEVOPS_CHECKLIST_SEED.map((item) => ({ ...item, type: "DEVOPS" as const })),
-      ].map((item) => ({
+      const checklistItems = templateItems.map((item) => ({
         id: randomUUID(),
         projectId: project.id,
         type: item.type,

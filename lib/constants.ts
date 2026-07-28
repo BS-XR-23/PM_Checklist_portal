@@ -10,7 +10,8 @@ export type ItemStatus =
   | "COMPLETED"
   | "AT_RISK"
   | "DELAYED"
-  | "BLOCKED";
+  | "BLOCKED"
+  | "NOT_APPLICABLE";
 
 export const ITEM_STATUSES: ItemStatus[] = [
   "NOT_STARTED",
@@ -19,6 +20,7 @@ export const ITEM_STATUSES: ItemStatus[] = [
   "AT_RISK",
   "DELAYED",
   "BLOCKED",
+  "NOT_APPLICABLE",
 ];
 
 export const RISK_LEVELS = ["Low", "Medium", "High"] as const;

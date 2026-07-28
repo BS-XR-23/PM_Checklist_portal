@@ -35,12 +35,18 @@ enum AccessLevel {
   WRITE
 }
 
+enum ProjectStatus {
+  ACTIVE
+  ARCHIVED
+}
+
 model User {
   id           String   @id @default(cuid())
   email        String   @unique
   passwordHash String
   name         String
   role         Role     @default(LIMITED)
+  isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
 
   memberships       ProjectMembership[]
@@ -56,6 +62,7 @@ model Project {
   contractValue  Float    @default(0)
   plannedManDays Float    @default(0)
   crRate         Float    @default(0)
+  status         ProjectStatus @default(ACTIVE)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -146,10 +153,26 @@ model ChecklistItem {
   forecastDate  DateTime?
   status        String    @default("NOT_STARTED") // see ItemStatus in lib/constants.ts
   notes         String?
+  isCustom      Boolean   @default(false) // true only for items added via "+ Add Item" / "Add Milestone", never the fixed template
 
   milestonePayment MilestonePayment?
 
   @@unique([projectId, type, order])
+}
+
+/// The editable master checklist — lib/create-project.ts copies this into a
+/// new project's ChecklistItem rows once, at creation. Deliberately has no
+/// relation back to Project/ChecklistItem: editing or deleting a row here
+/// only affects projects created afterward, never existing ones.
+model ChecklistTemplateItem {
+  id            String  @id @default(cuid())
+  type          String // "PM" | "DEVOPS" -- see ChecklistType in lib/constants.ts
+  order         Int
+  stage         String
+  itemText      String
+  milestoneName String?
+
+  @@unique([type, order])
 }
 
 model MilestonePayment {

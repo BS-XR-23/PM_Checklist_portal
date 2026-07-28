@@ -22,6 +22,10 @@ export const authOptions: NextAuthOptions = {
         const valid = await bcrypt.compare(credentials.password, user.passwordHash);
         if (!valid) return null;
 
+        // Deactivated accounts can't start a new session — surfaces as the
+        // same generic invalid-credentials error, no info leak about why.
+        if (!user.isActive) return null;
+
         return { id: user.id, email: user.email, name: user.name, role: user.role };
       },
     }),

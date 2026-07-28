@@ -11,7 +11,7 @@ export type PersonRowData = {
   email: string | null;
   phone: string | null;
   linkedUserLabel: string | null;
-  engagementSummary: string;
+  engagements: string[];
 };
 
 export function PersonRow({ person }: { person: PersonRowData }) {
@@ -32,7 +32,19 @@ export function PersonRow({ person }: { person: PersonRowData }) {
         <InlineText value={person.phone ?? ""} onSave={(v) => updatePerson(person.id, { phone: v })} placeholder="Phone" />
       </td>
       <td className="px-3 py-2 text-slate-500">{person.linkedUserLabel ?? "—"}</td>
-      <td className="px-3 py-2 text-slate-500">{person.engagementSummary || "No current engagements"}</td>
+      <td className="px-3 py-2 text-slate-500 max-w-[16rem]">
+        {person.engagements.length > 0 ? (
+          <div className="space-y-0.5">
+            {person.engagements.map((e) => (
+              <div key={e} className="break-words">
+                {e}
+              </div>
+            ))}
+          </div>
+        ) : (
+          "No current engagements"
+        )}
+      </td>
       <td className="px-3 py-2">
         <button
           onClick={() => startTransition(() => deletePerson(person.id))}

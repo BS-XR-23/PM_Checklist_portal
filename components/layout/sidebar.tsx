@@ -4,7 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import clsx from "clsx";
 import { SignOutLink } from "@/components/ui/sign-out-link";
-import { IconGrid, IconChart, IconUser, IconUsers, IconIdCard, IconClipboardList } from "./icons";
+import { ChangePasswordModal } from "@/components/ui/change-password-modal";
+import { IconGrid, IconChart, IconUser, IconUsers, IconIdCard, IconClipboardList, IconLayers } from "./icons";
 import type { Role } from "@prisma/client";
 
 type NavItem = { href: string; label: string; icon: (props: React.SVGProps<SVGSVGElement>) => React.ReactElement };
@@ -25,6 +26,7 @@ export function Sidebar({ user }: { user: { name: string; role: Role } }) {
       ? [
           { href: "/admin/users", label: "Users", icon: IconUsers },
           { href: "/admin/people", label: "People", icon: IconIdCard },
+          { href: "/admin/checklist-template", label: "Checklist Template", icon: IconLayers },
           { href: "/admin/audit-log", label: "Audit Log", icon: IconClipboardList },
         ]
       : [];
@@ -49,7 +51,10 @@ export function Sidebar({ user }: { user: { name: string; role: Role } }) {
       <div className="border-t border-slate-100 px-3 py-3">
         <p className="text-sm font-medium text-slate-800 truncate">{user.name}</p>
         <p className="text-xs text-slate-400 mb-2">{user.role.replace("_", " ")}</p>
-        <SignOutLink />
+        <div className="flex items-center gap-3">
+          <ChangePasswordModal />
+          <SignOutLink />
+        </div>
       </div>
     </aside>
   );

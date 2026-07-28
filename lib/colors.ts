@@ -9,6 +9,11 @@ export const STATUS_COLORS: Record<ItemStatus, { bg: string; text: string; label
   AT_RISK: { bg: "#FFD966", text: "#7A5B00", label: "At Risk" },
   DELAYED: { bg: "#F4B183", text: "#8A3B00", label: "Delayed" },
   BLOCKED: { bg: "#FF7C80", text: "#7A0000", label: "Blocked" },
+  // Not from the spreadsheet — added so an item genuinely out of scope for a
+  // specific project (e.g. a 3D-only step on a 2D project) can be excluded
+  // from that project's completion % without disappearing from the fixed
+  // template. Neutral gray, matching the "Custom" item badge's color.
+  NOT_APPLICABLE: { bg: "#E2E8F0", text: "#475569", label: "Not Applicable" },
 };
 
 export const STATUS_ORDER: ItemStatus[] = [

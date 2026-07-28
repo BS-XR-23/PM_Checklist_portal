@@ -33,7 +33,11 @@ export default async function AdminPeoplePage() {
       email: p.email,
       phone: p.phone,
       linkedUserLabel: p.user ? `${p.user.name} (${p.user.email})` : null,
-      engagementSummary: active.map((e) => `${e.project.name} — ${e.roleOnProject} (${e.intensityPct}%)`).join("; "),
+      // One entry per engagement (not joined into a single line) — someone
+      // staffed across several projects was producing one very long
+      // unbroken string that forced the whole table wider than the
+      // viewport, pushing later columns out of view.
+      engagements: active.map((e) => `${e.project.name} — ${e.roleOnProject} (${e.intensityPct}%)`),
     };
   });
 

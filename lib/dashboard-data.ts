@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { PM_STAGES, DEVOPS_CATEGORIES } from "@/lib/seed-data";
 import { ITEM_STATUSES, type ItemStatus } from "@/lib/constants";
-import { riskScore, computeEvm, trancheAmount } from "@/lib/calculations";
+import { riskScore, computeEvm, trancheAmount, currentStage } from "@/lib/calculations";
 
 export async function getDashboardData(projectId: string) {
   const project = await prisma.project.findUniqueOrThrow({ where: { id: projectId } });
@@ -16,34 +16,56 @@ export async function getDashboardData(projectId: string) {
   ]);
 
   const allItems = [...pmItems, ...devopsItems];
-  const totalItems = allItems.length;
-  const completedItems = allItems.filter((i) => i.status === "COMPLETED").length;
+  // N/A items don't count toward completion at all — not the numerator
+  // (obviously not completed) and not the denominator either (they're not
+  // part of this project's plan, same as if the template item weren't there).
+  const applicableItems = allItems.filter((i) => i.status !== "NOT_APPLICABLE");
+  const totalItems = applicableItems.length;
+  const completedItems = applicableItems.filter((i) => i.status === "COMPLETED").length;
   const overallPct = totalItems ? completedItems / totalItems : 0;
 
+  // Status breakdown stays over ALL items — seeing "N marked Not Applicable"
+  // as its own slice is useful; it's only the percentage-complete math above
+  // that excludes them.
   const statusBreakdown = ITEM_STATUSES.map((status) => ({
     status,
     count: allItems.filter((i) => i.status === status).length,
   }));
 
   const perChecklistSummary = [
-    { name: "PM Checklist", total: pmItems.length, completed: pmItems.filter((i) => i.status === "COMPLETED").length },
-    { name: "DevOps Checklist", total: devopsItems.length, completed: devopsItems.filter((i) => i.status === "COMPLETED").length },
-  ].map((c) => ({ ...c, pct: c.total ? c.completed / c.total : 0 }));
+    { name: "PM Checklist", items: pmItems },
+    { name: "DevOps Checklist", items: devopsItems },
+  ].map(({ name, items }) => {
+    const applicable = items.filter((i) => i.status !== "NOT_APPLICABLE");
+    const completed = applicable.filter((i) => i.status === "COMPLETED").length;
+    return { name, total: applicable.length, completed, pct: applicable.length ? completed / applicable.length : 0 };
+  });
 
   function stageSummary(items: typeof pmItems, stages: readonly string[]) {
     return stages.map((stage) => {
       const rows = items.filter((i) => i.stage === stage);
-      const completed = rows.filter((i) => i.status === "COMPLETED").length;
-      const plannedDates = rows.map((r) => r.plannedDate).filter((d): d is Date => d != null);
-      const forecastDates = rows.map((r) => r.forecastDate).filter((d): d is Date => d != null);
+      const applicable = rows.filter((i) => i.status !== "NOT_APPLICABLE");
+      const completed = applicable.filter((i) => i.status === "COMPLETED").length;
+      const plannedDates = applicable.map((r) => r.plannedDate).filter((d): d is Date => d != null);
+      const forecastDates = applicable.map((r) => r.forecastDate).filter((d): d is Date => d != null);
       const start = plannedDates.length ? new Date(Math.min(...plannedDates.map((d) => d.getTime()))) : null;
       const end = forecastDates.length ? new Date(Math.max(...forecastDates.map((d) => d.getTime()))) : null;
-      return { stage, total: rows.length, completed, pct: rows.length ? completed / rows.length : 0, start, end };
+      return { stage, total: applicable.length, completed, pct: applicable.length ? completed / applicable.length : 0, start, end };
     });
   }
 
   const pmStageSummary = stageSummary(pmItems, PM_STAGES);
   const devopsStageSummary = stageSummary(devopsItems, DEVOPS_CATEGORIES);
+
+  // Derived, not stored — the current stage (per the resolved PM-Checklist-
+  // is-canonical definition, same as the Projects list) and the project's
+  // "end date" (latest Forecast Date across every checklist item), so
+  // neither can drift out of sync with the checklist itself.
+  const pmStage = currentStage(pmItems, PM_STAGES) ?? "Complete";
+  const endDate = applicableItems.reduce<Date | null>((latest, i) => {
+    if (!i.forecastDate) return latest;
+    return !latest || i.forecastDate > latest ? i.forecastDate : latest;
+  }, null);
 
   const timelineStrip = [
     ...pmStageSummary.map((s) => ({ ...s, source: "PM Checklist" })),
@@ -101,6 +123,8 @@ export async function getDashboardData(projectId: string) {
     totalItems,
     completedItems,
     overallPct,
+    pmStage,
+    endDate,
     statusBreakdown,
     perChecklistSummary,
     pmStageSummary,

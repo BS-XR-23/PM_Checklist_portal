@@ -1,4 +1,5 @@
 import "server-only";
+import * as React from "react";
 import { getServerSession } from "next-auth";
 import { notFound, redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
@@ -25,6 +26,15 @@ export {
 // DB-touching helpers — used by pages and server actions.
 // ---------------------------------------------------------------------------
 
+// Next's webpack build aliases "react" to a canary build that has `cache()`
+// (App Router request memoization); the plain react@18 package resolved by
+// Vitest does not. Fall back to an identity wrapper outside Next's build so
+// tests keep working — they don't need the dedup, only the dev/prod server does.
+function cache<T extends (...args: never[]) => unknown>(fn: T): T {
+  const reactCache = (React as { cache?: (fn: T) => T }).cache;
+  return reactCache ? reactCache(fn) : fn;
+}
+
 export type CurrentUser = { id: string; email: string; name: string; role: Role };
 
 /**
@@ -32,16 +42,26 @@ export type CurrentUser = { id: string; email: string; name: string; role: Role 
  * rather than trusted from the JWT, so an Admin revoking/changing someone's
  * role takes effect immediately, not "next login."
  */
-export async function getCurrentUser(): Promise<CurrentUser | null> {
+// Multiple helpers below (requireModuleAccess, getModuleAccess, a page's own
+// sibling-module check, the layout's getProjectContext, ...) all resolve the
+// same session user and project membership independently. `cache()` scopes
+// per request in the App Router, so redundant calls within one render dedupe
+// to a single DB round trip instead of each re-querying from scratch — this
+// is what actually exhausted the connection pool under real navigation.
+export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   const session = await getServerSession(authOptions);
   const sessionUserId = (session?.user as { id?: string } | undefined)?.id;
   if (!sessionUserId) return null;
 
   const user = await prisma.user.findUnique({ where: { id: sessionUserId } });
   if (!user) return null;
+  // Same "immediate, not next login" philosophy as the role re-fetch below:
+  // deactivating someone mid-session should cut their access on their very
+  // next request, not wait for their JWT to expire.
+  if (!user.isActive) return null;
 
   return { id: user.id, email: user.email, name: user.name, role: user.role };
-}
+});
 
 export async function requireUser(): Promise<CurrentUser> {
   const user = await getCurrentUser();
@@ -49,14 +69,14 @@ export async function requireUser(): Promise<CurrentUser> {
   return user;
 }
 
-async function getMembership(userId: string, projectId: string): Promise<MembershipLike> {
+const getMembership = cache(async (userId: string, projectId: string): Promise<MembershipLike> => {
   const membership = await prisma.projectMembership.findUnique({
     where: { userId_projectId: { userId, projectId } },
     include: { permissions: true },
   });
   if (!membership) return null;
   return { role: membership.role, permissions: membership.permissions };
-}
+});
 
 /** For layouts/pages: 404s (never a "you're not allowed" page — existence isn't revealed) if the user can't enter this project at all. */
 export async function requireProjectAccess(projectId: string): Promise<CurrentUser> {

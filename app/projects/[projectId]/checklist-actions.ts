@@ -20,6 +20,7 @@ function revalidateChecklist(projectId: string, checklistType: ChecklistType) {
 }
 
 type ChecklistUpdateData = Partial<{
+  itemText: string;
   owner: string;
   ownerPersonId: string | null;
   plannedDate: string | null;
@@ -30,6 +31,7 @@ type ChecklistUpdateData = Partial<{
 
 function toPrismaData(data: ChecklistUpdateData) {
   return {
+    ...(data.itemText !== undefined ? { itemText: data.itemText } : {}),
     ...(data.owner !== undefined ? { owner: data.owner || null } : {}),
     ...(data.ownerPersonId !== undefined ? { ownerPersonId: data.ownerPersonId } : {}),
     ...(data.plannedDate !== undefined ? { plannedDate: parseDateInput(data.plannedDate) } : {}),
@@ -44,6 +46,13 @@ export async function updateChecklistItem(itemId: string, projectId: string, che
   // real project and authorize against that.
   const existing = await prisma.checklistItem.findUniqueOrThrow({ where: { id: itemId } });
   const user = await requireModuleWrite(existing.projectId, moduleFor(checklistType));
+
+  // Renaming wording: a PM may only rename an item they added themselves;
+  // renaming a fixed template item's text is Admin-only, enforced here (not
+  // just hidden in the UI) so a crafted request can't bypass it.
+  if (data.itemText !== undefined && !existing.isCustom && user.role !== "ADMIN") {
+    throw new Error("Only an Admin can rename a fixed checklist item's wording.");
+  }
 
   await prisma.checklistItem.update({ where: { id: itemId }, data: toPrismaData(data) });
 
@@ -78,6 +87,61 @@ export async function tpmOverrideChecklistItem(
     summary: `edited checklist item "${existing.itemText.slice(0, 60)}"`,
     diff: { before: existing, changes: data },
     mutate: () => prisma.checklistItem.update({ where: { id: itemId }, data: toPrismaData(data) }),
+  });
+
+  revalidateChecklist(existing.projectId, checklistType);
+}
+
+/** Special-case escape hatch: a project-specific step the fixed template doesn't cover. */
+export async function createChecklistItem(projectId: string, checklistType: ChecklistType, stage: string) {
+  const user = await requireModuleWrite(projectId, moduleFor(checklistType));
+
+  const { _max } = await prisma.checklistItem.aggregate({
+    where: { projectId, type: checklistType },
+    _max: { order: true },
+  });
+
+  const created = await prisma.checklistItem.create({
+    data: {
+      projectId,
+      type: checklistType,
+      order: (_max.order ?? 0) + 1,
+      stage,
+      itemText: "New checklist item — click to edit",
+      isCustom: true,
+    },
+  });
+
+  await writeAudit({
+    actor: user,
+    projectId,
+    action: "create",
+    entityType: "ChecklistItem",
+    entityId: created.id,
+    summary: `Added a custom checklist item to "${stage}"`,
+  });
+
+  revalidateChecklist(projectId, checklistType);
+}
+
+export async function deleteChecklistItem(itemId: string, projectId: string, checklistType: ChecklistType) {
+  const existing = await prisma.checklistItem.findUniqueOrThrow({ where: { id: itemId } });
+  const user = await requireModuleWrite(existing.projectId, moduleFor(checklistType));
+
+  if (!existing.isCustom) {
+    throw new Error("Fixed template items can't be deleted — only custom items you added.");
+  }
+
+  await prisma.checklistItem.delete({ where: { id: itemId } });
+
+  await writeAudit({
+    actor: user,
+    projectId: existing.projectId,
+    action: "delete",
+    entityType: "ChecklistItem",
+    entityId: itemId,
+    summary: `Deleted custom checklist item "${existing.itemText.slice(0, 60)}"`,
+    diff: { before: existing },
   });
 
   revalidateChecklist(existing.projectId, checklistType);

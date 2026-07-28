@@ -40,8 +40,9 @@ describe("isolation boundary", () => {
   let projectB: { id: string };
   let pmAUserId: string;
   let clientBUserId: string;
+  let adminUserId: string;
   let itemInB: { id: string; itemText: string };
-  let itemInA: { id: string };
+  let itemInA: { id: string; itemText: string };
 
   beforeAll(async () => {
     projectA = await prisma.project.create({ data: { name: "[TEST] Isolation Project A", contractValue: 10000, plannedManDays: 20 } });
@@ -50,8 +51,10 @@ describe("isolation boundary", () => {
     const passwordHash = await bcrypt.hash("test-password-not-used", 10);
     const pmA = await prisma.user.create({ data: { email: `test-pm-a-${Date.now()}@example.test`, name: "Test PM A", passwordHash, role: "PM" } });
     const clientB = await prisma.user.create({ data: { email: `test-client-b-${Date.now()}@example.test`, name: "Test Client B", passwordHash, role: "CLIENT" } });
+    const admin = await prisma.user.create({ data: { email: `test-admin-${Date.now()}@example.test`, name: "Test Admin", passwordHash, role: "ADMIN" } });
     pmAUserId = pmA.id;
     clientBUserId = clientB.id;
+    adminUserId = admin.id;
 
     await prisma.projectMembership.create({ data: { userId: pmAUserId, projectId: projectA.id, role: "PM" } });
     const clientMembership = await prisma.projectMembership.create({ data: { userId: clientBUserId, projectId: projectB.id, role: "CLIENT" } });
@@ -68,9 +71,15 @@ describe("isolation boundary", () => {
   });
 
   afterAll(async () => {
-    // Cascades take care of memberships/permissions/checklist items.
+    // Cascades take care of memberships/permissions/checklist items. Audit
+    // log rows for project-scoped actions cascade with the project, but the
+    // Checklist Template actions write project-less audit rows (correctly —
+    // the template isn't project data), so those need explicit cleanup
+    // before the users can be deleted (AuditLog.actorId has no cascade,
+    // by design — an audit trail shouldn't silently lose its actor).
     await prisma.project.deleteMany({ where: { id: { in: [projectA.id, projectB.id] } } });
-    await prisma.user.deleteMany({ where: { id: { in: [pmAUserId, clientBUserId] } } });
+    await prisma.auditLog.deleteMany({ where: { actorId: { in: [pmAUserId, clientBUserId, adminUserId] } } });
+    await prisma.user.deleteMany({ where: { id: { in: [pmAUserId, clientBUserId, adminUserId] } } });
   });
 
   it("PM-A has WRITE on their own project's modules, NONE on the other project's", async () => {
@@ -136,5 +145,225 @@ describe("isolation boundary", () => {
     const { getModuleAccess } = await import("@/lib/rbac");
     actAs(null);
     expect(await getModuleAccess(projectA.id, "PM_CHECKLIST")).toBe("NONE");
+  });
+
+  it("Admin-only rename: PM-A cannot rename a fixed template item's text, even on their own project", async () => {
+    const { updateChecklistItem } = await import("@/app/projects/[projectId]/checklist-actions");
+    actAs(pmAUserId);
+    await expect(updateChecklistItem(itemInA.id, projectA.id, "PM", { itemText: "hacked" })).rejects.toThrow();
+    const stillUnchanged = await prisma.checklistItem.findUniqueOrThrow({ where: { id: itemInA.id } });
+    expect(stillUnchanged.itemText).toBe(itemInA.itemText);
+  });
+
+  it("sanity check: Admin CAN rename a fixed template item's text", async () => {
+    const { updateChecklistItem } = await import("@/app/projects/[projectId]/checklist-actions");
+    actAs(adminUserId);
+    await updateChecklistItem(itemInA.id, projectA.id, "PM", { itemText: "[TEST] renamed by admin" });
+    const updated = await prisma.checklistItem.findUniqueOrThrow({ where: { id: itemInA.id } });
+    expect(updated.itemText).toBe("[TEST] renamed by admin");
+  });
+
+  it("PM-A cannot delete a fixed template item — only custom items are deletable", async () => {
+    const { deleteChecklistItem } = await import("@/app/projects/[projectId]/checklist-actions");
+    actAs(pmAUserId);
+    await expect(deleteChecklistItem(itemInA.id, projectA.id, "PM")).rejects.toThrow();
+    expect(await prisma.checklistItem.findUnique({ where: { id: itemInA.id } })).not.toBeNull();
+  });
+
+  it("sanity check: PM-A CAN rename and delete their own custom item", async () => {
+    const { updateChecklistItem, deleteChecklistItem } = await import("@/app/projects/[projectId]/checklist-actions");
+    actAs(pmAUserId);
+    const custom = await prisma.checklistItem.create({
+      data: { projectId: projectA.id, type: "PM", order: 997, stage: "Pre-Sales & Initiation", itemText: "[TEST] before rename", isCustom: true },
+    });
+
+    await updateChecklistItem(custom.id, projectA.id, "PM", { itemText: "[TEST] after rename" });
+    expect((await prisma.checklistItem.findUniqueOrThrow({ where: { id: custom.id } })).itemText).toBe("[TEST] after rename");
+
+    await deleteChecklistItem(custom.id, projectA.id, "PM");
+    expect(await prisma.checklistItem.findUnique({ where: { id: custom.id } })).toBeNull();
+  });
+
+  it("guessed-ID attack: PM-A cannot add a checklist item to Project B", async () => {
+    const { createChecklistItem } = await import("@/app/projects/[projectId]/checklist-actions");
+    actAs(pmAUserId);
+    await expect(createChecklistItem(projectB.id, "PM", "Pre-Sales & Initiation")).rejects.toThrow();
+  });
+
+  it("guessed-ID attack: PM-A cannot delete a real (custom) ChecklistItem that belongs to Project B", async () => {
+    const { deleteChecklistItem } = await import("@/app/projects/[projectId]/checklist-actions");
+    const customInB = await prisma.checklistItem.create({
+      data: { projectId: projectB.id, type: "PM", order: 996, stage: "Pre-Sales & Initiation", itemText: "[TEST] custom in B", isCustom: true },
+    });
+    actAs(pmAUserId);
+    await expect(deleteChecklistItem(customInB.id, projectB.id, "PM")).rejects.toThrow();
+    expect(await prisma.checklistItem.findUnique({ where: { id: customInB.id } })).not.toBeNull();
+  });
+
+  it("sanity check: PM-A CAN add a milestone (creates ChecklistItem + MilestonePayment together) and rename it", async () => {
+    const { addMilestone, updateMilestoneName } = await import("@/app/projects/[projectId]/milestones/milestone-actions");
+    actAs(pmAUserId);
+
+    await addMilestone(projectA.id, { checklistType: "PM", stage: "Planning", name: "[TEST] Beta Signoff" });
+
+    const created = await prisma.checklistItem.findFirstOrThrow({
+      where: { projectId: projectA.id, milestoneName: "[TEST] Beta Signoff" },
+      include: { milestonePayment: true },
+    });
+    expect(created.isCustom).toBe(true);
+    expect(created.stage).toBe("Planning");
+    expect(created.milestonePayment?.paymentPct).toBe(0);
+
+    await updateMilestoneName(created.id, projectA.id, "[TEST] Beta Signoff (renamed)");
+    const renamed = await prisma.checklistItem.findUniqueOrThrow({ where: { id: created.id } });
+    expect(renamed.milestoneName).toBe("[TEST] Beta Signoff (renamed)");
+  });
+
+  it("guessed-ID attack: PM-A cannot add a milestone to Project B, or rename one that belongs to it", async () => {
+    const { addMilestone, updateMilestoneName } = await import("@/app/projects/[projectId]/milestones/milestone-actions");
+
+    const milestoneItemInB = await prisma.checklistItem.create({
+      data: { projectId: projectB.id, type: "PM", order: 995, stage: "Pre-Sales & Initiation", itemText: "[TEST] B milestone", milestoneName: "[TEST] B milestone" },
+    });
+    await prisma.milestonePayment.create({ data: { checklistItemId: milestoneItemInB.id, paymentPct: 0.1 } });
+
+    actAs(pmAUserId);
+    await expect(addMilestone(projectB.id, { checklistType: "PM", stage: "Planning", name: "[TEST] should fail" })).rejects.toThrow();
+    await expect(updateMilestoneName(milestoneItemInB.id, projectB.id, "hacked")).rejects.toThrow();
+
+    const stillUnchanged = await prisma.checklistItem.findUniqueOrThrow({ where: { id: milestoneItemInB.id } });
+    expect(stillUnchanged.milestoneName).toBe("[TEST] B milestone");
+  });
+
+  it("Checklist Template is Admin-only: a PM (even with WRITE everywhere on their own project) cannot touch it", async () => {
+    const { createTemplateItem, updateTemplateItem, deleteTemplateItem } = await import("@/app/admin/checklist-template/template-actions");
+    actAs(pmAUserId);
+
+    await expect(createTemplateItem("PM", "[TEST] Stage")).rejects.toThrow();
+
+    const templateItem = await prisma.checklistTemplateItem.create({
+      data: { type: "PM", order: -100, stage: "[TEST] Stage", itemText: "[TEST] template item" },
+    });
+    try {
+      await expect(updateTemplateItem(templateItem.id, { itemText: "hacked" })).rejects.toThrow();
+      await expect(deleteTemplateItem(templateItem.id)).rejects.toThrow();
+      const stillThere = await prisma.checklistTemplateItem.findUniqueOrThrow({ where: { id: templateItem.id } });
+      expect(stillThere.itemText).toBe("[TEST] template item");
+    } finally {
+      await prisma.checklistTemplateItem.delete({ where: { id: templateItem.id } });
+    }
+  });
+
+  it("changePassword rejects a wrong current password without touching the hash", async () => {
+    const { changePassword } = await import("@/app/admin/users/user-actions");
+    actAs(pmAUserId);
+
+    const before = await prisma.user.findUniqueOrThrow({ where: { id: pmAUserId } });
+    await expect(changePassword("definitely-wrong-password", "a-new-password-123")).rejects.toThrow();
+    const after = await prisma.user.findUniqueOrThrow({ where: { id: pmAUserId } });
+    expect(after.passwordHash).toBe(before.passwordHash);
+  });
+
+  it("changePassword CAN change your own password given the correct current one", async () => {
+    const { changePassword } = await import("@/app/admin/users/user-actions");
+    actAs(pmAUserId);
+
+    const before = await prisma.user.findUniqueOrThrow({ where: { id: pmAUserId } });
+    await changePassword("test-password-not-used", "a-brand-new-password-123");
+    const after = await prisma.user.findUniqueOrThrow({ where: { id: pmAUserId } });
+    expect(after.passwordHash).not.toBe(before.passwordHash);
+    expect(await bcrypt.compare("a-brand-new-password-123", after.passwordHash)).toBe(true);
+  });
+
+  it("resetUserPassword is Admin-only: a PM cannot reset another user's password", async () => {
+    const { resetUserPassword } = await import("@/app/admin/users/user-actions");
+    actAs(pmAUserId);
+    await expect(resetUserPassword(clientBUserId)).rejects.toThrow();
+  });
+
+  it("sanity check: Admin CAN reset a user's password", async () => {
+    const { resetUserPassword } = await import("@/app/admin/users/user-actions");
+    actAs(adminUserId);
+
+    const before = await prisma.user.findUniqueOrThrow({ where: { id: clientBUserId } });
+    const { tempPassword } = await resetUserPassword(clientBUserId);
+    const after = await prisma.user.findUniqueOrThrow({ where: { id: clientBUserId } });
+    expect(after.passwordHash).not.toBe(before.passwordHash);
+    expect(await bcrypt.compare(tempPassword, after.passwordHash)).toBe(true);
+  });
+
+  it("deactivating a user cuts their access immediately — getCurrentUser() returns null, not stale data", async () => {
+    const { getCurrentUser } = await import("@/lib/rbac");
+    const { setUserActive } = await import("@/app/admin/users/user-actions");
+
+    actAs(clientBUserId);
+    expect(await getCurrentUser()).not.toBeNull();
+
+    actAs(adminUserId);
+    await setUserActive(clientBUserId, false);
+
+    actAs(clientBUserId);
+    expect(await getCurrentUser()).toBeNull();
+
+    // Restore so later tests in this file that depend on clientB still work.
+    actAs(adminUserId);
+    await setUserActive(clientBUserId, true);
+    actAs(clientBUserId);
+    expect(await getCurrentUser()).not.toBeNull();
+  });
+
+  it("setUserActive/updateUserProfile are Admin-only, and an Admin can't deactivate themselves", async () => {
+    const { setUserActive, updateUserProfile } = await import("@/app/admin/users/user-actions");
+
+    actAs(pmAUserId);
+    await expect(setUserActive(clientBUserId, false)).rejects.toThrow();
+    await expect(updateUserProfile(clientBUserId, { name: "hacked" })).rejects.toThrow();
+
+    actAs(adminUserId);
+    await expect(setUserActive(adminUserId, false)).rejects.toThrow();
+  });
+
+  it("updateUserProfile rejects an email collision but allows a real rename", async () => {
+    const { updateUserProfile } = await import("@/app/admin/users/user-actions");
+    actAs(adminUserId);
+
+    const admin = await prisma.user.findUniqueOrThrow({ where: { id: adminUserId } });
+    await expect(updateUserProfile(clientBUserId, { email: admin.email })).rejects.toThrow();
+
+    await updateUserProfile(clientBUserId, { name: "[TEST] Renamed Client B" });
+    const updated = await prisma.user.findUniqueOrThrow({ where: { id: clientBUserId } });
+    expect(updated.name).toBe("[TEST] Renamed Client B");
+  });
+
+  it("setProjectStatus (archive) is Admin-only", async () => {
+    const { setProjectStatus } = await import("@/app/projects/actions");
+    actAs(pmAUserId);
+    await expect(setProjectStatus(projectA.id, "ARCHIVED")).rejects.toThrow();
+    expect((await prisma.project.findUniqueOrThrow({ where: { id: projectA.id } })).status).toBe("ACTIVE");
+  });
+
+  it("sanity check: Admin CAN archive and unarchive a project", async () => {
+    const { setProjectStatus } = await import("@/app/projects/actions");
+    actAs(adminUserId);
+
+    await setProjectStatus(projectA.id, "ARCHIVED");
+    expect((await prisma.project.findUniqueOrThrow({ where: { id: projectA.id } })).status).toBe("ARCHIVED");
+
+    await setProjectStatus(projectA.id, "ACTIVE");
+    expect((await prisma.project.findUniqueOrThrow({ where: { id: projectA.id } })).status).toBe("ACTIVE");
+  });
+
+  it("sanity check: Admin CAN manage the checklist template", async () => {
+    const { createTemplateItem, updateTemplateItem, deleteTemplateItem } = await import("@/app/admin/checklist-template/template-actions");
+    actAs(adminUserId);
+
+    await createTemplateItem("PM", "[TEST] Stage");
+    const created = await prisma.checklistTemplateItem.findFirstOrThrow({ where: { type: "PM", stage: "[TEST] Stage" } });
+
+    await updateTemplateItem(created.id, { itemText: "[TEST] renamed" });
+    expect((await prisma.checklistTemplateItem.findUniqueOrThrow({ where: { id: created.id } })).itemText).toBe("[TEST] renamed");
+
+    await deleteTemplateItem(created.id);
+    expect(await prisma.checklistTemplateItem.findUnique({ where: { id: created.id } })).toBeNull();
   });
 });

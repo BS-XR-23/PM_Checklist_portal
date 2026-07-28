@@ -49,6 +49,15 @@ export function IconIdCard(props: React.SVGProps<SVGSVGElement>) {
   );
 }
 
+export function IconLayers(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M12 3.5l8 4.3-8 4.3-8-4.3 8-4.3z" />
+      <path d="M4 12.2l8 4.3 8-4.3M4 16l8 4.3L20 16" />
+    </svg>
+  );
+}
+
 export function IconClipboardList(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" {...props}>
