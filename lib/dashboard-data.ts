@@ -6,9 +6,10 @@ import { riskScore, computeEvm, trancheAmount, currentStage, reminderBand } from
 export async function getDashboardData(projectId: string) {
   const project = await prisma.project.findUniqueOrThrow({ where: { id: projectId } });
 
-  const [pmItems, devopsItems, risks, crs, budgetEntries, milestones, actionItems, recentDecisionsRaw] = await Promise.all([
-    prisma.checklistItem.findMany({ where: { projectId, type: "PM" }, orderBy: { order: "asc" } }),
-    prisma.checklistItem.findMany({ where: { projectId, type: "DEVOPS" }, orderBy: { order: "asc" } }),
+  const [allItems, risks, crs, budgetEntries, milestones, actionItems, recentDecisionsRaw] = await Promise.all([
+    // One query for both checklists (differ only by `type`) instead of two —
+    // filtering below preserves the orderBy order within each subset.
+    prisma.checklistItem.findMany({ where: { projectId }, orderBy: { order: "asc" } }),
     prisma.riskItem.findMany({ where: { projectId } }),
     prisma.changeRequest.findMany({ where: { projectId } }),
     prisma.budgetEntry.findMany({ where: { projectId }, orderBy: { weekEnding: "asc" } }),
@@ -24,7 +25,8 @@ export async function getDashboardData(projectId: string) {
     decidedByName: d.decidedByPerson?.name ?? d.decidedBy ?? null,
   }));
 
-  const allItems = [...pmItems, ...devopsItems];
+  const pmItems = allItems.filter((i) => i.type === "PM");
+  const devopsItems = allItems.filter((i) => i.type === "DEVOPS");
   // N/A items don't count toward completion at all — not the numerator
   // (obviously not completed) and not the denominator either (they're not
   // part of this project's plan, same as if the template item weren't there).

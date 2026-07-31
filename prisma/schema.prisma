@@ -125,6 +125,10 @@ model AuditLog {
   diff       Json?
   isOverride Boolean  @default(false)
   createdAt  DateTime @default(now())
+
+  @@index([projectId])
+  @@index([actorId])
+  @@index([createdAt])
 }
 
 /// TPM's dedicated write surface — deliberately never touches the 7 project-data
@@ -140,6 +144,8 @@ model EscalationItem {
   createdById String
   createdBy   User     @relation(fields: [createdById], references: [id])
   createdAt   DateTime @default(now())
+
+  @@index([projectId])
 }
 
 model ChecklistItem {
@@ -208,6 +214,8 @@ model RiskItem {
   dateClosed    DateTime?
   notes         String?
   order         Int       @default(0)
+
+  @@index([projectId])
 }
 
 /// Append-only record of "what did we decide and why" — distinct from
@@ -226,6 +234,8 @@ model DecisionLogItem {
   decidedByPersonId String?
   decidedByPerson   Person?   @relation(fields: [decidedByPersonId], references: [id], onDelete: SetNull)
   notes             String?
+
+  @@index([projectId])
 }
 
 /// Lightweight follow-ups that fall out of a call/meeting — too small for
@@ -243,6 +253,8 @@ model ActionItem {
   dueDate       DateTime?
   status        String    @default("Open") // "Open" | "Done"
   notes         String?
+
+  @@index([projectId])
 }
 
 model ChangeRequest {
@@ -398,4 +410,6 @@ model ProjectEngagement {
   endDate       DateTime?
   notes         String?
   createdAt     DateTime  @default(now())
+
+  @@index([projectId])
 }

@@ -15,14 +15,17 @@ export default async function ProjectLayout({
   children: React.ReactNode;
   params: { projectId: string };
 }) {
-  const project = await prisma.project.findUnique({ where: { id: params.projectId } });
+  // Independent lookups — run concurrently rather than as two serialized
+  // round trips.
+  const [project, { user, moduleAccess }] = await Promise.all([
+    prisma.project.findUnique({ where: { id: params.projectId } }),
+    // Coarse gate (404s if this user has no business being in this project
+    // at all) plus every module's access level, computed once for nav
+    // filtering. Each page still re-checks its own module access
+    // independently — this is UX filtering, not the enforcement boundary.
+    getProjectContext(params.projectId),
+  ]);
   if (!project || project.deletedAt) notFound();
-
-  // Coarse gate (404s if this user has no business being in this project at
-  // all) plus every module's access level, computed once for nav filtering.
-  // Each page still re-checks its own module access independently — this is
-  // UX filtering, not the enforcement boundary.
-  const { user, moduleAccess } = await getProjectContext(params.projectId);
 
   const canSeeTeam = user.role === "ADMIN" || user.role === "TPM" || user.role === "PM";
   const canSeeActivity = user.role === "ADMIN" || user.role === "TPM" || user.role === "PM";
