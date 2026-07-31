@@ -119,12 +119,11 @@ export type ReminderBand = "OVERDUE" | "DUE_SOON" | null;
  */
 export function reminderBand(
   plannedDate: Date | null,
-  status: string,
+  isDone: boolean,
   today: Date = new Date(),
   dueSoonDays = 7
 ): ReminderBand {
-  if (!plannedDate) return null;
-  if (status === "COMPLETED" || status === "NOT_APPLICABLE") return null;
+  if (!plannedDate || isDone) return null;
   const diffDays = Math.floor((plannedDate.getTime() - today.getTime()) / 86400000);
   if (diffDays < 0) return "OVERDUE";
   if (diffDays <= dueSoonDays) return "DUE_SOON";

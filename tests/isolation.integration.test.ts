@@ -118,13 +118,15 @@ describe("isolation boundary", () => {
     expect(updated.status).toBe("COMPLETED");
   });
 
-  it("Client-B sees Milestones in full but Risk Register/CR Log/Budget are NONE, on their own assigned project", async () => {
+  it("Client-B sees Milestones in full but Risk Register/CR Log/Budget/Decision Log/Action Items are NONE, on their own assigned project", async () => {
     const { getModuleAccess } = await import("@/lib/rbac");
     actAs(clientBUserId);
     expect(await getModuleAccess(projectB.id, "MILESTONES")).toBe("READ_FULL");
     expect(await getModuleAccess(projectB.id, "RISK_REGISTER")).toBe("NONE");
     expect(await getModuleAccess(projectB.id, "CR_LOG")).toBe("NONE");
     expect(await getModuleAccess(projectB.id, "BUDGET_TRACKER")).toBe("NONE");
+    expect(await getModuleAccess(projectB.id, "DECISION_LOG")).toBe("NONE");
+    expect(await getModuleAccess(projectB.id, "ACTION_ITEMS")).toBe("NONE");
   });
 
   it("Client-B has NONE on every module of Project A — a role held elsewhere grants nothing here", async () => {
@@ -447,5 +449,62 @@ describe("isolation boundary", () => {
 
     await deleteTemplateItem(created.id);
     expect(await prisma.checklistTemplateItem.findUnique({ where: { id: created.id } })).toBeNull();
+  });
+
+  it("guessed-ID attack: PM-A cannot create, update, or delete a Decision Log entry on Project B", async () => {
+    const { createDecision, updateDecision, deleteDecision } = await import("@/app/projects/[projectId]/decisions/decision-actions");
+    const decisionInB = await prisma.decisionLogItem.create({ data: { projectId: projectB.id, decision: "[TEST] decision in B" } });
+
+    actAs(pmAUserId);
+    await expect(createDecision(projectB.id)).rejects.toThrow();
+    await expect(updateDecision(decisionInB.id, projectB.id, { decision: "hacked" })).rejects.toThrow();
+    await expect(deleteDecision(decisionInB.id, projectB.id)).rejects.toThrow();
+
+    const stillThere = await prisma.decisionLogItem.findUniqueOrThrow({ where: { id: decisionInB.id } });
+    expect(stillThere.decision).toBe("[TEST] decision in B");
+  });
+
+  it("sanity check: PM-A CAN create, update, and delete a Decision Log entry on their own project", async () => {
+    const { createDecision, updateDecision, deleteDecision } = await import("@/app/projects/[projectId]/decisions/decision-actions");
+    actAs(pmAUserId);
+
+    await createDecision(projectA.id);
+    const created = await prisma.decisionLogItem.findFirstOrThrow({ where: { projectId: projectA.id, decision: "New decision" } });
+
+    await updateDecision(created.id, projectA.id, { decision: "[TEST] renamed decision", rationale: "[TEST] because reasons" });
+    const updated = await prisma.decisionLogItem.findUniqueOrThrow({ where: { id: created.id } });
+    expect(updated.decision).toBe("[TEST] renamed decision");
+    expect(updated.rationale).toBe("[TEST] because reasons");
+
+    await deleteDecision(created.id, projectA.id);
+    expect(await prisma.decisionLogItem.findUnique({ where: { id: created.id } })).toBeNull();
+  });
+
+  it("guessed-ID attack: PM-A cannot create, update, or delete an Action Item on Project B", async () => {
+    const { createActionItem, updateActionItem, deleteActionItem } = await import("@/app/projects/[projectId]/action-items/action-item-actions");
+    const actionInB = await prisma.actionItem.create({ data: { projectId: projectB.id, description: "[TEST] action in B" } });
+
+    actAs(pmAUserId);
+    await expect(createActionItem(projectB.id)).rejects.toThrow();
+    await expect(updateActionItem(actionInB.id, projectB.id, { status: "Done" })).rejects.toThrow();
+    await expect(deleteActionItem(actionInB.id, projectB.id)).rejects.toThrow();
+
+    const stillThere = await prisma.actionItem.findUniqueOrThrow({ where: { id: actionInB.id } });
+    expect(stillThere.status).toBe("Open");
+  });
+
+  it("sanity check: PM-A CAN create, toggle, and delete an Action Item on their own project", async () => {
+    const { createActionItem, updateActionItem, deleteActionItem } = await import("@/app/projects/[projectId]/action-items/action-item-actions");
+    actAs(pmAUserId);
+
+    await createActionItem(projectA.id);
+    const created = await prisma.actionItem.findFirstOrThrow({ where: { projectId: projectA.id, description: "New action item" } });
+    expect(created.status).toBe("Open");
+
+    await updateActionItem(created.id, projectA.id, { status: "Done" });
+    expect((await prisma.actionItem.findUniqueOrThrow({ where: { id: created.id } })).status).toBe("Done");
+
+    await deleteActionItem(created.id, projectA.id);
+    expect(await prisma.actionItem.findUnique({ where: { id: created.id } })).toBeNull();
   });
 });

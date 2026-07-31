@@ -2,7 +2,7 @@ import Link from "next/link";
 import { getDashboardData } from "@/lib/dashboard-data";
 import { formatPct, formatMoney, formatDate } from "@/lib/format";
 import { STATUS_COLORS, RISK_SEVERITY_COLORS, INDEX_FAVORABLE_COLOR, INDEX_UNFAVORABLE_COLOR } from "@/lib/colors";
-import { requireModuleAccess } from "@/lib/rbac";
+import { requireModuleAccess, getModuleAccess } from "@/lib/rbac";
 import { StatTile } from "@/components/ui/stat-tile";
 import { StatusPieChart } from "@/components/charts/status-pie-chart";
 import { CompletionBarChart } from "@/components/charts/completion-bar-chart";
@@ -10,7 +10,10 @@ import { EvmLineChart } from "@/components/charts/evm-line-chart";
 import { TimelineStrip } from "@/components/dashboard/timeline-strip";
 
 export default async function DashboardPage({ params }: { params: { projectId: string } }) {
-  const access = await requireModuleAccess(params.projectId, "DASHBOARD", "READ_LIMITED");
+  const [access, decisionLogAccess] = await Promise.all([
+    requireModuleAccess(params.projectId, "DASHBOARD", "READ_LIMITED"),
+    getModuleAccess(params.projectId, "DECISION_LOG"),
+  ]);
   // READ_LIMITED (the Client default): overall progress only — no financial/
   // risk snapshot, no cost-bearing budget-burn chart.
   const financialsVisible = access !== "READ_LIMITED";
@@ -56,13 +59,13 @@ export default async function DashboardPage({ params }: { params: { projectId: s
               return (
                 <Link
                   key={r.id}
-                  href={`/projects/${data.project.id}/${r.type === "PM" ? "pm-checklist" : "devops-checklist"}`}
+                  href={`/projects/${data.project.id}/${r.route}`}
                   prefetch={false}
                   className="flex items-center justify-between gap-3 rounded-md px-2 py-1.5 hover:bg-slate-50"
                 >
                   <div className="min-w-0">
                     <p className="text-sm text-slate-800 truncate">{r.itemText}</p>
-                    <p className="text-xs text-slate-400">{r.stage} · Planned {formatDate(r.plannedDate)}</p>
+                    <p className="text-xs text-slate-400">{r.context} · {r.source === "ACTION_ITEM" ? "Due" : "Planned"} {formatDate(r.plannedDate)}</p>
                   </div>
                   <span
                     className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium shrink-0"
@@ -73,6 +76,27 @@ export default async function DashboardPage({ params }: { params: { projectId: s
                 </Link>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {decisionLogAccess !== "NONE" && data.recentDecisions.length > 0 && (
+        <div className="rounded-lg border border-slate-200 bg-white p-4">
+          <h3 className="text-sm font-semibold text-slate-700 mb-2">Recent Decisions</h3>
+          <div className="space-y-1.5">
+            {data.recentDecisions.map((d) => (
+              <Link
+                key={d.id}
+                href={`/projects/${data.project.id}/decisions`}
+                prefetch={false}
+                className="flex items-center justify-between gap-3 rounded-md px-2 py-1.5 hover:bg-slate-50"
+              >
+                <p className="text-sm text-slate-800 truncate">{d.decision}</p>
+                <p className="text-xs text-slate-400 shrink-0">
+                  {d.decidedByName ?? "—"}{d.date ? ` · ${formatDate(d.date)}` : ""}
+                </p>
+              </Link>
+            ))}
           </div>
         </div>
       )}

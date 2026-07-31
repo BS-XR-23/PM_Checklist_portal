@@ -1,17 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { meetsLevel, computeProjectAccess, computeModuleAccess, DEFAULT_CLIENT_PERMISSIONS, type MembershipLike } from "./rbac-core";
+import { meetsLevel, computeProjectAccess, computeModuleAccess, DEFAULT_CLIENT_PERMISSIONS, ALL_MODULES, type MembershipLike } from "./rbac-core";
 import type { Role, ModuleName, AccessLevel } from "@prisma/client";
-
-const ALL_MODULES: ModuleName[] = [
-  "DASHBOARD",
-  "PM_CHECKLIST",
-  "DEVOPS_CHECKLIST",
-  "MILESTONES",
-  "RISK_REGISTER",
-  "CR_LOG",
-  "BUDGET_TRACKER",
-  "PM_PLAN",
-];
 
 function membership(role: Role, permissions: { module: ModuleName; access: AccessLevel }[] = []): MembershipLike {
   return { role, permissions };

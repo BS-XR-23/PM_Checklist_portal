@@ -25,7 +25,7 @@ export default async function NotificationsPage() {
       <header className="border-b border-slate-200 bg-white px-4 sm:px-6 py-4">
         <h1 className="text-lg font-semibold text-slate-900">Reminders</h1>
         <p className="text-sm text-slate-500">
-          Checklist items across your projects that are overdue or due within the next 7 days.
+          Checklist items and action items across your projects that are overdue or due within the next 7 days.
         </p>
       </header>
 
@@ -39,14 +39,14 @@ export default async function NotificationsPage() {
               return (
                 <Link
                   key={i}
-                  href={`/projects/${r.projectId}/${r.type === "PM" ? "pm-checklist" : "devops-checklist"}`}
+                  href={`/projects/${r.projectId}/${r.route}`}
                   prefetch={false}
                   className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-slate-50"
                 >
                   <div className="min-w-0">
                     <p className="text-sm text-slate-800 truncate">{r.itemText}</p>
                     <p className="text-xs text-slate-400">
-                      {r.projectName} · {r.stage} · Planned {formatDate(r.plannedDate)}
+                      {r.projectName} · {r.context} · {r.source === "ACTION_ITEM" ? "Due" : "Planned"} {formatDate(r.plannedDate)}
                     </p>
                   </div>
                   <span

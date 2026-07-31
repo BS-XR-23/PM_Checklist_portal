@@ -41,6 +41,9 @@ export default async function ProjectLayout({
   }
   if (moduleAccess.BUDGET_TRACKER !== "NONE") visibleTabs.push({ href: "/budget", label: "Budget Tracker" });
   if (moduleAccess.PM_PLAN !== "NONE") visibleTabs.push({ href: "/pm-plan", label: "PM Plan" });
+  if (moduleAccess.DECISION_LOG !== "NONE" || moduleAccess.ACTION_ITEMS !== "NONE") {
+    visibleTabs.push({ href: "/decisions", label: "Decisions", matchHrefs: ["/action-items"] });
+  }
   if (canSeeTeam || canSeeResourcing) {
     visibleTabs.push({ href: "/team", label: "Team", matchHrefs: ["/resourcing"] });
   }

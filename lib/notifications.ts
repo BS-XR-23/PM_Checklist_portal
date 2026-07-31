@@ -25,8 +25,9 @@ async function visibleActiveProjectIds(user: CurrentUser): Promise<string[]> {
 export type ReminderItem = {
   projectId: string;
   projectName: string;
-  type: string;
-  stage: string;
+  source: "CHECKLIST" | "ACTION_ITEM";
+  route: string;
+  context: string;
   itemText: string;
   plannedDate: Date;
   band: "OVERDUE" | "DUE_SOON";
@@ -36,27 +37,49 @@ async function reminderItemsRaw(user: CurrentUser): Promise<ReminderItem[]> {
   const projectIds = await visibleActiveProjectIds(user);
   if (projectIds.length === 0) return [];
 
-  const items = await prisma.checklistItem.findMany({
-    where: { projectId: { in: projectIds }, status: { notIn: ["COMPLETED", "NOT_APPLICABLE"] }, plannedDate: { not: null } },
-    include: { project: { select: { id: true, name: true } } },
-  });
+  const [checklistItems, actionItems] = await Promise.all([
+    prisma.checklistItem.findMany({
+      where: { projectId: { in: projectIds }, status: { notIn: ["COMPLETED", "NOT_APPLICABLE"] }, plannedDate: { not: null } },
+      include: { project: { select: { id: true, name: true } } },
+    }),
+    prisma.actionItem.findMany({
+      where: { projectId: { in: projectIds }, status: { not: "Done" }, dueDate: { not: null } },
+      include: { project: { select: { id: true, name: true } }, ownerPerson: { select: { name: true } } },
+    }),
+  ]);
 
-  return items
-    .map((i) => ({ item: i, band: reminderBand(i.plannedDate, i.status) }))
-    .filter((x): x is { item: (typeof items)[number]; band: "OVERDUE" | "DUE_SOON" } => x.band !== null)
-    .map(({ item, band }) => ({
-      projectId: item.project.id,
-      projectName: item.project.name,
-      type: item.type,
-      stage: item.stage,
-      itemText: item.itemText,
-      plannedDate: item.plannedDate as Date,
+  const checklistReminders = checklistItems
+    .map((i) => ({ i, band: reminderBand(i.plannedDate, i.status === "COMPLETED" || i.status === "NOT_APPLICABLE") }))
+    .filter((x): x is { i: (typeof checklistItems)[number]; band: "OVERDUE" | "DUE_SOON" } => x.band !== null)
+    .map(({ i, band }) => ({
+      projectId: i.project.id,
+      projectName: i.project.name,
+      source: "CHECKLIST" as const,
+      route: i.type === "PM" ? "pm-checklist" : "devops-checklist",
+      context: i.stage,
+      itemText: i.itemText,
+      plannedDate: i.plannedDate as Date,
       band,
-    }))
-    .sort((a, b) => {
-      if (a.band !== b.band) return a.band === "OVERDUE" ? -1 : 1;
-      return a.plannedDate.getTime() - b.plannedDate.getTime();
-    });
+    }));
+
+  const actionItemReminders = actionItems
+    .map((a) => ({ a, band: reminderBand(a.dueDate, a.status === "Done") }))
+    .filter((x): x is { a: (typeof actionItems)[number]; band: "OVERDUE" | "DUE_SOON" } => x.band !== null)
+    .map(({ a, band }) => ({
+      projectId: a.project.id,
+      projectName: a.project.name,
+      source: "ACTION_ITEM" as const,
+      route: "action-items",
+      context: a.ownerPerson?.name ?? a.owner ?? "Unassigned",
+      itemText: a.description,
+      plannedDate: a.dueDate as Date,
+      band,
+    }));
+
+  return [...checklistReminders, ...actionItemReminders].sort((a, b) => {
+    if (a.band !== b.band) return a.band === "OVERDUE" ? -1 : 1;
+    return a.plannedDate.getTime() - b.plannedDate.getTime();
+  });
 }
 
 export async function getReminderCount(user: CurrentUser): Promise<number> {

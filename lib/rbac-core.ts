@@ -51,6 +51,8 @@ export const DEFAULT_CLIENT_PERMISSIONS: { module: ModuleName; access: AccessLev
   { module: "CR_LOG", access: "NONE" },
   { module: "BUDGET_TRACKER", access: "NONE" },
   { module: "PM_PLAN", access: "NONE" },
+  { module: "DECISION_LOG", access: "NONE" },
+  { module: "ACTION_ITEMS", access: "NONE" },
 ];
 
 export const ALL_MODULES: ModuleName[] = [
@@ -62,4 +64,6 @@ export const ALL_MODULES: ModuleName[] = [
   "CR_LOG",
   "BUDGET_TRACKER",
   "PM_PLAN",
+  "DECISION_LOG",
+  "ACTION_ITEMS",
 ];

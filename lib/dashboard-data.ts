@@ -6,14 +6,23 @@ import { riskScore, computeEvm, trancheAmount, currentStage, reminderBand } from
 export async function getDashboardData(projectId: string) {
   const project = await prisma.project.findUniqueOrThrow({ where: { id: projectId } });
 
-  const [pmItems, devopsItems, risks, crs, budgetEntries, milestones] = await Promise.all([
+  const [pmItems, devopsItems, risks, crs, budgetEntries, milestones, actionItems, recentDecisionsRaw] = await Promise.all([
     prisma.checklistItem.findMany({ where: { projectId, type: "PM" }, orderBy: { order: "asc" } }),
     prisma.checklistItem.findMany({ where: { projectId, type: "DEVOPS" }, orderBy: { order: "asc" } }),
     prisma.riskItem.findMany({ where: { projectId } }),
     prisma.changeRequest.findMany({ where: { projectId } }),
     prisma.budgetEntry.findMany({ where: { projectId }, orderBy: { weekEnding: "asc" } }),
     prisma.milestonePayment.findMany({ where: { checklistItem: { projectId } }, include: { checklistItem: true } }),
+    prisma.actionItem.findMany({ where: { projectId, dueDate: { not: null } }, include: { ownerPerson: { select: { name: true } } } }),
+    prisma.decisionLogItem.findMany({ where: { projectId }, orderBy: { order: "desc" }, take: 5, include: { decidedByPerson: { select: { name: true } } } }),
   ]);
+
+  const recentDecisions = recentDecisionsRaw.map((d) => ({
+    id: d.id,
+    decision: d.decision,
+    date: d.date,
+    decidedByName: d.decidedByPerson?.name ?? d.decidedBy ?? null,
+  }));
 
   const allItems = [...pmItems, ...devopsItems];
   // N/A items don't count toward completion at all — not the numerator
@@ -69,20 +78,38 @@ export async function getDashboardData(projectId: string) {
 
   // Same reminder-worthy definition as lib/notifications.ts (cross-project
   // sidebar/notifications page) — computed here for free since allItems is
-  // already loaded, no extra query. band is non-null here by construction
-  // (reminderBand only returns null when plannedDate is null), so
-  // plannedDate is guaranteed non-null too.
-  const reminders = allItems
-    .filter((i) => reminderBand(i.plannedDate, i.status) !== null)
-    .map((i) => ({
+  // already loaded, no extra query for the checklist half. band is non-null
+  // here by construction (reminderBand only returns null when plannedDate
+  // is null or the item's done), so plannedDate is guaranteed non-null too.
+  const checklistReminders = allItems
+    .map((i) => ({ i, band: reminderBand(i.plannedDate, i.status === "COMPLETED" || i.status === "NOT_APPLICABLE") }))
+    .filter((x): x is { i: (typeof allItems)[number]; band: "OVERDUE" | "DUE_SOON" } => x.band !== null)
+    .map(({ i, band }) => ({
       id: i.id,
-      type: i.type,
-      stage: i.stage,
+      source: "CHECKLIST" as const,
+      route: i.type === "PM" ? "pm-checklist" : "devops-checklist",
+      context: i.stage,
       itemText: i.itemText,
       plannedDate: i.plannedDate as Date,
-      band: reminderBand(i.plannedDate, i.status) as "OVERDUE" | "DUE_SOON",
-    }))
-    .sort((a, b) => (a.band !== b.band ? (a.band === "OVERDUE" ? -1 : 1) : a.plannedDate.getTime() - b.plannedDate.getTime()));
+      band,
+    }));
+
+  const actionItemReminders = actionItems
+    .map((a) => ({ a, band: reminderBand(a.dueDate, a.status === "Done") }))
+    .filter((x): x is { a: (typeof actionItems)[number]; band: "OVERDUE" | "DUE_SOON" } => x.band !== null)
+    .map(({ a, band }) => ({
+      id: a.id,
+      source: "ACTION_ITEM" as const,
+      route: "action-items",
+      context: a.ownerPerson?.name ?? a.owner ?? "Unassigned",
+      itemText: a.description,
+      plannedDate: a.dueDate as Date,
+      band,
+    }));
+
+  const reminders = [...checklistReminders, ...actionItemReminders].sort((a, b) =>
+    a.band !== b.band ? (a.band === "OVERDUE" ? -1 : 1) : a.plannedDate.getTime() - b.plannedDate.getTime()
+  );
 
   const timelineStrip = [
     ...pmStageSummary.map((s) => ({ ...s, source: "PM Checklist" })),
@@ -143,6 +170,7 @@ export async function getDashboardData(projectId: string) {
     pmStage,
     endDate,
     reminders,
+    recentDecisions,
     statusBreakdown,
     perChecklistSummary,
     pmStageSummary,
