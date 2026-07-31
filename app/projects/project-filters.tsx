@@ -3,10 +3,11 @@
 import { useState } from "react";
 import Link from "next/link";
 import clsx from "clsx";
-import { formatMoney, formatDate, formatPct } from "@/lib/format";
+import { formatMoney, formatDate, formatShortDate, formatPct } from "@/lib/format";
 import { PM_STAGES } from "@/lib/seed-data";
+import { RAG_COLORS, type Rag } from "@/lib/rag";
 import { ArchiveButton } from "./archive-button";
-import { DeleteButton, RestoreButton } from "./delete-button";
+import { DeleteButton, RestoreButton, PermanentDeleteButton } from "./delete-button";
 import type { ProjectStatus } from "@prisma/client";
 
 export type ProjectCardData = {
@@ -22,6 +23,8 @@ export type ProjectCardData = {
   deletedAt: Date | null;
   pmStage: string; // one of PM_STAGES, or "Complete"
   endDate: Date | null; // derived — latest Forecast Date across the checklist
+  rag: Rag; // same SPI/CPI/open-high-risk definition as the Portfolio rollup
+  overdueCount: number; // items past their Planned Date, empty for viewers who can't see Reminders
 };
 
 // Purely decorative, deterministic per project id — no data encoded, so no
@@ -94,11 +97,20 @@ export function ProjectFilters({ cards, isAdmin }: { cards: ProjectCardData[]; i
                       {p.name.trim().charAt(0).toUpperCase()}
                     </span>
                     <div className="min-w-0">
-                      <h3 className="font-medium text-slate-900 truncate">{p.name}</h3>
+                      <h3 className="font-medium text-slate-900 truncate" title={p.name}>{p.name}</h3>
                       {p.client && <p className="text-sm text-slate-500 truncate">{p.client}</p>}
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
+                    {p.overdueCount > 0 && (
+                      <span
+                        className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap"
+                        style={{ backgroundColor: RAG_COLORS.RED.bg, color: RAG_COLORS.RED.text }}
+                        title={`${p.overdueCount} checklist item${p.overdueCount > 1 ? "s" : ""} past their Planned Date`}
+                      >
+                        ⚠ {p.overdueCount} overdue
+                      </span>
+                    )}
                     {isDeleted ? (
                       <span className="inline-flex items-center rounded-full bg-red-50 text-red-600 px-2 py-0.5 text-xs font-medium">
                         Deleted
@@ -110,21 +122,25 @@ export function ProjectFilters({ cards, isAdmin }: { cards: ProjectCardData[]; i
                         </span>
                       )
                     )}
-                    <span className="inline-flex items-center rounded-full bg-slate-100 text-slate-700 px-2.5 py-0.5 text-xs font-semibold">
+                    <span
+                      className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold"
+                      style={{ backgroundColor: RAG_COLORS[p.rag].bg, color: RAG_COLORS[p.rag].text }}
+                      title={`RAG: ${RAG_COLORS[p.rag].label}`}
+                    >
                       {formatPct(p.pct)}
                     </span>
                   </div>
                 </div>
 
                 <div className="mt-3 h-1.5 w-full rounded-full bg-slate-100 overflow-hidden">
-                  <div className="h-full bg-slate-800" style={{ width: `${p.pct * 100}%` }} />
+                  <div className="h-full" style={{ width: `${p.pct * 100}%`, backgroundColor: RAG_COLORS[p.rag].text }} />
                 </div>
 
                 <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
                   <StatChip label="Items" value={`${p.completed}/${p.total}`} />
                   <StatChip label="Value" value={p.contractValue > 0 ? formatMoney(p.contractValue) : "—"} />
-                  <StatChip label="Started" value={formatDate(p.createdAt)} />
-                  <StatChip label="Ends" value={p.endDate ? formatDate(p.endDate) : "—"} />
+                  <StatChip label="Started" value={formatShortDate(p.createdAt)} title={formatDate(p.createdAt)} />
+                  <StatChip label="Ends" value={p.endDate ? formatShortDate(p.endDate) : "—"} title={p.endDate ? formatDate(p.endDate) : undefined} />
                 </div>
 
                 <div className="mt-3 flex items-center justify-between gap-2">
@@ -132,7 +148,10 @@ export function ProjectFilters({ cards, isAdmin }: { cards: ProjectCardData[]; i
                   {isAdmin && (
                     <div className="flex items-center gap-3">
                       {isDeleted ? (
-                        <RestoreButton projectId={p.id} />
+                        <>
+                          <RestoreButton projectId={p.id} />
+                          <PermanentDeleteButton projectId={p.id} />
+                        </>
                       ) : (
                         <>
                           <ArchiveButton projectId={p.id} status={p.status} />
@@ -187,9 +206,9 @@ function FilterPill({ label, active, onClick }: { label: string; active: boolean
   );
 }
 
-function StatChip({ label, value }: { label: string; value: string }) {
+function StatChip({ label, value, title }: { label: string; value: string; title?: string }) {
   return (
-    <div className="rounded-md bg-slate-50 px-2 py-1.5">
+    <div className="rounded-md bg-slate-50 px-2 py-1.5" title={title}>
       <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">{label}</p>
       <p className="text-slate-700 font-medium truncate">{value}</p>
     </div>

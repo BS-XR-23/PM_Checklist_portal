@@ -58,6 +58,15 @@ export function IconLayers(props: React.SVGProps<SVGSVGElement>) {
   );
 }
 
+export function IconBell(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M6 9.5a6 6 0 1112 0c0 4 1.3 5.7 2 6.5H4c.7-.8 2-2.5 2-6.5z" />
+      <path d="M9.5 19a2.5 2.5 0 005 0" />
+    </svg>
+  );
+}
+
 export function IconClipboardList(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" {...props}>

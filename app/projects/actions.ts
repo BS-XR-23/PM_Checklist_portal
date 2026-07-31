@@ -97,3 +97,34 @@ export async function restoreProject(projectId: string) {
 
   revalidatePath("/projects");
 }
+
+export async function permanentlyDeleteProject(projectId: string) {
+  const user = await requireUser();
+  if (user.role !== "ADMIN") {
+    throw new Error("Only an Admin can permanently delete a project.");
+  }
+
+  const existing = await prisma.project.findUniqueOrThrow({ where: { id: projectId } });
+  // Enforced here, not just hidden in the UI — permanent delete is only ever
+  // reachable from the Deleted tab (soft-delete first, trash second), so a
+  // direct call bypassing that two-step path must be rejected too.
+  if (!existing.deletedAt) {
+    throw new Error("Only a soft-deleted project can be permanently deleted — delete it first.");
+  }
+
+  await prisma.project.delete({ where: { id: projectId } });
+
+  // No projectId on this entry — the project (and its cascade-deleted audit
+  // rows) is gone, so this record of "it was permanently deleted" would be
+  // destroyed along with it if it were scoped to the project. Same
+  // project-less pattern the Checklist Template actions already use.
+  await writeAudit({
+    actor: user,
+    action: "delete",
+    entityType: "Project",
+    entityId: projectId,
+    summary: `Permanently deleted project "${existing.name}"`,
+  });
+
+  revalidatePath("/projects");
+}

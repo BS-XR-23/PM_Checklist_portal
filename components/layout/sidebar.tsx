@@ -5,17 +5,22 @@ import { usePathname } from "next/navigation";
 import clsx from "clsx";
 import { SignOutLink } from "@/components/ui/sign-out-link";
 import { ChangePasswordModal } from "@/components/ui/change-password-modal";
-import { IconGrid, IconChart, IconUser, IconUsers, IconIdCard, IconClipboardList, IconLayers } from "./icons";
+import { IconGrid, IconChart, IconUser, IconUsers, IconIdCard, IconClipboardList, IconLayers, IconBell } from "./icons";
 import type { Role } from "@prisma/client";
 
-type NavItem = { href: string; label: string; icon: (props: React.SVGProps<SVGSVGElement>) => React.ReactElement };
+type NavItem = { href: string; label: string; icon: (props: React.SVGProps<SVGSVGElement>) => React.ReactElement; badge?: number };
 
-export function Sidebar({ user }: { user: { name: string; role: Role } }) {
+export function Sidebar({ user, reminderCount = 0 }: { user: { name: string; role: Role }; reminderCount?: number }) {
   const pathname = usePathname();
 
   const primaryItems: NavItem[] = [{ href: "/projects", label: "Projects", icon: IconGrid }];
   if (user.role === "ADMIN" || user.role === "TPM" || user.role === "PROGRAM_MANAGER") {
     primaryItems.push({ href: "/portfolio", label: "Portfolio", icon: IconChart });
+  }
+  // Item-level reminders — same role scope as lib/notifications.ts
+  // (PROGRAM_MANAGER stays aggregate-only, CLIENT/LIMITED never see it).
+  if (user.role === "ADMIN" || user.role === "TPM" || user.role === "PM") {
+    primaryItems.push({ href: "/notifications", label: "Reminders", icon: IconBell, badge: reminderCount });
   }
   if (user.role === "LIMITED") {
     primaryItems.push({ href: "/my-engagement", label: "My Engagement", icon: IconUser });
@@ -77,7 +82,12 @@ function NavGroup({ items, pathname }: { items: NavItem[]; pathname: string }) {
               )}
             >
               <Icon className="w-4.5 h-4.5 shrink-0" width={18} height={18} />
-              {item.label}
+              <span className="flex-1">{item.label}</span>
+              {!!item.badge && (
+                <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 rounded-full bg-red-500 text-white text-[11px] font-semibold px-1">
+                  {item.badge}
+                </span>
+              )}
             </Link>
           </li>
         );

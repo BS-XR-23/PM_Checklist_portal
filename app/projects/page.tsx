@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { formatMoney, formatPct } from "@/lib/format";
 import { requireUser } from "@/lib/rbac";
 import { currentStage } from "@/lib/calculations";
+import { computeProjectRag } from "@/lib/rag";
+import { getReminderItems } from "@/lib/notifications";
 import { PM_STAGES } from "@/lib/seed-data";
 import { AppShell } from "@/components/layout/app-shell";
 import { NewProjectForm } from "./new-project-form";
@@ -20,8 +22,21 @@ export default async function ProjectsPage() {
   const projects = await prisma.project.findMany({
     where: canSeeAll ? {} : { memberships: { some: { userId: user.id } }, deletedAt: null },
     orderBy: { createdAt: "desc" },
-    include: { checklistItems: { select: { type: true, stage: true, status: true, forecastDate: true } } },
+    include: {
+      checklistItems: { select: { type: true, stage: true, status: true, forecastDate: true } },
+      budgetEntries: { orderBy: { weekEnding: "asc" } },
+      risks: true,
+    },
   });
+
+  // Same reminder-worthy items the sidebar badge/Dashboard rollup use —
+  // already scoped to this viewer's role/projects (empty for Client/Limited/
+  // Program Manager), so the card tag below never leaks it to a Client.
+  const reminderItems = await getReminderItems(user);
+  const overdueCounts = new Map<string, number>();
+  for (const r of reminderItems) {
+    if (r.band === "OVERDUE") overdueCounts.set(r.projectId, (overdueCounts.get(r.projectId) ?? 0) + 1);
+  }
 
   const cards = projects.map((p) => {
     // N/A items don't count toward completion at all — same treatment as
@@ -37,7 +52,12 @@ export default async function ProjectsPage() {
       if (!i.forecastDate) return latest;
       return !latest || i.forecastDate > latest ? i.forecastDate : latest;
     }, null);
-    return { ...p, total, completed, pct, pmStage, endDate };
+    // Same RAG definition as the Portfolio rollup (lib/rag.ts) — SPI/CPI +
+    // open high risks — so a project's health reads the same everywhere,
+    // not just as a raw completion percentage.
+    const { rag } = computeProjectRag({ contractValue: p.contractValue, budgetEntries: p.budgetEntries, risks: p.risks });
+    const overdueCount = overdueCounts.get(p.id) ?? 0;
+    return { ...p, total, completed, pct, pmStage, endDate, rag, overdueCount };
   });
 
   // Archived (done) projects shouldn't dilute "current portfolio" numbers.

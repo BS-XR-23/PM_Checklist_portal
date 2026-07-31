@@ -1,6 +1,7 @@
+import Link from "next/link";
 import { getDashboardData } from "@/lib/dashboard-data";
 import { formatPct, formatMoney, formatDate } from "@/lib/format";
-import { STATUS_COLORS, INDEX_FAVORABLE_COLOR, INDEX_UNFAVORABLE_COLOR } from "@/lib/colors";
+import { STATUS_COLORS, RISK_SEVERITY_COLORS, INDEX_FAVORABLE_COLOR, INDEX_UNFAVORABLE_COLOR } from "@/lib/colors";
 import { requireModuleAccess } from "@/lib/rbac";
 import { StatTile } from "@/components/ui/stat-tile";
 import { StatusPieChart } from "@/components/charts/status-pie-chart";
@@ -39,6 +40,42 @@ export default async function DashboardPage({ params }: { params: { projectId: s
         <StatTile label="Current Stage (PM Checklist)" value={data.pmStage} />
         <StatTile label="End Date" value={data.endDate ? formatDate(data.endDate) : "—"} />
       </div>
+
+      {/* Same visibility as the financial stat tiles below — an overdue-item
+          list is a PM/TPM/Admin safety net, not something to surface to a
+          Client. */}
+      {financialsVisible && data.reminders.length > 0 && (
+        <div className="rounded-lg border border-slate-200 bg-white p-4">
+          <h3 className="text-sm font-semibold text-slate-700 mb-2">
+            Overdue &amp; Due Soon ({data.reminders.filter((r) => r.band === "OVERDUE").length} overdue,{" "}
+            {data.reminders.filter((r) => r.band === "DUE_SOON").length} due soon)
+          </h3>
+          <div className="space-y-1.5">
+            {data.reminders.map((r) => {
+              const color = r.band === "OVERDUE" ? RISK_SEVERITY_COLORS.high : RISK_SEVERITY_COLORS.medium;
+              return (
+                <Link
+                  key={r.id}
+                  href={`/projects/${data.project.id}/${r.type === "PM" ? "pm-checklist" : "devops-checklist"}`}
+                  prefetch={false}
+                  className="flex items-center justify-between gap-3 rounded-md px-2 py-1.5 hover:bg-slate-50"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm text-slate-800 truncate">{r.itemText}</p>
+                    <p className="text-xs text-slate-400">{r.stage} · Planned {formatDate(r.plannedDate)}</p>
+                  </div>
+                  <span
+                    className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium shrink-0"
+                    style={{ backgroundColor: color.bg, color: color.text }}
+                  >
+                    {r.band === "OVERDUE" ? "Overdue" : "Due Soon"}
+                  </span>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {financialsVisible && (
         <div className="grid sm:grid-cols-3 lg:grid-cols-5 gap-4">

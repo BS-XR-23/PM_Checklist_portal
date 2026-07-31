@@ -106,3 +106,27 @@ export function currentStage(
   }
   return null;
 }
+
+export type ReminderBand = "OVERDUE" | "DUE_SOON" | null;
+
+/**
+ * App-derived: an incomplete item whose Planned Date has already passed
+ * (OVERDUE) or falls within the next `dueSoonDays` (DUE_SOON). Deliberately
+ * distinct from isSlipped() above — that flags "the forecast moved past the
+ * plan" (a re-estimate signal); this flags "this was due and nothing's
+ * happened" (a forgot-about-it signal), which is what actually needs to
+ * proactively surface to whoever owns the item.
+ */
+export function reminderBand(
+  plannedDate: Date | null,
+  status: string,
+  today: Date = new Date(),
+  dueSoonDays = 7
+): ReminderBand {
+  if (!plannedDate) return null;
+  if (status === "COMPLETED" || status === "NOT_APPLICABLE") return null;
+  const diffDays = Math.floor((plannedDate.getTime() - today.getTime()) / 86400000);
+  if (diffDays < 0) return "OVERDUE";
+  if (diffDays <= dueSoonDays) return "DUE_SOON";
+  return null;
+}

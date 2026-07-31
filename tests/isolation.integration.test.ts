@@ -200,6 +200,40 @@ describe("isolation boundary", () => {
     expect(await prisma.checklistItem.findUnique({ where: { id: customInB.id } })).not.toBeNull();
   });
 
+  it("getReminderItems only returns overdue/due-soon items from the caller's own projects", async () => {
+    const { getReminderItems } = await import("@/lib/notifications");
+    const overdue = new Date(Date.now() - 5 * 86400000);
+
+    const overdueInA = await prisma.checklistItem.create({
+      data: { projectId: projectA.id, type: "PM", order: 995, stage: "Pre-Sales & Initiation", itemText: "[TEST] overdue in A", status: "IN_PROGRESS", plannedDate: overdue },
+    });
+    const overdueInB = await prisma.checklistItem.create({
+      data: { projectId: projectB.id, type: "PM", order: 991, stage: "Pre-Sales & Initiation", itemText: "[TEST] overdue in B", status: "IN_PROGRESS", plannedDate: overdue },
+    });
+
+    const items = await getReminderItems({ id: pmAUserId, email: "x@example.test", name: "Test PM A", role: "PM" });
+    expect(items.some((i) => i.itemText === overdueInA.itemText)).toBe(true);
+    expect(items.some((i) => i.itemText === overdueInB.itemText)).toBe(false);
+  });
+
+  it("getReminderItems returns nothing for CLIENT, LIMITED, or PROGRAM_MANAGER, regardless of membership", async () => {
+    const { getReminderItems } = await import("@/lib/notifications");
+    const overdue = new Date(Date.now() - 5 * 86400000);
+
+    await prisma.checklistItem.create({
+      data: { projectId: projectB.id, type: "PM", order: 990, stage: "Pre-Sales & Initiation", itemText: "[TEST] overdue in B for client", status: "IN_PROGRESS", plannedDate: overdue },
+    });
+
+    const client = await getReminderItems({ id: clientBUserId, email: "x@example.test", name: "Test Client B", role: "CLIENT" });
+    expect(client).toEqual([]);
+
+    const limited = await getReminderItems({ id: clientBUserId, email: "x@example.test", name: "Test Client B", role: "LIMITED" });
+    expect(limited).toEqual([]);
+
+    const programManager = await getReminderItems({ id: adminUserId, email: "x@example.test", name: "Test Admin", role: "PROGRAM_MANAGER" });
+    expect(programManager).toEqual([]);
+  });
+
   it("sanity check: PM-A CAN add a milestone (creates ChecklistItem + MilestonePayment together) and rename it", async () => {
     const { addMilestone, updateMilestoneName } = await import("@/app/projects/[projectId]/milestones/milestone-actions");
     actAs(pmAUserId);
@@ -370,6 +404,35 @@ describe("isolation boundary", () => {
 
     await restoreProject(projectA.id);
     expect((await prisma.project.findUniqueOrThrow({ where: { id: projectA.id } })).deletedAt).toBeNull();
+  });
+
+  it("permanentlyDeleteProject is Admin-only", async () => {
+    const { permanentlyDeleteProject } = await import("@/app/projects/actions");
+    actAs(pmAUserId);
+    await expect(permanentlyDeleteProject(projectA.id)).rejects.toThrow();
+    expect(await prisma.project.findUnique({ where: { id: projectA.id } })).not.toBeNull();
+  });
+
+  it("permanentlyDeleteProject rejects a project that hasn't been soft-deleted first", async () => {
+    const { permanentlyDeleteProject } = await import("@/app/projects/actions");
+    const throwaway = await prisma.project.create({ data: { name: "[TEST] Not yet soft-deleted", contractValue: 0, plannedManDays: 0 } });
+    actAs(adminUserId);
+    try {
+      await expect(permanentlyDeleteProject(throwaway.id)).rejects.toThrow();
+      expect(await prisma.project.findUnique({ where: { id: throwaway.id } })).not.toBeNull();
+    } finally {
+      await prisma.project.delete({ where: { id: throwaway.id } });
+    }
+  });
+
+  it("sanity check: Admin CAN permanently delete a project that's already in the trash", async () => {
+    const { deleteProject, permanentlyDeleteProject } = await import("@/app/projects/actions");
+    const throwaway = await prisma.project.create({ data: { name: "[TEST] Permanent delete target", contractValue: 0, plannedManDays: 0 } });
+    actAs(adminUserId);
+
+    await deleteProject(throwaway.id);
+    await permanentlyDeleteProject(throwaway.id);
+    expect(await prisma.project.findUnique({ where: { id: throwaway.id } })).toBeNull();
   });
 
   it("sanity check: Admin CAN manage the checklist template", async () => {

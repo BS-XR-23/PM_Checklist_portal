@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { PM_STAGES, DEVOPS_CATEGORIES } from "@/lib/seed-data";
 import { ITEM_STATUSES, type ItemStatus } from "@/lib/constants";
-import { riskScore, computeEvm, trancheAmount, currentStage } from "@/lib/calculations";
+import { riskScore, computeEvm, trancheAmount, currentStage, reminderBand } from "@/lib/calculations";
 
 export async function getDashboardData(projectId: string) {
   const project = await prisma.project.findUniqueOrThrow({ where: { id: projectId } });
@@ -67,6 +67,23 @@ export async function getDashboardData(projectId: string) {
     return !latest || i.forecastDate > latest ? i.forecastDate : latest;
   }, null);
 
+  // Same reminder-worthy definition as lib/notifications.ts (cross-project
+  // sidebar/notifications page) — computed here for free since allItems is
+  // already loaded, no extra query. band is non-null here by construction
+  // (reminderBand only returns null when plannedDate is null), so
+  // plannedDate is guaranteed non-null too.
+  const reminders = allItems
+    .filter((i) => reminderBand(i.plannedDate, i.status) !== null)
+    .map((i) => ({
+      id: i.id,
+      type: i.type,
+      stage: i.stage,
+      itemText: i.itemText,
+      plannedDate: i.plannedDate as Date,
+      band: reminderBand(i.plannedDate, i.status) as "OVERDUE" | "DUE_SOON",
+    }))
+    .sort((a, b) => (a.band !== b.band ? (a.band === "OVERDUE" ? -1 : 1) : a.plannedDate.getTime() - b.plannedDate.getTime()));
+
   const timelineStrip = [
     ...pmStageSummary.map((s) => ({ ...s, source: "PM Checklist" })),
     ...devopsStageSummary.map((s) => ({ ...s, source: "DevOps Checklist" })),
@@ -125,6 +142,7 @@ export async function getDashboardData(projectId: string) {
     overallPct,
     pmStage,
     endDate,
+    reminders,
     statusBreakdown,
     perChecklistSummary,
     pmStageSummary,

@@ -1,7 +1,7 @@
 "use client";
 
 import { useTransition } from "react";
-import { deleteProject, restoreProject } from "./actions";
+import { deleteProject, restoreProject, permanentlyDeleteProject } from "./actions";
 
 export function DeleteButton({ projectId }: { projectId: string }) {
   const [pending, startTransition] = useTransition();
@@ -38,6 +38,25 @@ export function RestoreButton({ projectId }: { projectId: string }) {
       className="text-xs font-medium text-slate-400 hover:text-slate-700 disabled:opacity-50"
     >
       {pending ? "..." : "Restore"}
+    </button>
+  );
+}
+
+export function PermanentDeleteButton({ projectId }: { projectId: string }) {
+  const [pending, startTransition] = useTransition();
+
+  return (
+    <button
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!window.confirm("Permanently delete this project? This cannot be undone — all checklists, milestones, risks, and budget history are erased.")) return;
+        startTransition(() => permanentlyDeleteProject(projectId));
+      }}
+      disabled={pending}
+      className="text-xs font-medium text-red-500 hover:text-red-700 disabled:opacity-50"
+    >
+      {pending ? "..." : "Delete Permanently"}
     </button>
   );
 }

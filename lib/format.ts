@@ -12,6 +12,13 @@ export function formatDate(value: Date | string | null): string {
   return d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
 }
 
+/** No year — for tight spaces (card stat chips) where the full formatDate() truncates. Pair with a title="" tooltip for the exact date. */
+export function formatShortDate(value: Date | string | null): string {
+  if (!value) return "—";
+  const d = typeof value === "string" ? new Date(value) : value;
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
 /** Parses a yyyy-mm-dd <input type=date> value as a local-midnight Date, avoiding UTC off-by-one. */
 export function parseDateInput(value: string | null): Date | null {
   if (!value) return null;

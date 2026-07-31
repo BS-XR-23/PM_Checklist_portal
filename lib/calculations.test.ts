@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { currentStage, isSlipped } from "./calculations";
+import { currentStage, isSlipped, reminderBand } from "./calculations";
 
 describe("currentStage", () => {
   const STAGES = ["Planning", "Development", "Release"] as const;
@@ -56,5 +56,31 @@ describe("isSlipped", () => {
   it("no flag when either date is missing", () => {
     expect(isSlipped(null, forecastPastDue, "IN_PROGRESS")).toBe(false);
     expect(isSlipped(planned, null, "IN_PROGRESS")).toBe(false);
+  });
+});
+
+describe("reminderBand", () => {
+  const today = new Date("2026-07-30");
+
+  it("flags a past Planned Date as OVERDUE", () => {
+    expect(reminderBand(new Date("2026-07-20"), "IN_PROGRESS", today)).toBe("OVERDUE");
+  });
+
+  it("flags today and within the next 7 days as DUE_SOON", () => {
+    expect(reminderBand(new Date("2026-07-30"), "IN_PROGRESS", today)).toBe("DUE_SOON");
+    expect(reminderBand(new Date("2026-08-06"), "IN_PROGRESS", today)).toBe("DUE_SOON");
+  });
+
+  it("does not flag a Planned Date more than 7 days out", () => {
+    expect(reminderBand(new Date("2026-08-07"), "IN_PROGRESS", today)).toBeNull();
+  });
+
+  it("does not flag when there's no Planned Date", () => {
+    expect(reminderBand(null, "IN_PROGRESS", today)).toBeNull();
+  });
+
+  it("never flags a COMPLETED or NOT_APPLICABLE item, even if overdue", () => {
+    expect(reminderBand(new Date("2026-07-01"), "COMPLETED", today)).toBeNull();
+    expect(reminderBand(new Date("2026-07-01"), "NOT_APPLICABLE", today)).toBeNull();
   });
 });
