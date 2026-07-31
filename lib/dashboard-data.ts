@@ -65,7 +65,11 @@ export async function getDashboardData(projectId: string) {
     });
   }
 
-  const pmStageSummary = stageSummary(pmItems, PM_STAGES);
+  // "Presales" is only ever populated on a project won from a Presales
+  // opportunity (winPresalesProject, app/presales/actions.ts) — drop it
+  // here when empty so a regular project's Dashboard doesn't show a
+  // permanent "Presales: 0/0" row.
+  const pmStageSummary = stageSummary(pmItems, PM_STAGES).filter((s) => s.stage !== "Presales" || s.total > 0);
   const devopsStageSummary = stageSummary(devopsItems, DEVOPS_CATEGORIES);
 
   // Derived, not stored — the current stage (per the resolved PM-Checklist-

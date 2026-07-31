@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import clsx from "clsx";
 import { SignOutLink } from "@/components/ui/sign-out-link";
 import { ChangePasswordModal } from "@/components/ui/change-password-modal";
-import { IconGrid, IconChart, IconUser, IconUsers, IconIdCard, IconClipboardList, IconLayers, IconBell } from "./icons";
+import { IconGrid, IconChart, IconUser, IconUsers, IconIdCard, IconClipboardList, IconLayers, IconBell, IconTarget } from "./icons";
 import type { Role } from "@prisma/client";
 
 type NavItem = { href: string; label: string; icon: (props: React.SVGProps<SVGSVGElement>) => React.ReactElement; badge?: number };
@@ -14,6 +14,12 @@ export function Sidebar({ user, reminderCount = 0 }: { user: { name: string; rol
   const pathname = usePathname();
 
   const primaryItems: NavItem[] = [{ href: "/projects", label: "Projects", icon: IconGrid }];
+  // Internal pipeline data — the deal team (PM/Admin) plus leadership
+  // (TPM/Program Manager) can see it, read-only for the latter. Same role
+  // scope as app/presales/page.tsx's VIEW_ROLES.
+  if (user.role === "ADMIN" || user.role === "PM" || user.role === "TPM" || user.role === "PROGRAM_MANAGER") {
+    primaryItems.push({ href: "/presales", label: "Presales", icon: IconTarget });
+  }
   if (user.role === "ADMIN" || user.role === "TPM" || user.role === "PROGRAM_MANAGER") {
     primaryItems.push({ href: "/portfolio", label: "Portfolio", icon: IconChart });
   }

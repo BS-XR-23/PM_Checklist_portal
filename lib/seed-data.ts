@@ -83,6 +83,11 @@ export const DEVOPS_CHECKLIST_SEED: ChecklistSeedItem[] = [
 ];
 
 export const PM_STAGES = [
+  // Only ever populated on a project won from a Presales opportunity — see
+  // winPresalesProject in app/presales/actions.ts. Empty on every other
+  // project; ChecklistTable and currentStage() both already skip stages
+  // with 0 rows, so this is inert everywhere else.
+  "Presales",
   "Pre-Sales & Initiation",
   "Planning",
   "Kickoff",

@@ -51,35 +51,37 @@ model User {
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
 
-  memberships       ProjectMembership[]
-  auditLogs         AuditLog[]
-  escalationsRaised EscalationItem[]
-  person            Person?
+  memberships             ProjectMembership[]
+  auditLogs               AuditLog[]
+  escalationsRaised       EscalationItem[]
+  person                  Person?
+  presalesProjectsCreated PresalesProject[]
 }
 
 model Project {
-  id             String   @id @default(cuid())
+  id             String        @id @default(cuid())
   name           String
   client         String?
-  contractValue  Float    @default(0)
-  plannedManDays Float    @default(0)
-  crRate         Float    @default(0)
+  contractValue  Float         @default(0)
+  plannedManDays Float         @default(0)
+  crRate         Float         @default(0)
   status         ProjectStatus @default(ACTIVE)
   deletedAt      DateTime?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
-  checklistItems ChecklistItem[]
-  risks          RiskItem[]
-  changeRequests ChangeRequest[]
-  budgetEntries  BudgetEntry[]
-  pmPlan         PMPlan?
-  memberships    ProjectMembership[]
-  auditLogs      AuditLog[]
-  escalations    EscalationItem[]
-  engagements    ProjectEngagement[]
-  decisions      DecisionLogItem[]
-  actionItems    ActionItem[]
+  checklistItems  ChecklistItem[]
+  risks           RiskItem[]
+  changeRequests  ChangeRequest[]
+  budgetEntries   BudgetEntry[]
+  pmPlan          PMPlan?
+  memberships     ProjectMembership[]
+  auditLogs       AuditLog[]
+  escalations     EscalationItem[]
+  engagements     ProjectEngagement[]
+  decisions       DecisionLogItem[]
+  actionItems     ActionItem[]
+  wonFromPresales PresalesProject?
 }
 
 /// A user's access to one specific project. Only meaningful for PM/CLIENT/LIMITED
@@ -387,12 +389,113 @@ model Person {
   user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   createdAt DateTime @default(now())
 
-  engagements     ProjectEngagement[]
-  checklistOwners ChecklistItem[]
-  riskOwners      RiskItem[]
-  stakeholderRows StakeholderRow[]
-  decisionsMade   DecisionLogItem[]
-  actionItemOwner ActionItem[]
+  engagements             ProjectEngagement[]
+  checklistOwners         ChecklistItem[]
+  riskOwners              RiskItem[]
+  stakeholderRows         StakeholderRow[]
+  decisionsMade           DecisionLogItem[]
+  actionItemOwner         ActionItem[]
+  presalesDecisionsMade   PresalesDecisionItem[]
+  presalesActionItemOwner PresalesActionItem[]
+  presalesChecklistOwner  PresalesChecklistItem[]
+}
+
+enum PresalesOutcome {
+  OPEN
+  WON
+  LOST
+}
+
+/// A pre-contract opportunity — deliberately NOT a Project (no checklist,
+/// milestones, risk, budget, or PM Plan). Tracks just enough to reason about
+/// a deal before it's signed. On Win, createProject() (lib/create-project.ts)
+/// seeds a real Project the normal way and this row links to it via
+/// wonProjectId; on Lost, the row is kept (not deleted) as win/loss history.
+model PresalesProject {
+  id                String          @id @default(cuid())
+  name              String
+  client            String?
+  description       String?
+  estimatedValue    Float?
+  expectedCloseDate DateTime?
+  outcome           PresalesOutcome @default(OPEN)
+  lostReason        String? // set when outcome = LOST
+  wonProjectId      String?         @unique
+  wonProject        Project?        @relation(fields: [wonProjectId], references: [id], onDelete: SetNull)
+  createdById       String
+  createdBy         User            @relation(fields: [createdById], references: [id])
+  deletedAt         DateTime?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  decisions      PresalesDecisionItem[]
+  actionItems    PresalesActionItem[]
+  checklistItems PresalesChecklistItem[]
+
+  @@index([outcome])
+}
+
+model PresalesDecisionItem {
+  id                String          @id @default(cuid())
+  presalesProjectId String
+  presalesProject   PresalesProject @relation(fields: [presalesProjectId], references: [id], onDelete: Cascade)
+  order             Int             @default(0)
+  date              DateTime?
+  decision          String
+  rationale         String?
+  decidedBy         String? // legacy free-text name; prefer decidedByPersonId once set
+  decidedByPersonId String?
+  decidedByPerson   Person?         @relation(fields: [decidedByPersonId], references: [id], onDelete: SetNull)
+  notes             String?
+
+  @@index([presalesProjectId])
+}
+
+model PresalesActionItem {
+  id                String          @id @default(cuid())
+  presalesProjectId String
+  presalesProject   PresalesProject @relation(fields: [presalesProjectId], references: [id], onDelete: Cascade)
+  order             Int             @default(0)
+  description       String
+  ownerPersonId     String?
+  ownerPerson       Person?         @relation(fields: [ownerPersonId], references: [id], onDelete: SetNull)
+  owner             String? // legacy free-text name; prefer ownerPersonId once set
+  dueDate           DateTime?
+  status            String          @default("Open") // "Open" | "Done"
+  notes             String?
+
+  @@index([presalesProjectId])
+}
+
+/// Admin-managed playbook — flat (no stage grouping; presales is a much
+/// shorter, single-phase process than delivery). Deliberately a separate
+/// table from ChecklistTemplateItem: that one's `type` is tied to the
+/// ChecklistType/ModuleName system (PM/DEVOPS), which Presales isn't part of.
+model PresalesChecklistTemplateItem {
+  id       String @id @default(cuid())
+  order    Int    @unique
+  itemText String
+}
+
+/// Per-opportunity instance of the template above. On Win, these are copied
+/// into the resulting Project's ChecklistItem table (type: "PM", stage:
+/// "Presales") — see winPresalesProject in app/presales/actions.ts.
+model PresalesChecklistItem {
+  id                String          @id @default(cuid())
+  presalesProjectId String
+  presalesProject   PresalesProject @relation(fields: [presalesProjectId], references: [id], onDelete: Cascade)
+  order             Int
+  itemText          String
+  status            String          @default("NOT_STARTED") // see ItemStatus in lib/constants.ts
+  plannedDate       DateTime?
+  forecastDate      DateTime?
+  owner             String? // legacy free-text name; prefer ownerPersonId once set
+  ownerPersonId     String?
+  ownerPerson       Person?         @relation(fields: [ownerPersonId], references: [id], onDelete: SetNull)
+  notes             String?
+  isCustom          Boolean         @default(false) // false = seeded from the template; true = added ad hoc
+
+  @@index([presalesProjectId])
 }
 
 /// A person's lightweight staffing on one project: role, coarse intensity,

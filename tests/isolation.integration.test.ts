@@ -507,4 +507,260 @@ describe("isolation boundary", () => {
     await deleteActionItem(created.id, projectA.id);
     expect(await prisma.actionItem.findUnique({ where: { id: created.id } })).toBeNull();
   });
+
+  // Presales isn't project-scoped (no membership row, role-level access
+  // only), so its fixtures are independent of projectA/projectB and each
+  // test cleans up its own rows rather than relying on the outer afterAll.
+  it("presales: CLIENT cannot create, update, or delete an opportunity", async () => {
+    const { createPresalesProject, updatePresalesProject, deletePresalesProject } = await import("@/app/presales/actions");
+    const opp = await prisma.presalesProject.create({ data: { name: "[TEST] presales client-blocked", createdById: pmAUserId } });
+
+    actAs(clientBUserId);
+    const fd = new FormData();
+    fd.set("name", "[TEST] should not be created");
+    await expect(createPresalesProject(fd)).rejects.toThrow();
+    await expect(updatePresalesProject(opp.id, { name: "hacked" })).rejects.toThrow();
+    await expect(deletePresalesProject(opp.id)).rejects.toThrow();
+
+    const stillThere = await prisma.presalesProject.findUniqueOrThrow({ where: { id: opp.id } });
+    expect(stillThere.name).toBe("[TEST] presales client-blocked");
+    expect(stillThere.deletedAt).toBeNull();
+
+    await prisma.presalesProject.delete({ where: { id: opp.id } });
+  });
+
+  it("presales: PM CAN create, update, soft-delete, and restore an opportunity; only Admin can permanently delete it", async () => {
+    const { updatePresalesProject, deletePresalesProject, restorePresalesProject, permanentlyDeletePresalesProject } = await import(
+      "@/app/presales/actions"
+    );
+    const opp = await prisma.presalesProject.create({ data: { name: "[TEST] presales pm-owned", createdById: pmAUserId } });
+
+    actAs(pmAUserId);
+    await updatePresalesProject(opp.id, { client: "[TEST] Acme Co", estimatedValue: 5000 });
+    expect((await prisma.presalesProject.findUniqueOrThrow({ where: { id: opp.id } })).client).toBe("[TEST] Acme Co");
+
+    await deletePresalesProject(opp.id);
+    expect((await prisma.presalesProject.findUniqueOrThrow({ where: { id: opp.id } })).deletedAt).not.toBeNull();
+
+    // PM cannot permanently delete, even after soft-deleting it themselves.
+    await expect(permanentlyDeletePresalesProject(opp.id)).rejects.toThrow();
+
+    await restorePresalesProject(opp.id);
+    expect((await prisma.presalesProject.findUniqueOrThrow({ where: { id: opp.id } })).deletedAt).toBeNull();
+
+    await deletePresalesProject(opp.id);
+    actAs(adminUserId);
+    await permanentlyDeletePresalesProject(opp.id);
+    expect(await prisma.presalesProject.findUnique({ where: { id: opp.id } })).toBeNull();
+  });
+
+  it("presales: Lost is reversible, Open->Lost requires the OPEN state, and Won creates a real project", async () => {
+    const { markPresalesLost, reopenPresalesProject, winPresalesProject } = await import("@/app/presales/actions");
+    const lostOpp = await prisma.presalesProject.create({ data: { name: "[TEST] presales to lose", createdById: pmAUserId } });
+    const wonOpp = await prisma.presalesProject.create({
+      data: { name: "[TEST] presales to win", createdById: pmAUserId, client: "[TEST] Client", estimatedValue: 12000 },
+    });
+    const decision = await prisma.presalesDecisionItem.create({
+      data: { presalesProjectId: wonOpp.id, decision: "[TEST] use React Native" },
+    });
+    const actionItem = await prisma.presalesActionItem.create({
+      data: { presalesProjectId: wonOpp.id, description: "[TEST] send proposal" },
+    });
+    const checklistItem = await prisma.presalesChecklistItem.create({
+      data: { presalesProjectId: wonOpp.id, order: 1, itemText: "[TEST] discovery call held", status: "COMPLETED" },
+    });
+
+    actAs(pmAUserId);
+    try {
+      await markPresalesLost(lostOpp.id, "[TEST] budget cut");
+      let refreshed = await prisma.presalesProject.findUniqueOrThrow({ where: { id: lostOpp.id } });
+      expect(refreshed.outcome).toBe("LOST");
+      expect(refreshed.lostReason).toBe("[TEST] budget cut");
+
+      // Can't mark an already-Lost opportunity Lost again — must reopen first.
+      await expect(markPresalesLost(lostOpp.id, "again")).rejects.toThrow();
+
+      await reopenPresalesProject(lostOpp.id);
+      refreshed = await prisma.presalesProject.findUniqueOrThrow({ where: { id: lostOpp.id } });
+      expect(refreshed.outcome).toBe("OPEN");
+      expect(refreshed.lostReason).toBeNull();
+
+      // winPresalesProject redirects on success; next/navigation is mocked
+      // to throw (see the file-level vi.mock above) rather than actually
+      // navigate, so all the DB writes complete first and then this rejects.
+      await expect(winPresalesProject(wonOpp.id)).rejects.toThrow(/REDIRECT/);
+      const won = await prisma.presalesProject.findUniqueOrThrow({ where: { id: wonOpp.id } });
+      expect(won.outcome).toBe("WON");
+      expect(won.wonProjectId).not.toBeNull();
+
+      const newProject = await prisma.project.findUniqueOrThrow({ where: { id: won.wonProjectId! } });
+      expect(newProject.name).toBe("[TEST] presales to win");
+      expect(newProject.client).toBe("[TEST] Client");
+      expect(newProject.contractValue).toBe(12000);
+      // The standard checklist template should have been seeded, same as a
+      // normal New Project — this is what "becomes a main project" means.
+      const seededItems = await prisma.checklistItem.count({ where: { projectId: newProject.id } });
+      expect(seededItems).toBeGreaterThan(0);
+
+      // Decisions/action items logged during the pitch carry over.
+      const carriedDecision = await prisma.decisionLogItem.findFirst({ where: { projectId: newProject.id, decision: "[TEST] use React Native" } });
+      expect(carriedDecision).not.toBeNull();
+      const carriedAction = await prisma.actionItem.findFirst({ where: { projectId: newProject.id, description: "[TEST] send proposal" } });
+      expect(carriedAction).not.toBeNull();
+
+      // Checklist items fold into the PM Checklist as their own "Presales"
+      // stage, and count toward the project's overall completion — not
+      // left behind as a separate historical record.
+      const carriedChecklistItem = await prisma.checklistItem.findFirst({
+        where: { projectId: newProject.id, itemText: "[TEST] discovery call held" },
+      });
+      expect(carriedChecklistItem).not.toBeNull();
+      expect(carriedChecklistItem?.type).toBe("PM");
+      expect(carriedChecklistItem?.stage).toBe("Presales");
+      expect(carriedChecklistItem?.status).toBe("COMPLETED");
+      expect(carriedChecklistItem!.order).toBeLessThan(0);
+
+      const { getDashboardData } = await import("@/lib/dashboard-data");
+      const dashboard = await getDashboardData(newProject.id);
+      const presalesStage = dashboard.pmStageSummary.find((s) => s.stage === "Presales");
+      expect(presalesStage).toBeDefined();
+      expect(presalesStage?.total).toBe(1);
+      expect(presalesStage?.completed).toBe(1);
+
+      // Can't win it twice.
+      await expect(winPresalesProject(wonOpp.id)).rejects.toThrow();
+
+      await prisma.decisionLogItem.deleteMany({ where: { projectId: newProject.id } });
+      await prisma.actionItem.deleteMany({ where: { projectId: newProject.id } });
+      await prisma.checklistItem.deleteMany({ where: { projectId: newProject.id } });
+      await prisma.project.delete({ where: { id: newProject.id } });
+    } finally {
+      await prisma.presalesDecisionItem.deleteMany({ where: { id: decision.id } });
+      await prisma.presalesActionItem.deleteMany({ where: { id: actionItem.id } });
+      await prisma.presalesChecklistItem.deleteMany({ where: { id: checklistItem.id } });
+      await prisma.presalesProject.delete({ where: { id: lostOpp.id } });
+      await prisma.presalesProject.deleteMany({ where: { id: wonOpp.id } });
+    }
+  });
+
+  it("presales: PM can manage Decision Log / Action Items on an opportunity; CLIENT cannot", async () => {
+    const { createPresalesDecision, updatePresalesDecision, deletePresalesDecision } = await import("@/app/presales/[id]/decision-actions");
+    const { createPresalesActionItem, updatePresalesActionItem, deletePresalesActionItem } = await import(
+      "@/app/presales/[id]/action-item-actions"
+    );
+    const opp = await prisma.presalesProject.create({ data: { name: "[TEST] presales decisions/actions", createdById: pmAUserId } });
+
+    try {
+      actAs(pmAUserId);
+      await createPresalesDecision(opp.id);
+      const decision = await prisma.presalesDecisionItem.findFirstOrThrow({ where: { presalesProjectId: opp.id } });
+      await updatePresalesDecision(decision.id, opp.id, { decision: "[TEST] renamed" });
+      expect((await prisma.presalesDecisionItem.findUniqueOrThrow({ where: { id: decision.id } })).decision).toBe("[TEST] renamed");
+
+      await createPresalesActionItem(opp.id);
+      const action = await prisma.presalesActionItem.findFirstOrThrow({ where: { presalesProjectId: opp.id } });
+      await updatePresalesActionItem(action.id, opp.id, { status: "Done" });
+      expect((await prisma.presalesActionItem.findUniqueOrThrow({ where: { id: action.id } })).status).toBe("Done");
+
+      actAs(clientBUserId);
+      await expect(createPresalesDecision(opp.id)).rejects.toThrow();
+      await expect(updatePresalesDecision(decision.id, opp.id, { decision: "hacked" })).rejects.toThrow();
+      await expect(createPresalesActionItem(opp.id)).rejects.toThrow();
+      await expect(updatePresalesActionItem(action.id, opp.id, { status: "Open" })).rejects.toThrow();
+
+      actAs(pmAUserId);
+      await deletePresalesDecision(decision.id, opp.id);
+      await deletePresalesActionItem(action.id, opp.id);
+      expect(await prisma.presalesDecisionItem.findUnique({ where: { id: decision.id } })).toBeNull();
+      expect(await prisma.presalesActionItem.findUnique({ where: { id: action.id } })).toBeNull();
+    } finally {
+      await prisma.presalesProject.delete({ where: { id: opp.id } });
+    }
+  });
+
+  it("presales checklist template: Admin-only CRUD, and a new opportunity auto-seeds from it", async () => {
+    const { createPresalesTemplateItem, updatePresalesTemplateItem, deletePresalesTemplateItem } = await import(
+      "@/app/admin/checklist-template/presales-template-actions"
+    );
+    const { createPresalesProject } = await import("@/app/presales/actions");
+
+    actAs(clientBUserId);
+    await expect(createPresalesTemplateItem()).rejects.toThrow();
+
+    actAs(adminUserId);
+    await createPresalesTemplateItem();
+    const created = await prisma.presalesChecklistTemplateItem.findFirstOrThrow({ where: { itemText: "New checklist item — click to edit" } });
+
+    await updatePresalesTemplateItem(created.id, "[TEST] Discovery call held");
+    expect((await prisma.presalesChecklistTemplateItem.findUniqueOrThrow({ where: { id: created.id } })).itemText).toBe("[TEST] Discovery call held");
+
+    try {
+      // createPresalesProject redirects on success (same REDIRECT-throw
+      // pattern as winPresalesProject above).
+      actAs(pmAUserId);
+      const fd = new FormData();
+      fd.set("name", "[TEST] auto-seeded opportunity");
+      await expect(createPresalesProject(fd)).rejects.toThrow(/REDIRECT/);
+
+      const opp = await prisma.presalesProject.findFirstOrThrow({
+        where: { name: "[TEST] auto-seeded opportunity" },
+        include: { checklistItems: true },
+      });
+      try {
+        const seeded = opp.checklistItems.find((c) => c.itemText === "[TEST] Discovery call held");
+        expect(seeded).toBeDefined();
+        expect(seeded?.isCustom).toBe(false);
+      } finally {
+        await prisma.presalesProject.delete({ where: { id: opp.id } });
+      }
+    } finally {
+      actAs(adminUserId);
+      await deletePresalesTemplateItem(created.id);
+      expect(await prisma.presalesChecklistTemplateItem.findUnique({ where: { id: created.id } })).toBeNull();
+    }
+  });
+
+  it("presales checklist (per-opportunity): PM manages custom items; template item text is Admin-only; CLIENT is blocked", async () => {
+    const { createPresalesChecklistItem, updatePresalesChecklistItem, deletePresalesChecklistItem } = await import(
+      "@/app/presales/[id]/checklist-actions"
+    );
+    const opp = await prisma.presalesProject.create({ data: { name: "[TEST] presales checklist opp", createdById: pmAUserId } });
+    const templateItem = await prisma.presalesChecklistItem.create({
+      data: { presalesProjectId: opp.id, order: 1, itemText: "[TEST] seeded step", isCustom: false },
+    });
+
+    try {
+      actAs(pmAUserId);
+      await createPresalesChecklistItem(opp.id);
+      const custom = await prisma.presalesChecklistItem.findFirstOrThrow({ where: { presalesProjectId: opp.id, isCustom: true } });
+
+      // PM can freely edit a custom item's text and status.
+      await updatePresalesChecklistItem(custom.id, opp.id, { itemText: "[TEST] custom step", status: "IN_PROGRESS" });
+      const updatedCustom = await prisma.presalesChecklistItem.findUniqueOrThrow({ where: { id: custom.id } });
+      expect(updatedCustom.itemText).toBe("[TEST] custom step");
+      expect(updatedCustom.status).toBe("IN_PROGRESS");
+
+      // PM can change a template item's status/dates, but not its wording.
+      await updatePresalesChecklistItem(templateItem.id, opp.id, { status: "COMPLETED" });
+      expect((await prisma.presalesChecklistItem.findUniqueOrThrow({ where: { id: templateItem.id } })).status).toBe("COMPLETED");
+      await expect(updatePresalesChecklistItem(templateItem.id, opp.id, { itemText: "hacked wording" })).rejects.toThrow();
+
+      // PM can delete a custom item, but not a template item.
+      await expect(deletePresalesChecklistItem(templateItem.id, opp.id)).rejects.toThrow();
+      await deletePresalesChecklistItem(custom.id, opp.id);
+      expect(await prisma.presalesChecklistItem.findUnique({ where: { id: custom.id } })).toBeNull();
+
+      // Admin CAN rename a template item's wording.
+      actAs(adminUserId);
+      await updatePresalesChecklistItem(templateItem.id, opp.id, { itemText: "[TEST] renamed by admin" });
+      expect((await prisma.presalesChecklistItem.findUniqueOrThrow({ where: { id: templateItem.id } })).itemText).toBe("[TEST] renamed by admin");
+
+      // CLIENT is blocked entirely.
+      actAs(clientBUserId);
+      await expect(createPresalesChecklistItem(opp.id)).rejects.toThrow();
+      await expect(updatePresalesChecklistItem(templateItem.id, opp.id, { status: "BLOCKED" })).rejects.toThrow();
+    } finally {
+      await prisma.presalesProject.delete({ where: { id: opp.id } });
+    }
+  });
 });
