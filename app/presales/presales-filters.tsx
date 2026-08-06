@@ -5,6 +5,8 @@ import Link from "next/link";
 import clsx from "clsx";
 import { formatMoney, formatShortDate, formatDate } from "@/lib/format";
 import { RAG_COLORS } from "@/lib/rag";
+import { RISK_SEVERITY_COLORS } from "@/lib/colors";
+import { reminderBand } from "@/lib/calculations";
 import { DeleteButton, RestoreButton, PermanentDeleteButton } from "./delete-buttons";
 import type { PresalesOutcome } from "@prisma/client";
 
@@ -51,6 +53,7 @@ export function PresalesFilters({ cards, canWrite, isAdmin }: { cards: PresalesC
           {visible.map((p) => {
             const isDeleted = p.deletedAt !== null;
             const badge = OUTCOME_BADGE[p.outcome];
+            const closeBand = p.outcome === "OPEN" ? reminderBand(p.expectedCloseDate, false) : null;
 
             const cardBody = (
               <>
@@ -62,6 +65,18 @@ export function PresalesFilters({ cards, canWrite, isAdmin }: { cards: PresalesC
                   <div className="flex items-center gap-1.5 shrink-0">
                     {isDeleted && (
                       <span className="inline-flex items-center rounded-full bg-red-50 text-red-600 px-2 py-0.5 text-xs font-medium">Deleted</span>
+                    )}
+                    {closeBand && (
+                      <span
+                        className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap"
+                        style={{
+                          backgroundColor: (closeBand === "OVERDUE" ? RISK_SEVERITY_COLORS.high : RISK_SEVERITY_COLORS.medium).bg,
+                          color: (closeBand === "OVERDUE" ? RISK_SEVERITY_COLORS.high : RISK_SEVERITY_COLORS.medium).text,
+                        }}
+                        title={`Expected close ${formatDate(p.expectedCloseDate)}`}
+                      >
+                        ⚠ {closeBand === "OVERDUE" ? "Overdue" : "Due Soon"}
+                      </span>
                     )}
                     <span
                       className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold"

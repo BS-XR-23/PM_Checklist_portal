@@ -5,7 +5,17 @@ import { IconClipboardList } from "@/components/layout/icons";
 // (components/layout/sidebar.tsx) — this is just the project's page title
 // (plus, when the viewer can see it, a link to the Activity log — pulled out
 // of the tab row since it's a log page, not a workspace someone edits in).
-export function HeaderBar({ title, subtitle, activityHref }: { title: string; subtitle?: string; activityHref?: string }) {
+export function HeaderBar({
+  title,
+  subtitle,
+  activityHref,
+  wonFromPresales,
+}: {
+  title: string;
+  subtitle?: string;
+  activityHref?: string;
+  wonFromPresales?: { id: string; name: string };
+}) {
   return (
     <header className="border-b border-slate-200 bg-white px-4 sm:px-6 py-3 flex items-start justify-between gap-3">
       <div>
@@ -14,6 +24,11 @@ export function HeaderBar({ title, subtitle, activityHref }: { title: string; su
         </Link>
         <h1 className="text-lg font-semibold text-slate-900 leading-tight">{title}</h1>
         {subtitle && <p className="text-xs text-slate-500">{subtitle}</p>}
+        {wonFromPresales && (
+          <Link href={`/presales/${wonFromPresales.id}`} prefetch={false} className="block text-xs text-slate-400 hover:text-slate-600">
+            ↳ Won from presales opportunity
+          </Link>
+        )}
       </div>
       {activityHref && (
         <Link

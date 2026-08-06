@@ -35,7 +35,8 @@ export default async function ProjectsPage() {
   const reminderItems = await getReminderItems(user);
   const overdueCounts = new Map<string, number>();
   for (const r of reminderItems) {
-    if (r.band === "OVERDUE") overdueCounts.set(r.projectId, (overdueCounts.get(r.projectId) ?? 0) + 1);
+    // Presales reminders have no projectId — they're not a project's problem.
+    if (r.band === "OVERDUE" && r.projectId) overdueCounts.set(r.projectId, (overdueCounts.get(r.projectId) ?? 0) + 1);
   }
 
   const cards = projects.map((p) => {

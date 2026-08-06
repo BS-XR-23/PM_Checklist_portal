@@ -23,28 +23,46 @@ async function visibleActiveProjectIds(user: CurrentUser): Promise<string[]> {
 }
 
 export type ReminderItem = {
-  projectId: string;
-  projectName: string;
-  source: "CHECKLIST" | "ACTION_ITEM";
-  route: string;
-  context: string;
+  href: string;
+  contextLabel: string; // project name, or the opportunity name for a presales reminder
+  projectId?: string; // present for CHECKLIST/ACTION_ITEM only — a presales reminder isn't scoped to a project
+  source: "CHECKLIST" | "ACTION_ITEM" | "PRESALES_OPPORTUNITY" | "PRESALES_ACTION_ITEM";
+  context: string; // stage / owner / client — the subtitle's first segment
   itemText: string;
   plannedDate: Date;
   band: "OVERDUE" | "DUE_SOON";
 };
 
 async function reminderItemsRaw(user: CurrentUser): Promise<ReminderItem[]> {
+  if (!REMINDER_ROLES.includes(user.role)) return [];
   const projectIds = await visibleActiveProjectIds(user);
-  if (projectIds.length === 0) return [];
 
-  const [checklistItems, actionItems] = await Promise.all([
-    prisma.checklistItem.findMany({
-      where: { projectId: { in: projectIds }, status: { notIn: ["COMPLETED", "NOT_APPLICABLE"] }, plannedDate: { not: null } },
-      include: { project: { select: { id: true, name: true } } },
+  const [checklistItems, actionItems, presalesOpportunities, presalesActionItems] = await Promise.all([
+    projectIds.length === 0
+      ? []
+      : prisma.checklistItem.findMany({
+          where: { projectId: { in: projectIds }, status: { notIn: ["COMPLETED", "NOT_APPLICABLE"] }, plannedDate: { not: null } },
+          include: { project: { select: { id: true, name: true } } },
+        }),
+    projectIds.length === 0
+      ? []
+      : prisma.actionItem.findMany({
+          where: { projectId: { in: projectIds }, status: { not: "Done" }, dueDate: { not: null } },
+          include: { project: { select: { id: true, name: true } }, ownerPerson: { select: { name: true } } },
+        }),
+    // Presales isn't project-scoped (no membership concept — any of these
+    // roles already sees every opportunity via app/presales/page.tsx), so
+    // no visibleActiveProjectIds-style filtering is needed here.
+    prisma.presalesProject.findMany({
+      where: { outcome: "OPEN", deletedAt: null, expectedCloseDate: { not: null } },
     }),
-    prisma.actionItem.findMany({
-      where: { projectId: { in: projectIds }, status: { not: "Done" }, dueDate: { not: null } },
-      include: { project: { select: { id: true, name: true } }, ownerPerson: { select: { name: true } } },
+    // Once Won, these action items were already copied into the new
+    // project's real ActionItem table (winPresalesProject) — reminding
+    // about the presales-side rows again would be noise the delivery PM
+    // can't act on from there. Once Lost, there's nothing left to chase.
+    prisma.presalesActionItem.findMany({
+      where: { status: { not: "Done" }, dueDate: { not: null }, presalesProject: { outcome: "OPEN", deletedAt: null } },
+      include: { presalesProject: { select: { id: true, name: true } }, ownerPerson: { select: { name: true } } },
     }),
   ]);
 
@@ -52,10 +70,10 @@ async function reminderItemsRaw(user: CurrentUser): Promise<ReminderItem[]> {
     .map((i) => ({ i, band: reminderBand(i.plannedDate, i.status === "COMPLETED" || i.status === "NOT_APPLICABLE") }))
     .filter((x): x is { i: (typeof checklistItems)[number]; band: "OVERDUE" | "DUE_SOON" } => x.band !== null)
     .map(({ i, band }) => ({
+      href: `/projects/${i.project.id}/${i.type === "PM" ? "pm-checklist" : "devops-checklist"}`,
+      contextLabel: i.project.name,
       projectId: i.project.id,
-      projectName: i.project.name,
       source: "CHECKLIST" as const,
-      route: i.type === "PM" ? "pm-checklist" : "devops-checklist",
       context: i.stage,
       itemText: i.itemText,
       plannedDate: i.plannedDate as Date,
@@ -66,17 +84,43 @@ async function reminderItemsRaw(user: CurrentUser): Promise<ReminderItem[]> {
     .map((a) => ({ a, band: reminderBand(a.dueDate, a.status === "Done") }))
     .filter((x): x is { a: (typeof actionItems)[number]; band: "OVERDUE" | "DUE_SOON" } => x.band !== null)
     .map(({ a, band }) => ({
+      href: `/projects/${a.project.id}/action-items`,
+      contextLabel: a.project.name,
       projectId: a.project.id,
-      projectName: a.project.name,
       source: "ACTION_ITEM" as const,
-      route: "action-items",
       context: a.ownerPerson?.name ?? a.owner ?? "Unassigned",
       itemText: a.description,
       plannedDate: a.dueDate as Date,
       band,
     }));
 
-  return [...checklistReminders, ...actionItemReminders].sort((a, b) => {
+  const presalesReminders = presalesOpportunities
+    .map((o) => ({ o, band: reminderBand(o.expectedCloseDate, false) }))
+    .filter((x): x is { o: (typeof presalesOpportunities)[number]; band: "OVERDUE" | "DUE_SOON" } => x.band !== null)
+    .map(({ o, band }) => ({
+      href: `/presales/${o.id}`,
+      contextLabel: o.name,
+      source: "PRESALES_OPPORTUNITY" as const,
+      context: o.client ?? "No client set",
+      itemText: "Expected close date",
+      plannedDate: o.expectedCloseDate as Date,
+      band,
+    }));
+
+  const presalesActionItemReminders = presalesActionItems
+    .map((a) => ({ a, band: reminderBand(a.dueDate, a.status === "Done") }))
+    .filter((x): x is { a: (typeof presalesActionItems)[number]; band: "OVERDUE" | "DUE_SOON" } => x.band !== null)
+    .map(({ a, band }) => ({
+      href: `/presales/${a.presalesProject.id}`,
+      contextLabel: a.presalesProject.name,
+      source: "PRESALES_ACTION_ITEM" as const,
+      context: a.ownerPerson?.name ?? a.owner ?? "Unassigned",
+      itemText: a.description,
+      plannedDate: a.dueDate as Date,
+      band,
+    }));
+
+  return [...checklistReminders, ...actionItemReminders, ...presalesReminders, ...presalesActionItemReminders].sort((a, b) => {
     if (a.band !== b.band) return a.band === "OVERDUE" ? -1 : 1;
     return a.plannedDate.getTime() - b.plannedDate.getTime();
   });

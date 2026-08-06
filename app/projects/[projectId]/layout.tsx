@@ -18,7 +18,7 @@ export default async function ProjectLayout({
   // Independent lookups — run concurrently rather than as two serialized
   // round trips.
   const [project, { user, moduleAccess }] = await Promise.all([
-    prisma.project.findUnique({ where: { id: params.projectId } }),
+    prisma.project.findUnique({ where: { id: params.projectId }, include: { wonFromPresales: { select: { id: true, name: true } } } }),
     // Coarse gate (404s if this user has no business being in this project
     // at all) plus every module's access level, computed once for nav
     // filtering. Each page still re-checks its own module access
@@ -30,6 +30,12 @@ export default async function ProjectLayout({
   const canSeeTeam = user.role === "ADMIN" || user.role === "TPM" || user.role === "PM";
   const canSeeActivity = user.role === "ADMIN" || user.role === "TPM" || user.role === "PM";
   const canSeeResourcing = canViewResourcing(user.role);
+  // Same ADMIN/TPM/PM scope as canSeeTeam/canSeeActivity above — never
+  // CLIENT/LIMITED, who have no access to the opportunity this would link
+  // to. PROGRAM_MANAGER is omitted too: that role never reaches this layout
+  // at all (computeProjectAccess always denies it — portfolio-only, see
+  // lib/rbac-core.ts), so there's nothing to gate here for it.
+  const canSeePresalesOrigin = user.role === "ADMIN" || user.role === "TPM" || user.role === "PM";
 
   // Checklist / Risk & CR / Team are each a merge of two modules that used
   // to be separate tabs — visible if EITHER half is; the page itself (via
@@ -57,7 +63,12 @@ export default async function ProjectLayout({
   return (
     <AppShell user={user}>
       <div className="min-h-screen flex flex-col">
-        <HeaderBar title={project.name} subtitle={project.client ?? undefined} activityHref={canSeeActivity ? `/projects/${project.id}/activity` : undefined} />
+        <HeaderBar
+          title={project.name}
+          subtitle={project.client ?? undefined}
+          activityHref={canSeeActivity ? `/projects/${project.id}/activity` : undefined}
+          wonFromPresales={canSeePresalesOrigin ? project.wonFromPresales ?? undefined : undefined}
+        />
         <NavTabs projectId={project.id} tabs={visibleTabs} />
         <main className="flex-1 p-4 sm:p-6">{children}</main>
       </div>

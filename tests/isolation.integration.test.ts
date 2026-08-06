@@ -218,6 +218,70 @@ describe("isolation boundary", () => {
     expect(items.some((i) => i.itemText === overdueInB.itemText)).toBe(false);
   });
 
+  it("getReminderItems surfaces an OPEN presales opportunity past its expected close date, but not WON/LOST ones", async () => {
+    const { getReminderItems } = await import("@/lib/notifications");
+    const overdue = new Date(Date.now() - 5 * 86400000);
+
+    const staleOpen = await prisma.presalesProject.create({
+      data: { name: "[TEST] stale open opportunity", createdById: pmAUserId, expectedCloseDate: overdue },
+    });
+    const staleLost = await prisma.presalesProject.create({
+      data: { name: "[TEST] stale lost opportunity", createdById: pmAUserId, expectedCloseDate: overdue, outcome: "LOST", lostReason: "x" },
+    });
+
+    try {
+      const items = await getReminderItems({ id: pmAUserId, email: "x@example.test", name: "Test PM A", role: "PM" });
+      const openReminder = items.find((i) => i.contextLabel === "[TEST] stale open opportunity");
+      expect(openReminder).toBeDefined();
+      expect(openReminder?.band).toBe("OVERDUE");
+      expect(openReminder?.source).toBe("PRESALES_OPPORTUNITY");
+      expect(openReminder?.href).toBe(`/presales/${staleOpen.id}`);
+      expect(openReminder?.projectId).toBeUndefined();
+
+      expect(items.some((i) => i.contextLabel === "[TEST] stale lost opportunity")).toBe(false);
+
+      // CLIENT never sees presales reminders either (same role gate as everything else in Presales).
+      const client = await getReminderItems({ id: clientBUserId, email: "x@example.test", name: "Test Client B", role: "CLIENT" });
+      expect(client.some((i) => i.contextLabel === "[TEST] stale open opportunity")).toBe(false);
+    } finally {
+      await prisma.presalesProject.delete({ where: { id: staleOpen.id } });
+      await prisma.presalesProject.delete({ where: { id: staleLost.id } });
+    }
+  });
+
+  it("getReminderItems surfaces an overdue presales action item on an OPEN opportunity, but not a WON one", async () => {
+    const { getReminderItems } = await import("@/lib/notifications");
+    const overdue = new Date(Date.now() - 5 * 86400000);
+
+    const openOpp = await prisma.presalesProject.create({ data: { name: "[TEST] open opp with action item", createdById: pmAUserId } });
+    const wonOpp = await prisma.presalesProject.create({
+      data: { name: "[TEST] won opp with action item", createdById: pmAUserId, outcome: "WON" },
+    });
+    const openAction = await prisma.presalesActionItem.create({
+      data: { presalesProjectId: openOpp.id, order: 0, description: "[TEST] overdue on open opp", dueDate: overdue },
+    });
+    const wonAction = await prisma.presalesActionItem.create({
+      data: { presalesProjectId: wonOpp.id, order: 0, description: "[TEST] overdue on won opp", dueDate: overdue },
+    });
+
+    try {
+      const items = await getReminderItems({ id: pmAUserId, email: "x@example.test", name: "Test PM A", role: "PM" });
+      const reminder = items.find((i) => i.itemText === "[TEST] overdue on open opp");
+      expect(reminder).toBeDefined();
+      expect(reminder?.band).toBe("OVERDUE");
+      expect(reminder?.source).toBe("PRESALES_ACTION_ITEM");
+      expect(reminder?.href).toBe(`/presales/${openOpp.id}`);
+      expect(reminder?.contextLabel).toBe("[TEST] open opp with action item");
+
+      expect(items.some((i) => i.itemText === "[TEST] overdue on won opp")).toBe(false);
+    } finally {
+      await prisma.presalesActionItem.delete({ where: { id: openAction.id } });
+      await prisma.presalesActionItem.delete({ where: { id: wonAction.id } });
+      await prisma.presalesProject.delete({ where: { id: openOpp.id } });
+      await prisma.presalesProject.delete({ where: { id: wonOpp.id } });
+    }
+  });
+
   it("getReminderItems returns nothing for CLIENT, LIMITED, or PROGRAM_MANAGER, regardless of membership", async () => {
     const { getReminderItems } = await import("@/lib/notifications");
     const overdue = new Date(Date.now() - 5 * 86400000);
@@ -597,6 +661,15 @@ describe("isolation boundary", () => {
       expect(newProject.name).toBe("[TEST] presales to win");
       expect(newProject.client).toBe("[TEST] Client");
       expect(newProject.contractValue).toBe(12000);
+
+      // The project surfaces its presales origin via the back-relation
+      // (components/ui/header-bar.tsx renders this on every project tab).
+      const projectWithOrigin = await prisma.project.findUniqueOrThrow({
+        where: { id: newProject.id },
+        include: { wonFromPresales: { select: { id: true, name: true } } },
+      });
+      expect(projectWithOrigin.wonFromPresales?.id).toBe(wonOpp.id);
+      expect(projectWithOrigin.wonFromPresales?.name).toBe("[TEST] presales to win");
       // The standard checklist template should have been seeded, same as a
       // normal New Project — this is what "becomes a main project" means.
       const seededItems = await prisma.checklistItem.count({ where: { projectId: newProject.id } });
