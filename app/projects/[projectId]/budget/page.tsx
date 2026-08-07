@@ -13,11 +13,15 @@ export default async function BudgetTrackerPage({ params }: { params: { projectI
   const canWrite = access === "WRITE";
   const costHidden = access === "READ_LIMITED"; // strips AC / CV / SPI / CPI — cost-side detail
 
-  const project = await prisma.project.findUniqueOrThrow({ where: { id: params.projectId } });
-  const entries = await prisma.budgetEntry.findMany({
-    where: { projectId: params.projectId },
-    orderBy: { weekEnding: "asc" },
-  });
+  const [project, entries, roleRates] = await Promise.all([
+    prisma.project.findUniqueOrThrow({ where: { id: params.projectId } }),
+    prisma.budgetEntry.findMany({
+      where: { projectId: params.projectId },
+      orderBy: { weekEnding: "asc" },
+      include: { roleCosts: { orderBy: { createdAt: "asc" } } },
+    }),
+    prisma.roleRate.findMany({ orderBy: { roleName: "asc" } }),
+  ]);
 
   const evm = computeEvm(entries, project.contractValue);
   const rate = manDayRate(project.contractValue, project.plannedManDays);
@@ -36,7 +40,8 @@ export default async function BudgetTrackerPage({ params }: { params: { projectI
         <h2 className="text-base font-semibold text-slate-900">Budget / CPI-SPI Tracker</h2>
         <p className="text-sm text-slate-500">
           EV = %Actual Complete x Contract Value. PV = %Planned Complete x Contract Value. SPI = EV/PV. CPI = EV/AC.
-          &ge;1.0 favorable, &lt;1.0 unfavorable.
+          &ge;1.0 favorable, &lt;1.0 unfavorable. %Actual Complete is synced from the checklist; AC is the sum of
+          actual man-days logged per role each week (click a row&apos;s AC to expand).
         </p>
       </div>
 
@@ -88,7 +93,7 @@ export default async function BudgetTrackerPage({ params }: { params: { projectI
                 <th className="px-4 py-3 font-medium w-40">% Actual Complete (Cum.)</th>
                 <th className="px-4 py-3 font-medium w-28">PV</th>
                 <th className="px-4 py-3 font-medium w-28">EV</th>
-                {!costHidden && <th className="px-4 py-3 font-medium w-32">AC (Actual Cost)</th>}
+                {!costHidden && <th className="px-4 py-3 font-medium w-32">AC (by role)</th>}
                 {!costHidden && <th className="px-4 py-3 font-medium w-28">CV (EV-AC)</th>}
                 {!costHidden && <th className="px-4 py-3 font-medium w-24">SPI</th>}
                 {!costHidden && <th className="px-4 py-3 font-medium w-24">CPI</th>}
@@ -98,7 +103,15 @@ export default async function BudgetTrackerPage({ params }: { params: { projectI
             </thead>
             <tbody>
               {evm.map((e, i) => (
-                <BudgetRow key={entries[i].id} projectId={project.id} entry={entries[i]} evm={e} canWrite={canWrite} costHidden={costHidden} />
+                <BudgetRow
+                  key={entries[i].id}
+                  projectId={project.id}
+                  entry={entries[i]}
+                  evm={e}
+                  canWrite={canWrite}
+                  costHidden={costHidden}
+                  roleRates={roleRates}
+                />
               ))}
             </tbody>
           </table>

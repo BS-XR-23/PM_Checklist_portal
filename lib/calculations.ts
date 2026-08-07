@@ -79,6 +79,24 @@ export function trancheAmount(contractValue: number, paymentPct: number): number
   return contractValue * paymentPct;
 }
 
+/**
+ * App-derived: fraction of checklist items actually done. NOT_APPLICABLE
+ * items are excluded from both the numerator and denominator entirely —
+ * out of scope, not "not done". Shared by the Dashboard's "Overall %
+ * Complete" and Budget Tracker's "Sync from Checklist" so the two can never
+ * disagree about what "done" means.
+ */
+export function checklistCompletionPct(items: { status: string }[]): number {
+  const applicable = items.filter((i) => i.status !== "NOT_APPLICABLE");
+  if (applicable.length === 0) return 0;
+  return applicable.filter((i) => i.status === "COMPLETED").length / applicable.length;
+}
+
+/** Budget Tracker: BudgetEntry.actualCost = sum of its role-cost breakdown rows. */
+export function sumRoleCosts(rows: { manDays: number; manDayRate: number }[]): number {
+  return rows.reduce((sum, r) => sum + r.manDays * r.manDayRate, 0);
+}
+
 /** Forecast Date slipped past Planned Date on an incomplete item (non-blocking flag). */
 export function isSlipped(
   plannedDate: Date | null,

@@ -285,11 +285,42 @@ model BudgetEntry {
   project            Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   weekEnding         DateTime
   pctPlannedComplete Float
-  pctActualComplete  Float
-  actualCost         Float
+  pctActualComplete  Float // set via "Sync from Checklist", not hand-typed — see checklistCompletionPct()
+  actualCost         Float // cached sum of roleCosts — see recomputeActualCost()
   notes              String?
 
+  roleCosts BudgetEntryRoleCost[]
+
   @@unique([projectId, weekEnding])
+}
+
+// Admin-managed rate card, by role — not by named person, so no
+// salary-like data is stored against an individual. Used to auto-compute
+// BudgetEntry.actualCost from actual man-days logged per role each week.
+model RoleRate {
+  id         String   @id @default(cuid())
+  roleName   String   @unique
+  manDayRate Float
+  createdAt  DateTime @default(now())
+
+  budgetEntryRoleCosts BudgetEntryRoleCost[]
+}
+
+// One row per role logged against a week's BudgetEntry. roleName/manDayRate
+// are snapshotted from RoleRate at add/edit time — a later rename or
+// deletion of the RoleRate must never rewrite historical cost data.
+model BudgetEntryRoleCost {
+  id            String      @id @default(cuid())
+  budgetEntryId String
+  budgetEntry   BudgetEntry @relation(fields: [budgetEntryId], references: [id], onDelete: Cascade)
+  roleRateId    String?
+  roleRate      RoleRate?   @relation(fields: [roleRateId], references: [id], onDelete: SetNull)
+  roleName      String
+  manDayRate    Float
+  manDays       Float       @default(0)
+  createdAt     DateTime    @default(now())
+
+  @@index([budgetEntryId])
 }
 
 model PMPlan {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { currentStage, isSlipped, reminderBand } from "./calculations";
+import { currentStage, isSlipped, reminderBand, checklistCompletionPct, sumRoleCosts } from "./calculations";
 
 describe("currentStage", () => {
   const STAGES = ["Planning", "Development", "Release"] as const;
@@ -81,5 +81,44 @@ describe("reminderBand", () => {
 
   it("never flags a done item, even if overdue", () => {
     expect(reminderBand(new Date("2026-07-01"), true, today)).toBeNull();
+  });
+});
+
+describe("checklistCompletionPct", () => {
+  it("excludes NOT_APPLICABLE items from both numerator and denominator", () => {
+    const items = [
+      { status: "COMPLETED" },
+      { status: "COMPLETED" },
+      { status: "NOT_APPLICABLE" },
+      { status: "IN_PROGRESS" },
+    ];
+    // 2 completed / 3 applicable, not / 4 total
+    expect(checklistCompletionPct(items)).toBeCloseTo(2 / 3);
+  });
+
+  it("returns 0 when there are no items", () => {
+    expect(checklistCompletionPct([])).toBe(0);
+  });
+
+  it("returns 0 when every item is NOT_APPLICABLE (no applicable items at all)", () => {
+    expect(checklistCompletionPct([{ status: "NOT_APPLICABLE" }, { status: "NOT_APPLICABLE" }])).toBe(0);
+  });
+
+  it("returns 1 when every applicable item is COMPLETED", () => {
+    expect(checklistCompletionPct([{ status: "COMPLETED" }, { status: "NOT_APPLICABLE" }])).toBe(1);
+  });
+});
+
+describe("sumRoleCosts", () => {
+  it("sums man-days x rate across rows", () => {
+    const rows = [
+      { manDays: 3.5, manDayRate: 200 },
+      { manDays: 2, manDayRate: 350 },
+    ];
+    expect(sumRoleCosts(rows)).toBe(3.5 * 200 + 2 * 350);
+  });
+
+  it("returns 0 for an empty breakdown", () => {
+    expect(sumRoleCosts([])).toBe(0);
   });
 });

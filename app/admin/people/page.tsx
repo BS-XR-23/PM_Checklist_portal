@@ -6,6 +6,8 @@ import { isCurrentlyActive } from "@/lib/overload";
 import { AppShell } from "@/components/layout/app-shell";
 import { CreatePersonForm } from "./create-person-form";
 import { PersonRow } from "./person-row";
+import { CreateRoleRateForm } from "./create-role-rate-form";
+import { RoleRateRow } from "./role-rate-row";
 
 export const dynamic = "force-dynamic";
 
@@ -13,12 +15,13 @@ export default async function AdminPeoplePage() {
   const currentUser = await requireUser();
   if (!canManagePersonRegistry(currentUser.role)) redirect("/projects");
 
-  const [people, users] = await Promise.all([
+  const [people, users, roleRates] = await Promise.all([
     prisma.person.findMany({
       orderBy: { name: "asc" },
       include: { user: true, engagements: { include: { project: true } } },
     }),
     prisma.user.findMany({ orderBy: { name: "asc" } }),
+    prisma.roleRate.findMany({ orderBy: { roleName: "asc" } }),
   ]);
 
   const linkedUserIds = new Set(people.filter((p) => p.userId).map((p) => p.userId as string));
@@ -80,6 +83,32 @@ export default async function AdminPeoplePage() {
           Assigning a Person to a specific project (role, intensity, dates) happens on that project&apos;s
           Resourcing tab — Admin or that project&apos;s PM.
         </p>
+
+        <div className="pt-4 border-t border-slate-100">
+          <h2 className="text-base font-semibold text-slate-900 mb-1">Role Rates</h2>
+          <p className="text-sm text-slate-500 mb-4">
+            Used to auto-compute Actual Cost on each project&apos;s Budget Tracker from man-days logged per role
+            each week — rates are set by role, not by named person.
+          </p>
+          <CreateRoleRateForm />
+          <div className="mt-4 rounded-lg border border-slate-200 bg-white overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-slate-500 border-b border-slate-100 bg-slate-50">
+                  <th className="px-4 py-3 font-medium">Role</th>
+                  <th className="px-4 py-3 font-medium">Man-Day Rate</th>
+                  <th className="px-4 py-3 font-medium w-8" />
+                </tr>
+              </thead>
+              <tbody>
+                {roleRates.map((r) => (
+                  <RoleRateRow key={r.id} roleRate={r} />
+                ))}
+              </tbody>
+            </table>
+            {roleRates.length === 0 && <p className="text-sm text-slate-400 p-4">No role rates set yet.</p>}
+          </div>
+        </div>
       </main>
     </AppShell>
   );

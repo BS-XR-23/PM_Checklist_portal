@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { PM_STAGES, DEVOPS_CATEGORIES } from "@/lib/seed-data";
 import { ITEM_STATUSES, type ItemStatus } from "@/lib/constants";
-import { riskScore, computeEvm, trancheAmount, currentStage, reminderBand } from "@/lib/calculations";
+import { riskScore, computeEvm, trancheAmount, currentStage, reminderBand, checklistCompletionPct } from "@/lib/calculations";
 
 export async function getDashboardData(projectId: string) {
   const project = await prisma.project.findUniqueOrThrow({ where: { id: projectId } });
@@ -33,7 +33,7 @@ export async function getDashboardData(projectId: string) {
   const applicableItems = allItems.filter((i) => i.status !== "NOT_APPLICABLE");
   const totalItems = applicableItems.length;
   const completedItems = applicableItems.filter((i) => i.status === "COMPLETED").length;
-  const overallPct = totalItems ? completedItems / totalItems : 0;
+  const overallPct = checklistCompletionPct(allItems);
 
   // Status breakdown stays over ALL items — seeing "N marked Not Applicable"
   // as its own slice is useful; it's only the percentage-complete math above
