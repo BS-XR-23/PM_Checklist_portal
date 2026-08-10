@@ -1,0 +1,35 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Restore production env file
+        run: cp /opt/portal-secrets/.env .env
+
+      - name: Build and start
+        run: docker compose up -d --build
+
+      - name: Wait for healthy container
+        run: |
+          for i in $(seq 1 30); do
+            status=$(docker inspect --format='{{.State.Health.Status}}' "$(docker compose ps -q portal)" 2>/dev/null || echo "starting")
+            if [ "$status" = "healthy" ]; then
+              echo "Container healthy."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Container did not become healthy in time."
+          docker compose logs --tail=100
+          exit 1
+
+      - name: Clean up old images
+        run: docker image prune -f
