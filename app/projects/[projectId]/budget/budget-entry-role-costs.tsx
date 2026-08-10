@@ -1,24 +1,68 @@
 "use client";
 
-import { useTransition } from "react";
-import { InlineNumber, InlineSelect } from "@/components/ui/inline-edit";
+import { useState, useTransition } from "react";
+import { InlineNumber } from "@/components/ui/inline-edit";
 import { formatMoney } from "@/lib/format";
 import { addBudgetEntryRoleCost, updateBudgetEntryRoleCost, deleteBudgetEntryRoleCost } from "./budget-actions";
 
-export type RoleCostData = { id: string; roleRateId: string | null; roleName: string; manDayRate: number; manDays: number };
-export type RoleRateOption = { id: string; roleName: string; manDayRate: number };
+export type RoleCostData = { id: string; personId: string | null; personName: string | null; roleName: string; manDayRate: number; manDays: number };
+export type RosterPerson = { personId: string; personName: string; roleName: string | null; manDayRate: number | null };
+
+function PersonSelect({
+  rowId,
+  projectId,
+  value,
+  roster,
+}: {
+  rowId: string;
+  projectId: string;
+  value: string;
+  roster: RosterPerson[];
+}) {
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  return (
+    <div className="min-w-[200px]">
+      <select
+        className="w-full rounded border border-slate-200 px-1.5 py-1 text-xs hover:border-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-400 disabled:opacity-50"
+        defaultValue={value}
+        disabled={pending}
+        onChange={(e) => {
+          setError(null);
+          startTransition(async () => {
+            try {
+              await updateBudgetEntryRoleCost(rowId, projectId, { personId: e.target.value });
+            } catch (err) {
+              setError(err instanceof Error ? err.message : "Failed to set person.");
+            }
+          });
+        }}
+      >
+        <option value="">— Choose person —</option>
+        {roster.map((p) => (
+          <option key={p.personId} value={p.personId}>
+            {p.personName}
+            {p.roleName ? ` — ${p.roleName}` : " — no rate set"}
+          </option>
+        ))}
+      </select>
+      {error && <p className="text-xs text-red-600 mt-0.5">{error}</p>}
+    </div>
+  );
+}
 
 export function BudgetEntryRoleCosts({
   projectId,
   budgetEntryId,
   roleCosts,
-  roleRates,
+  roster,
   canWrite,
 }: {
   projectId: string;
   budgetEntryId: string;
   roleCosts: RoleCostData[];
-  roleRates: RoleRateOption[];
+  roster: RosterPerson[];
   canWrite: boolean;
 }) {
   const [pending, startTransition] = useTransition();
@@ -32,19 +76,12 @@ export function BudgetEntryRoleCosts({
       {roleCosts.map((r) => (
         <div key={r.id} className="flex items-center gap-2 text-xs">
           {canWrite ? (
-            <InlineSelect
-              className="rounded border border-slate-200 px-1.5 py-1 text-xs min-w-[160px]"
-              value={r.roleRateId ?? ""}
-              options={["", ...roleRates.map((rr) => rr.id)]}
-              renderOption={(id) => {
-                if (id === "") return "— Choose role —";
-                const rr = roleRates.find((rr) => rr.id === id);
-                return rr ? rr.roleName : id;
-              }}
-              onSave={(v) => updateBudgetEntryRoleCost(r.id, projectId, { roleRateId: v })}
-            />
+            <PersonSelect rowId={r.id} projectId={projectId} value={r.personId ?? ""} roster={roster} />
           ) : (
-            <span className="min-w-[160px] text-slate-600">{r.roleName || "—"}</span>
+            <span className="min-w-[200px] text-slate-600">
+              {r.personName ?? "—"}
+              {r.roleName ? ` — ${r.roleName}` : ""}
+            </span>
           )}
 
           {canWrite ? (
@@ -70,6 +107,10 @@ export function BudgetEntryRoleCosts({
           )}
         </div>
       ))}
+
+      {canWrite && roster.length === 0 && (
+        <p className="text-xs text-slate-400">No one is engaged on this project yet — assign people on the Team → Engagement tab.</p>
+      )}
 
       {canWrite && (
         <button

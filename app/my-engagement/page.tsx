@@ -1,20 +1,23 @@
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/rbac";
-import { computePersonLoad, type EngagementLike } from "@/lib/overload";
-import { formatDate } from "@/lib/format";
+import { computePersonLoad, intensityForMonth, type EngagementLike } from "@/lib/overload";
+import { formatDate, startOfMonthUTC } from "@/lib/format";
 import { AppShell } from "@/components/layout/app-shell";
 
 export const dynamic = "force-dynamic";
 
 export default async function MyEngagementPage() {
   const user = await requireUser();
+  const currentMonth = startOfMonthUTC(new Date());
 
   // Resolved by linked Person, not ProjectMembership — a resourcing-only
   // person (typically LIMITED) may have no membership row at all, and this
   // page must never leak anyone else's engagement regardless of role.
   const person = await prisma.person.findUnique({
     where: { userId: user.id },
-    include: { engagements: { include: { project: true }, orderBy: { createdAt: "asc" } } },
+    include: {
+      engagements: { include: { project: true, months: { where: { month: currentMonth } } }, orderBy: { createdAt: "asc" } },
+    },
   });
 
   const engagements: EngagementLike[] = (person?.engagements ?? []).map((e) => ({
@@ -22,7 +25,7 @@ export default async function MyEngagementPage() {
     projectId: e.projectId,
     projectName: e.project.name,
     roleOnProject: e.roleOnProject,
-    intensityPct: e.intensityPct,
+    intensityPct: intensityForMonth(e.months, currentMonth),
     startDate: e.startDate,
     endDate: e.endDate,
   }));
@@ -44,7 +47,7 @@ export default async function MyEngagementPage() {
         ) : (
           <>
             <div className="rounded-lg border border-slate-200 bg-white p-4">
-              <p className="text-xs text-slate-500">Total current allocation</p>
+              <p className="text-xs text-slate-500">Total current-month allocation</p>
               <p className="mt-1 text-2xl font-semibold text-slate-900">{load.totalActivePct}%</p>
             </div>
 
@@ -54,7 +57,7 @@ export default async function MyEngagementPage() {
                   <tr className="text-left text-xs text-slate-500 border-b border-slate-100 bg-slate-50">
                     <th className="px-3 py-2 font-medium">Project</th>
                     <th className="px-3 py-2 font-medium">Role</th>
-                    <th className="px-3 py-2 font-medium w-20">Intensity</th>
+                    <th className="px-3 py-2 font-medium w-32">Intensity (this month)</th>
                     <th className="px-3 py-2 font-medium">Dates</th>
                   </tr>
                 </thead>
@@ -63,7 +66,7 @@ export default async function MyEngagementPage() {
                     <tr key={e.id} className="border-b border-slate-50 last:border-0">
                       <td className="px-3 py-2 text-slate-800 font-medium">{e.project.name}</td>
                       <td className="px-3 py-2 text-slate-600">{e.roleOnProject}</td>
-                      <td className="px-3 py-2 text-slate-600">{e.intensityPct}%</td>
+                      <td className="px-3 py-2 text-slate-600">{intensityForMonth(e.months, currentMonth)}%</td>
                       <td className="px-3 py-2 text-slate-600">
                         {formatDate(e.startDate)} – {formatDate(e.endDate)}
                       </td>

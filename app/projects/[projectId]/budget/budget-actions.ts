@@ -121,29 +121,41 @@ export async function addBudgetEntryRoleCost(budgetEntryId: string, _projectId: 
   const user = await requireModuleWrite(entry.projectId, "BUDGET_TRACKER");
 
   const created = await prisma.budgetEntryRoleCost.create({
-    data: { budgetEntryId, roleRateId: null, roleName: "", manDayRate: 0, manDays: 0 },
+    data: { budgetEntryId, personId: null, personName: null, roleRateId: null, roleName: "", manDayRate: 0, manDays: 0 },
   });
 
   await writeAudit({ actor: user, projectId: entry.projectId, action: "create", entityType: "BudgetEntryRoleCost", entityId: created.id, summary: "Added a role to the actual-cost breakdown" });
   revalidateBudget(entry.projectId);
 }
 
-export async function updateBudgetEntryRoleCost(id: string, _projectId: string, data: { roleRateId?: string; manDays?: number }) {
+export async function updateBudgetEntryRoleCost(id: string, _projectId: string, data: { personId?: string; manDays?: number }) {
   const existing = await prisma.budgetEntryRoleCost.findUniqueOrThrow({ where: { id }, include: { budgetEntry: true } });
   const user = await requireModuleWrite(existing.budgetEntry.projectId, "BUDGET_TRACKER");
 
-  // Changing role re-snapshots roleName/manDayRate from the current
-  // RoleRate — a later rename/deletion of that RoleRate must not rewrite
-  // history, so we copy the values now rather than keep a live join.
-  let roleFields: { roleRateId?: string | null; roleName?: string; manDayRate?: number } = {};
-  if (data.roleRateId !== undefined) {
-    const roleRate = await prisma.roleRate.findUniqueOrThrow({ where: { id: data.roleRateId } });
-    roleFields = { roleRateId: roleRate.id, roleName: roleRate.roleName, manDayRate: roleRate.manDayRate };
+  // Choosing a person re-snapshots personName/roleName/manDayRate from
+  // their current People-registry Rate Role — a later rename/deletion must
+  // not rewrite history, so we copy the values now rather than keep a live
+  // join. The person must actually be engaged on this project (never trust
+  // the client-side roster filter as the real boundary) and must have a
+  // Rate Role configured, or there's nothing to resolve a cost from.
+  let personFields: { personId?: string; personName?: string; roleRateId?: string | null; roleName?: string; manDayRate?: number } = {};
+  if (data.personId !== undefined) {
+    const person = await prisma.person.findUniqueOrThrow({ where: { id: data.personId }, include: { roleRate: true } });
+    const engaged = await prisma.projectEngagement.findFirst({ where: { personId: person.id, projectId: existing.budgetEntry.projectId } });
+    if (!engaged) throw new Error(`${person.name} isn't engaged on this project — assign them on the Team → Engagement tab first.`);
+    if (!person.roleRate) throw new Error(`${person.name} has no Rate Role set — configure one in Admin → People.`);
+    personFields = {
+      personId: person.id,
+      personName: person.name,
+      roleRateId: person.roleRate.id,
+      roleName: person.roleRate.roleName,
+      manDayRate: person.roleRate.manDayRate,
+    };
   }
 
   await prisma.budgetEntryRoleCost.update({
     where: { id },
-    data: { ...roleFields, ...(data.manDays !== undefined ? { manDays: data.manDays } : {}) },
+    data: { ...personFields, ...(data.manDays !== undefined ? { manDays: data.manDays } : {}) },
   });
 
   await recomputeActualCost(existing.budgetEntryId);

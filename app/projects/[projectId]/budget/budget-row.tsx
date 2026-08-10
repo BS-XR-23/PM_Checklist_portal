@@ -6,7 +6,7 @@ import { formatMoney, formatDate, formatPct, toDateInputValue } from "@/lib/form
 import { INDEX_FAVORABLE_COLOR, INDEX_UNFAVORABLE_COLOR } from "@/lib/colors";
 import type { EvmPoint } from "@/lib/calculations";
 import { updateBudgetEntry, deleteBudgetEntry, syncActualCompleteFromChecklist } from "./budget-actions";
-import { BudgetEntryRoleCosts, type RoleCostData, type RoleRateOption } from "./budget-entry-role-costs";
+import { BudgetEntryRoleCosts, type RoleCostData, type RosterPerson } from "./budget-entry-role-costs";
 
 export type BudgetEntryData = {
   id: string;
@@ -38,14 +38,14 @@ export function BudgetRow({
   evm,
   canWrite,
   costHidden,
-  roleRates,
+  roster,
 }: {
   projectId: string;
   entry: BudgetEntryData;
   evm: EvmPoint;
   canWrite: boolean;
   costHidden: boolean;
-  roleRates: RoleRateOption[];
+  roster: RosterPerson[];
 }) {
   const [pending, startTransition] = useTransition();
   const [expanded, setExpanded] = useState(false);
@@ -83,7 +83,7 @@ export function BudgetRow({
           projectId={projectId}
           budgetEntryId={entry.id}
           roleCosts={entry.roleCosts}
-          roleRates={roleRates}
+          roster={roster}
           canWrite={canWrite}
         />
       </td>

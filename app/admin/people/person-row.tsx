@@ -13,10 +13,11 @@ export type PersonRowData = {
   phone: string | null;
   linkedUserId: string | null;
   linkableUsers: { id: string; name: string; email: string }[];
+  roleRateId: string | null;
   engagements: { projectName: string; roleOnProject: string; intensityPct: number }[];
 };
 
-export function PersonRow({ person }: { person: PersonRowData }) {
+export function PersonRow({ person, roleRates }: { person: PersonRowData; roleRates: { id: string; roleName: string }[] }) {
   const [pending, startTransition] = useTransition();
 
   return (
@@ -43,6 +44,17 @@ export function PersonRow({ person }: { person: PersonRowData }) {
             return u ? `${u.name} (${u.email})` : id;
           }}
           onSave={(v) => updatePerson(person.id, { userId: v || null })}
+        />
+      </td>
+      <td className="px-4 py-3">
+        <InlineSelect
+          value={person.roleRateId ?? ""}
+          options={["", ...roleRates.map((r) => r.id)]}
+          renderOption={(id) => {
+            if (id === "") return "— None —";
+            return roleRates.find((r) => r.id === id)?.roleName ?? id;
+          }}
+          onSave={(v) => updatePerson(person.id, { roleRateId: v || null })}
         />
       </td>
       <td className="px-4 py-3 max-w-[18rem]">

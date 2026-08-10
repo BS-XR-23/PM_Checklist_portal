@@ -867,12 +867,38 @@ describe("isolation boundary", () => {
     expect(await prisma.roleRate.findUnique({ where: { id: created.id } })).toBeNull();
   });
 
-  it("Budget actual cost: adding/updating/removing a role-cost row recomputes the parent BudgetEntry.actualCost", async () => {
+  it("Admin can set and clear a Person's Rate Role via updatePerson", async () => {
+    const { updatePerson } = await import("@/app/admin/people/people-actions");
+    const rate = await prisma.roleRate.create({ data: { roleName: "[TEST] Rate role field", manDayRate: 175 } });
+    const person = await prisma.person.create({ data: { name: "[TEST] Rate role toggling" } });
+
+    try {
+      actAs(adminUserId);
+      await updatePerson(person.id, { roleRateId: rate.id });
+      expect((await prisma.person.findUniqueOrThrow({ where: { id: person.id } })).roleRateId).toBe(rate.id);
+
+      await updatePerson(person.id, { roleRateId: null });
+      expect((await prisma.person.findUniqueOrThrow({ where: { id: person.id } })).roleRateId).toBeNull();
+    } finally {
+      await prisma.person.delete({ where: { id: person.id } });
+      await prisma.roleRate.delete({ where: { id: rate.id } });
+    }
+  });
+
+  it("Budget actual cost: adding/updating/removing a role-cost row (via an engaged person) recomputes the parent BudgetEntry.actualCost", async () => {
     const { addBudgetEntryRoleCost, updateBudgetEntryRoleCost, deleteBudgetEntryRoleCost } = await import(
       "@/app/projects/[projectId]/budget/budget-actions"
     );
     const seniorRate = await prisma.roleRate.create({ data: { roleName: "[TEST] Senior", manDayRate: 300 } });
     const qaRate = await prisma.roleRate.create({ data: { roleName: "[TEST] QA", manDayRate: 150 } });
+    const seniorPerson = await prisma.person.create({ data: { name: "[TEST] Senior Person", roleRateId: seniorRate.id } });
+    const qaPerson = await prisma.person.create({ data: { name: "[TEST] QA Person", roleRateId: qaRate.id } });
+    await prisma.projectEngagement.createMany({
+      data: [
+        { personId: seniorPerson.id, projectId: projectA.id, roleOnProject: "Senior" },
+        { personId: qaPerson.id, projectId: projectA.id, roleOnProject: "QA" },
+      ],
+    });
     const entry = await prisma.budgetEntry.create({
       data: { projectId: projectA.id, weekEnding: new Date("2026-09-01"), pctPlannedComplete: 0.1, pctActualComplete: 0, actualCost: 0 },
     });
@@ -882,19 +908,67 @@ describe("isolation boundary", () => {
       await addBudgetEntryRoleCost(entry.id, projectA.id);
       const seniorRow = await prisma.budgetEntryRoleCost.findFirstOrThrow({ where: { budgetEntryId: entry.id } });
 
-      await updateBudgetEntryRoleCost(seniorRow.id, projectA.id, { roleRateId: seniorRate.id, manDays: 4 });
-      expect((await prisma.budgetEntry.findUniqueOrThrow({ where: { id: entry.id } })).actualCost).toBe(4 * 300);
+      await updateBudgetEntryRoleCost(seniorRow.id, projectA.id, { personId: seniorPerson.id, manDays: 4 });
+      const afterSenior = await prisma.budgetEntry.findUniqueOrThrow({ where: { id: entry.id } });
+      expect(afterSenior.actualCost).toBe(4 * 300);
+      const seniorRowAfter = await prisma.budgetEntryRoleCost.findUniqueOrThrow({ where: { id: seniorRow.id } });
+      expect(seniorRowAfter.personName).toBe("[TEST] Senior Person");
+      expect(seniorRowAfter.roleName).toBe("[TEST] Senior");
 
       await addBudgetEntryRoleCost(entry.id, projectA.id);
       const qaRow = await prisma.budgetEntryRoleCost.findFirstOrThrow({ where: { budgetEntryId: entry.id, id: { not: seniorRow.id } } });
-      await updateBudgetEntryRoleCost(qaRow.id, projectA.id, { roleRateId: qaRate.id, manDays: 2 });
+      await updateBudgetEntryRoleCost(qaRow.id, projectA.id, { personId: qaPerson.id, manDays: 2 });
       expect((await prisma.budgetEntry.findUniqueOrThrow({ where: { id: entry.id } })).actualCost).toBe(4 * 300 + 2 * 150);
 
       await deleteBudgetEntryRoleCost(seniorRow.id, projectA.id);
       expect((await prisma.budgetEntry.findUniqueOrThrow({ where: { id: entry.id } })).actualCost).toBe(2 * 150);
     } finally {
       await prisma.budgetEntry.delete({ where: { id: entry.id } }); // cascades remaining roleCosts
+      await prisma.projectEngagement.deleteMany({ where: { personId: { in: [seniorPerson.id, qaPerson.id] } } });
+      await prisma.person.deleteMany({ where: { id: { in: [seniorPerson.id, qaPerson.id] } } });
       await prisma.roleRate.deleteMany({ where: { id: { in: [seniorRate.id, qaRate.id] } } });
+    }
+  });
+
+  it("a person not engaged on the project is rejected when chosen for the actual-cost breakdown", async () => {
+    const { addBudgetEntryRoleCost, updateBudgetEntryRoleCost } = await import("@/app/projects/[projectId]/budget/budget-actions");
+    const rate = await prisma.roleRate.create({ data: { roleName: "[TEST] Unengaged rate", manDayRate: 200 } });
+    const person = await prisma.person.create({ data: { name: "[TEST] Not engaged", roleRateId: rate.id } }); // never engaged on projectA
+    const entry = await prisma.budgetEntry.create({
+      data: { projectId: projectA.id, weekEnding: new Date("2026-09-22"), pctPlannedComplete: 0, pctActualComplete: 0, actualCost: 0 },
+    });
+
+    try {
+      actAs(pmAUserId);
+      await addBudgetEntryRoleCost(entry.id, projectA.id);
+      const row = await prisma.budgetEntryRoleCost.findFirstOrThrow({ where: { budgetEntryId: entry.id } });
+      await expect(updateBudgetEntryRoleCost(row.id, projectA.id, { personId: person.id })).rejects.toThrow();
+      expect((await prisma.budgetEntryRoleCost.findUniqueOrThrow({ where: { id: row.id } })).personId).toBeNull();
+    } finally {
+      await prisma.budgetEntry.delete({ where: { id: entry.id } });
+      await prisma.person.delete({ where: { id: person.id } });
+      await prisma.roleRate.delete({ where: { id: rate.id } });
+    }
+  });
+
+  it("a person with no Rate Role set is rejected when chosen for the actual-cost breakdown", async () => {
+    const { addBudgetEntryRoleCost, updateBudgetEntryRoleCost } = await import("@/app/projects/[projectId]/budget/budget-actions");
+    const person = await prisma.person.create({ data: { name: "[TEST] No rate role" } }); // roleRateId left unset
+    await prisma.projectEngagement.create({ data: { personId: person.id, projectId: projectA.id, roleOnProject: "Whatever" } });
+    const entry = await prisma.budgetEntry.create({
+      data: { projectId: projectA.id, weekEnding: new Date("2026-09-29"), pctPlannedComplete: 0, pctActualComplete: 0, actualCost: 0 },
+    });
+
+    try {
+      actAs(pmAUserId);
+      await addBudgetEntryRoleCost(entry.id, projectA.id);
+      const row = await prisma.budgetEntryRoleCost.findFirstOrThrow({ where: { budgetEntryId: entry.id } });
+      await expect(updateBudgetEntryRoleCost(row.id, projectA.id, { personId: person.id })).rejects.toThrow();
+      expect((await prisma.budgetEntryRoleCost.findUniqueOrThrow({ where: { id: row.id } })).personId).toBeNull();
+    } finally {
+      await prisma.budgetEntry.delete({ where: { id: entry.id } });
+      await prisma.projectEngagement.deleteMany({ where: { personId: person.id } });
+      await prisma.person.delete({ where: { id: person.id } });
     }
   });
 
@@ -943,6 +1017,8 @@ describe("isolation boundary", () => {
     const { deleteRoleRate } = await import("@/app/admin/people/role-rate-actions");
 
     const roleRate = await prisma.roleRate.create({ data: { roleName: "[TEST] Soon-deleted role", manDayRate: 250 } });
+    const person = await prisma.person.create({ data: { name: "[TEST] Rate-role person", roleRateId: roleRate.id } });
+    await prisma.projectEngagement.create({ data: { personId: person.id, projectId: projectA.id, roleOnProject: "Whatever" } });
     const entry = await prisma.budgetEntry.create({
       data: { projectId: projectA.id, weekEnding: new Date("2026-09-15"), pctPlannedComplete: 0, pctActualComplete: 0, actualCost: 0 },
     });
@@ -951,18 +1027,21 @@ describe("isolation boundary", () => {
       actAs(pmAUserId);
       await addBudgetEntryRoleCost(entry.id, projectA.id);
       const row = await prisma.budgetEntryRoleCost.findFirstOrThrow({ where: { budgetEntryId: entry.id } });
-      await updateBudgetEntryRoleCost(row.id, projectA.id, { roleRateId: roleRate.id, manDays: 2 });
+      await updateBudgetEntryRoleCost(row.id, projectA.id, { personId: person.id, manDays: 2 });
 
       actAs(adminUserId);
       await deleteRoleRate(roleRate.id);
 
       const afterDelete = await prisma.budgetEntryRoleCost.findUniqueOrThrow({ where: { id: row.id } });
       expect(afterDelete.roleRateId).toBeNull(); // onDelete: SetNull
+      expect(afterDelete.personName).toBe("[TEST] Rate-role person"); // snapshot untouched
       expect(afterDelete.roleName).toBe("[TEST] Soon-deleted role"); // snapshot untouched
       expect(afterDelete.manDayRate).toBe(250); // snapshot untouched
       expect((await prisma.budgetEntry.findUniqueOrThrow({ where: { id: entry.id } })).actualCost).toBe(500); // unaffected
     } finally {
       await prisma.budgetEntry.delete({ where: { id: entry.id } });
+      await prisma.projectEngagement.deleteMany({ where: { personId: person.id } });
+      await prisma.person.delete({ where: { id: person.id } });
     }
   });
 });

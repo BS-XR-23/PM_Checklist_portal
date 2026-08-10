@@ -13,15 +13,30 @@ export default async function BudgetTrackerPage({ params }: { params: { projectI
   const canWrite = access === "WRITE";
   const costHidden = access === "READ_LIMITED"; // strips AC / CV / SPI / CPI — cost-side detail
 
-  const [project, entries, roleRates] = await Promise.all([
+  const [project, entries, engagements] = await Promise.all([
     prisma.project.findUniqueOrThrow({ where: { id: params.projectId } }),
     prisma.budgetEntry.findMany({
       where: { projectId: params.projectId },
       orderBy: { weekEnding: "asc" },
       include: { roleCosts: { orderBy: { createdAt: "asc" } } },
     }),
-    prisma.roleRate.findMany({ orderBy: { roleName: "asc" } }),
+    // The Actual Cost breakdown picker only offers people actually engaged
+    // on this project — not filtered to "currently active," since a
+    // BudgetEntry is inherently historical and someone who's since rolled
+    // off may still need cost logged for a week they were on the project.
+    prisma.projectEngagement.findMany({
+      where: { projectId: params.projectId },
+      include: { person: { include: { roleRate: true } } },
+      orderBy: { person: { name: "asc" } },
+    }),
   ]);
+
+  const roster = Array.from(new Map(engagements.map((e) => [e.personId, e])).values()).map((e) => ({
+    personId: e.person.id,
+    personName: e.person.name,
+    roleName: e.person.roleRate?.roleName ?? null,
+    manDayRate: e.person.roleRate?.manDayRate ?? null,
+  }));
 
   const evm = computeEvm(entries, project.contractValue);
   const rate = manDayRate(project.contractValue, project.plannedManDays);
@@ -110,7 +125,7 @@ export default async function BudgetTrackerPage({ params }: { params: { projectI
                   evm={e}
                   canWrite={canWrite}
                   costHidden={costHidden}
-                  roleRates={roleRates}
+                  roster={roster}
                 />
               ))}
             </tbody>

@@ -304,15 +304,22 @@ model RoleRate {
   createdAt  DateTime @default(now())
 
   budgetEntryRoleCosts BudgetEntryRoleCost[]
+  people               Person[]
 }
 
 // One row per role logged against a week's BudgetEntry. roleName/manDayRate
 // are snapshotted from RoleRate at add/edit time — a later rename or
 // deletion of the RoleRate must never rewrite historical cost data.
+// personId/personName tie the row to who actually did the work (resolved
+// via their People-registry Rate Role) — nullable because rows created
+// before this existed are pure role-only history, left untouched.
 model BudgetEntryRoleCost {
   id            String      @id @default(cuid())
   budgetEntryId String
   budgetEntry   BudgetEntry @relation(fields: [budgetEntryId], references: [id], onDelete: Cascade)
+  personId      String?
+  person        Person?     @relation(fields: [personId], references: [id], onDelete: SetNull)
+  personName    String?
   roleRateId    String?
   roleRate      RoleRate?   @relation(fields: [roleRateId], references: [id], onDelete: SetNull)
   roleName      String
@@ -411,14 +418,16 @@ model RaciRow {
 /// checklist "Owner", risk "Owner", and stakeholder names should reference
 /// instead of re-typing free text on every row.
 model Person {
-  id        String   @id @default(cuid())
-  name      String
-  title     String? // e.g. "Lead Engineer", "Creative Lead", "QA", "BA"
-  email     String?
-  phone     String?
-  userId    String?  @unique // linked portal account, if they have one (typically LIMITED)
-  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  createdAt DateTime @default(now())
+  id         String    @id @default(cuid())
+  name       String
+  title      String? // e.g. "Lead Engineer", "Creative Lead", "QA", "BA"
+  email      String?
+  phone      String?
+  userId     String?   @unique // linked portal account, if they have one (typically LIMITED)
+  user       User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  roleRateId String? // which RoleRate this person's Actual Cost logging resolves to
+  roleRate   RoleRate? @relation(fields: [roleRateId], references: [id], onDelete: SetNull)
+  createdAt  DateTime  @default(now())
 
   engagements             ProjectEngagement[]
   checklistOwners         ChecklistItem[]
@@ -429,6 +438,7 @@ model Person {
   presalesDecisionsMade   PresalesDecisionItem[]
   presalesActionItemOwner PresalesActionItem[]
   presalesChecklistOwner  PresalesChecklistItem[]
+  budgetEntryRoleCosts    BudgetEntryRoleCost[]
 }
 
 enum PresalesOutcome {
@@ -539,11 +549,28 @@ model ProjectEngagement {
   projectId     String
   project       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
   roleOnProject String // free text, defaults to Person.title, editable per engagement
-  intensityPct  Int // 0-100; UI presents Low/Med/High bands over this one number
   startDate     DateTime?
   endDate       DateTime?
   notes         String?
   createdAt     DateTime  @default(now())
 
+  months ProjectEngagementMonth[]
+
   @@index([projectId])
+}
+
+// One row per calendar month an engagement has an explicit intensity set.
+// `month` is normalized to the 1st of the month (UTC midnight). A month
+// with no row here simply hasn't been set yet — resolved as 0% by
+// intensityForMonth() (lib/overload.ts), never inherited from a
+// neighboring month.
+model ProjectEngagementMonth {
+  id           String            @id @default(cuid())
+  engagementId String
+  engagement   ProjectEngagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  month        DateTime
+  intensityPct Int
+
+  @@unique([engagementId, month])
+  @@index([engagementId])
 }

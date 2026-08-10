@@ -3,12 +3,19 @@
 import { useState, useTransition } from "react";
 import { createPerson } from "./people-actions";
 
-export function CreatePersonForm({ linkableUsers }: { linkableUsers: { id: string; name: string; email: string }[] }) {
+export function CreatePersonForm({
+  linkableUsers,
+  roleRates,
+}: {
+  linkableUsers: { id: string; name: string; email: string }[];
+  roleRates: { id: string; roleName: string }[];
+}) {
   const [name, setName] = useState("");
   const [title, setTitle] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [userId, setUserId] = useState("");
+  const [roleRateId, setRoleRateId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -19,12 +26,13 @@ export function CreatePersonForm({ linkableUsers }: { linkableUsers: { id: strin
         setError(null);
         startTransition(async () => {
           try {
-            await createPerson({ name, title, email, phone, userId: userId || undefined });
+            await createPerson({ name, title, email, phone, userId: userId || undefined, roleRateId: roleRateId || undefined });
             setName("");
             setTitle("");
             setEmail("");
             setPhone("");
             setUserId("");
+            setRoleRateId("");
           } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to create person.");
           }
@@ -62,6 +70,17 @@ export function CreatePersonForm({ linkableUsers }: { linkableUsers: { id: strin
             {linkableUsers.map((u) => (
               <option key={u.id} value={u.id}>
                 {u.name} ({u.email})
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="min-w-[160px]">
+          <label className="block text-xs font-medium text-slate-600 mb-1">Rate Role (optional)</label>
+          <select value={roleRateId} onChange={(e) => setRoleRateId(e.target.value)} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
+            <option value="">None</option>
+            {roleRates.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.roleName}
               </option>
             ))}
           </select>

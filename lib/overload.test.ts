@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isCurrentlyActive, computePersonLoad, findOverlapConflicts, type EngagementLike } from "./overload";
+import { isCurrentlyActive, computePersonLoad, findOverlapConflicts, intensityForMonth, type EngagementLike } from "./overload";
 
 const TODAY = new Date("2026-07-24T00:00:00Z");
 
@@ -92,5 +92,33 @@ describe("findOverlapConflicts", () => {
       eng({ id: "2", projectId: "B", intensityPct: 70, startDate: new Date("2030-01-01"), endDate: null }),
     ];
     expect(findOverlapConflicts(engagements)).toHaveLength(1);
+  });
+});
+
+describe("intensityForMonth", () => {
+  const july = new Date("2026-07-01T00:00:00Z");
+  const august = new Date("2026-08-01T00:00:00Z");
+
+  it("returns the intensity for a month with an explicit row", () => {
+    const months = [
+      { month: july, intensityPct: 25 },
+      { month: august, intensityPct: 60 },
+    ];
+    expect(intensityForMonth(months, july)).toBe(25);
+    expect(intensityForMonth(months, august)).toBe(60);
+  });
+
+  it("returns 0 for a month with no row — never inherited from a neighboring month", () => {
+    const months = [{ month: july, intensityPct: 90 }];
+    expect(intensityForMonth(months, august)).toBe(0);
+  });
+
+  it("matches on calendar month, ignoring the day-of-month component", () => {
+    const months = [{ month: new Date("2026-07-01T00:00:00Z"), intensityPct: 40 }];
+    expect(intensityForMonth(months, new Date("2026-07-15T12:00:00Z"))).toBe(40);
+  });
+
+  it("returns 0 when there are no months at all", () => {
+    expect(intensityForMonth([], july)).toBe(0);
   });
 });

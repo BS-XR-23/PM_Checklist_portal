@@ -57,3 +57,17 @@ export function findOverlapConflicts(engagements: EngagementLike[]): OverlapConf
   }
   return conflicts;
 }
+
+export type MonthlyIntensity = { month: Date; intensityPct: number };
+
+/**
+ * Resolves an engagement's intensity for one calendar month from its
+ * monthly breakdown rows. A month with no row means nothing's been logged
+ * for it — resolved as 0, never inherited from a neighboring month.
+ */
+export function intensityForMonth(months: MonthlyIntensity[], targetMonth: Date): number {
+  return (
+    months.find((m) => m.month.getUTCFullYear() === targetMonth.getUTCFullYear() && m.month.getUTCMonth() === targetMonth.getUTCMonth())
+      ?.intensityPct ?? 0
+  );
+}

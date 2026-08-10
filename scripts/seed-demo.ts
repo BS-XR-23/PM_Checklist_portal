@@ -8,6 +8,7 @@ import { randomBytes } from "crypto";
 import bcrypt from "bcryptjs";
 import { PrismaClient } from "@prisma/client";
 import { createProject } from "../lib/create-project";
+import { startOfMonthUTC } from "../lib/format";
 
 const prisma = new PrismaClient();
 
@@ -42,14 +43,22 @@ async function main() {
   const [ayesha, tanvir, nusrat, rafiq] = people;
   console.log(`Created ${people.length} demo Person records.`);
 
-  await prisma.projectEngagement.createMany({
-    data: [
-      { projectId: demoProject.id, personId: ayesha.id, roleOnProject: "Lead Engineer", intensityPct: 70, startDate: daysFromNow(0), endDate: daysFromNow(90) },
-      { projectId: demoProject.id, personId: tanvir.id, roleOnProject: "QA Lead", intensityPct: 40, startDate: daysFromNow(30), endDate: daysFromNow(90) },
-      { projectId: demoProject.id, personId: nusrat.id, roleOnProject: "Creative Lead", intensityPct: 50, startDate: daysFromNow(0), endDate: daysFromNow(45) },
-      { projectId: demoProject.id, personId: rafiq.id, roleOnProject: "Business Analyst", intensityPct: 30, startDate: daysFromNow(0), endDate: daysFromNow(30) },
-    ],
-  });
+  // Intensity is now tracked per calendar month (ProjectEngagementMonth) —
+  // seed just the current month for each engagement, which is enough to
+  // populate the overload/conflict demo (all these windows include today).
+  const currentMonth = startOfMonthUTC(new Date());
+  async function createEngagement(data: { projectId: string; personId: string; roleOnProject: string; startDate: Date; endDate: Date }, intensityPct: number) {
+    const engagement = await prisma.projectEngagement.create({ data });
+    await prisma.projectEngagementMonth.create({ data: { engagementId: engagement.id, month: currentMonth, intensityPct } });
+    return engagement;
+  }
+
+  await Promise.all([
+    createEngagement({ projectId: demoProject.id, personId: ayesha.id, roleOnProject: "Lead Engineer", startDate: daysFromNow(0), endDate: daysFromNow(90) }, 70),
+    createEngagement({ projectId: demoProject.id, personId: tanvir.id, roleOnProject: "QA Lead", startDate: daysFromNow(30), endDate: daysFromNow(90) }, 40),
+    createEngagement({ projectId: demoProject.id, personId: nusrat.id, roleOnProject: "Creative Lead", startDate: daysFromNow(0), endDate: daysFromNow(45) }, 50),
+    createEngagement({ projectId: demoProject.id, personId: rafiq.id, roleOnProject: "Business Analyst", startDate: daysFromNow(0), endDate: daysFromNow(30) }, 30),
+  ]);
   console.log("Assigned 4 people to the demo project.");
 
   if (otherProject) {
@@ -57,16 +66,10 @@ async function main() {
     // dates: 70% + 60% = 130% total (over the 100% threshold), and both
     // engagements are high-intensity (>=60%) with overlapping windows —
     // triggers both the overload and the overlap-conflict signal.
-    await prisma.projectEngagement.create({
-      data: {
-        projectId: otherProject.id,
-        personId: ayesha.id,
-        roleOnProject: "Lead Engineer",
-        intensityPct: 60,
-        startDate: daysFromNow(0),
-        endDate: daysFromNow(60),
-      },
-    });
+    await createEngagement(
+      { projectId: otherProject.id, personId: ayesha.id, roleOnProject: "Lead Engineer", startDate: daysFromNow(0), endDate: daysFromNow(60) },
+      60
+    );
     console.log(`Also engaged Ayesha Rahman on "${otherProject.name}" at 60% (overlapping) — overload + conflict demo ready.`);
   } else {
     console.log("No other project found to demo the cross-project conflict against — only the single-project roster was created.");
