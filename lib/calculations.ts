@@ -79,6 +79,24 @@ export function trancheAmount(contractValue: number, paymentPct: number): number
   return contractValue * paymentPct;
 }
 
+/**
+ * App-derived: fraction of checklist items actually done. NOT_APPLICABLE
+ * items are excluded from both the numerator and denominator entirely —
+ * out of scope, not "not done". Shared by the Dashboard's "Overall %
+ * Complete" and Budget Tracker's "Sync from Checklist" so the two can never
+ * disagree about what "done" means.
+ */
+export function checklistCompletionPct(items: { status: string }[]): number {
+  const applicable = items.filter((i) => i.status !== "NOT_APPLICABLE");
+  if (applicable.length === 0) return 0;
+  return applicable.filter((i) => i.status === "COMPLETED").length / applicable.length;
+}
+
+/** Budget Tracker: BudgetEntry.actualCost = sum of its role-cost breakdown rows. */
+export function sumRoleCosts(rows: { manDays: number; manDayRate: number }[]): number {
+  return rows.reduce((sum, r) => sum + r.manDays * r.manDayRate, 0);
+}
+
 /** Forecast Date slipped past Planned Date on an incomplete item (non-blocking flag). */
 export function isSlipped(
   plannedDate: Date | null,
@@ -86,6 +104,46 @@ export function isSlipped(
   status: string
 ): boolean {
   if (!plannedDate || !forecastDate) return false;
-  if (status === "COMPLETED") return false;
+  if (status === "COMPLETED" || status === "NOT_APPLICABLE") return false;
   return forecastDate.getTime() > plannedDate.getTime();
+}
+
+/**
+ * App-derived (not from the spreadsheet): the first stage in stageOrder that
+ * still has an incomplete item, or null if everything's done. Shared by the
+ * Checklist page's default-open-tab logic and the Projects list's stage
+ * filter/label, so both definitions of "current stage" can't drift apart.
+ */
+export function currentStage(
+  items: { stage: string; status: string }[],
+  stageOrder: readonly string[]
+): string | null {
+  for (const stage of stageOrder) {
+    const rows = items.filter((i) => i.stage === stage);
+    if (rows.length > 0 && rows.some((r) => r.status !== "COMPLETED" && r.status !== "NOT_APPLICABLE")) return stage;
+  }
+  return null;
+}
+
+export type ReminderBand = "OVERDUE" | "DUE_SOON" | null;
+
+/**
+ * App-derived: an incomplete item whose Planned Date has already passed
+ * (OVERDUE) or falls within the next `dueSoonDays` (DUE_SOON). Deliberately
+ * distinct from isSlipped() above — that flags "the forecast moved past the
+ * plan" (a re-estimate signal); this flags "this was due and nothing's
+ * happened" (a forgot-about-it signal), which is what actually needs to
+ * proactively surface to whoever owns the item.
+ */
+export function reminderBand(
+  plannedDate: Date | null,
+  isDone: boolean,
+  today: Date = new Date(),
+  dueSoonDays = 7
+): ReminderBand {
+  if (!plannedDate || isDone) return null;
+  const diffDays = Math.floor((plannedDate.getTime() - today.getTime()) / 86400000);
+  if (diffDays < 0) return "OVERDUE";
+  if (diffDays <= dueSoonDays) return "DUE_SOON";
+  return null;
 }

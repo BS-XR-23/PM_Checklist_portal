@@ -1,15 +1,36 @@
 import { prisma } from "@/lib/prisma";
 import { ChecklistTable } from "@/components/checklist/checklist-table";
+import { SubNav } from "@/components/ui/sub-nav";
 import { DEVOPS_CATEGORIES } from "@/lib/seed-data";
+import { requireModuleAccess, getModuleAccess, getCurrentUser } from "@/lib/rbac";
 
 export default async function DevOpsChecklistPage({ params }: { params: { projectId: string } }) {
-  const items = await prisma.checklistItem.findMany({
-    where: { projectId: params.projectId, type: "DEVOPS" },
-    orderBy: { order: "asc" },
-  });
+  const [access, pmAccess, user] = await Promise.all([
+    requireModuleAccess(params.projectId, "DEVOPS_CHECKLIST", "READ_LIMITED"),
+    getModuleAccess(params.projectId, "PM_CHECKLIST"),
+    getCurrentUser(),
+  ]);
+
+  const [items, people] = await Promise.all([
+    prisma.checklistItem.findMany({
+      where: { projectId: params.projectId, type: "DEVOPS" },
+      orderBy: { order: "asc" },
+      include: { ownerPerson: { select: { id: true, name: true } } },
+    }),
+    access === "WRITE" ? prisma.person.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }) : Promise.resolve([]),
+  ]);
+
+  const withOwnerName = items.map((i) => ({ ...i, ownerPersonName: i.ownerPerson?.name ?? null }));
+  const visibleItems = access === "READ_LIMITED" ? withOwnerName.map((i) => ({ ...i, notes: null })) : withOwnerName;
+
+  const subNavOptions = [
+    ...(pmAccess !== "NONE" ? [{ href: "/pm-checklist", label: "PM Checklist" }] : []),
+    { href: "/devops-checklist", label: "DevOps Checklist" },
+  ];
 
   return (
     <div>
+      <SubNav projectId={params.projectId} options={subNavOptions} />
       <div className="mb-4">
         <h2 className="text-base font-semibold text-slate-900">DevOps Checklist</h2>
         <p className="text-sm text-slate-500">18 items across Infrastructure, CI/CD, Security, Reliability, and Release & Ops.</p>
@@ -17,9 +38,12 @@ export default async function DevOpsChecklistPage({ params }: { params: { projec
       <ChecklistTable
         projectId={params.projectId}
         checklistType="DEVOPS"
-        items={items}
+        items={visibleItems}
         stageOrder={DEVOPS_CATEGORIES}
         stageLabel="Category"
+        access={access}
+        viewerRole={user!.role}
+        people={people}
       />
     </div>
   );

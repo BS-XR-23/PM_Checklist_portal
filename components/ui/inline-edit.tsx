@@ -2,8 +2,13 @@
 
 import { useState, useTransition } from "react";
 
+// A visible border at rest (not just on hover/focus) is deliberate — every
+// field built on this primitive looked like static text until you happened
+// to click it, which read as "not editable" rather than "editable but
+// unstyled." One shared constant, so the fix applies everywhere this is
+// used (checklist, risks, CRs, milestones, budget, people, users, PM plan).
 const cellClass =
-  "w-full bg-transparent text-sm px-1.5 py-1 rounded hover:bg-slate-100 focus:bg-white focus:outline-none focus:ring-1 focus:ring-slate-400 disabled:opacity-50";
+  "w-full bg-transparent text-sm px-1.5 py-1 rounded border border-slate-200 hover:border-slate-300 hover:bg-slate-100 focus:bg-white focus:outline-none focus:ring-1 focus:ring-slate-400 disabled:opacity-50";
 
 export function InlineText({
   value,

@@ -1,28 +1,34 @@
 "use server";
 
-import { getServerSession } from "next-auth";
-import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { parseDateInput } from "@/lib/format";
+import { requireModuleWrite, writeAudit } from "@/lib/rbac";
 
-async function requireSession() {
-  const session = await getServerSession(authOptions);
-  if (!session) redirect("/login");
-  return session;
+function revalidateRisks(projectId: string) {
+  revalidatePath(`/projects/${projectId}/risks`);
+  revalidatePath(`/projects/${projectId}/dashboard`);
+  revalidatePath(`/projects/${projectId}/activity`);
 }
 
 export async function createRisk(projectId: string) {
-  await requireSession();
+  const user = await requireModuleWrite(projectId, "RISK_REGISTER");
 
   const count = await prisma.riskItem.count({ where: { projectId } });
-  await prisma.riskItem.create({
+  const created = await prisma.riskItem.create({
     data: { projectId, description: "New risk/opportunity/issue", order: count },
   });
 
-  revalidatePath(`/projects/${projectId}/risks`);
-  revalidatePath(`/projects/${projectId}/dashboard`);
+  await writeAudit({
+    actor: user,
+    projectId,
+    action: "create",
+    entityType: "RiskItem",
+    entityId: created.id,
+    summary: "Added a new risk/opportunity/issue",
+  });
+
+  revalidateRisks(projectId);
 }
 
 export async function updateRisk(
@@ -35,6 +41,7 @@ export async function updateRisk(
     probability: string;
     impact: string;
     owner: string;
+    ownerPersonId: string | null;
     mitigation: string;
     status: string;
     dateRaised: string | null;
@@ -42,7 +49,9 @@ export async function updateRisk(
     notes: string;
   }>
 ) {
-  await requireSession();
+  // Guessed-ID fix: authorize against the risk's real project.
+  const existing = await prisma.riskItem.findUniqueOrThrow({ where: { id } });
+  const user = await requireModuleWrite(existing.projectId, "RISK_REGISTER");
 
   await prisma.riskItem.update({
     where: { id },
@@ -53,6 +62,7 @@ export async function updateRisk(
       ...(data.probability !== undefined ? { probability: data.probability } : {}),
       ...(data.impact !== undefined ? { impact: data.impact } : {}),
       ...(data.owner !== undefined ? { owner: data.owner || null } : {}),
+      ...(data.ownerPersonId !== undefined ? { ownerPersonId: data.ownerPersonId } : {}),
       ...(data.mitigation !== undefined ? { mitigation: data.mitigation || null } : {}),
       ...(data.status !== undefined ? { status: data.status } : {}),
       ...(data.dateRaised !== undefined ? { dateRaised: parseDateInput(data.dateRaised) } : {}),
@@ -61,13 +71,34 @@ export async function updateRisk(
     },
   });
 
-  revalidatePath(`/projects/${projectId}/risks`);
-  revalidatePath(`/projects/${projectId}/dashboard`);
+  await writeAudit({
+    actor: user,
+    projectId: existing.projectId,
+    action: "update",
+    entityType: "RiskItem",
+    entityId: id,
+    summary: `Updated risk "${existing.description.slice(0, 60)}"`,
+    diff: { before: existing, changes: data },
+  });
+
+  revalidateRisks(existing.projectId);
 }
 
-export async function deleteRisk(id: string, projectId: string) {
-  await requireSession();
+export async function deleteRisk(id: string, _projectId: string) {
+  const existing = await prisma.riskItem.findUniqueOrThrow({ where: { id } });
+  const user = await requireModuleWrite(existing.projectId, "RISK_REGISTER");
+
   await prisma.riskItem.delete({ where: { id } });
-  revalidatePath(`/projects/${projectId}/risks`);
-  revalidatePath(`/projects/${projectId}/dashboard`);
+
+  await writeAudit({
+    actor: user,
+    projectId: existing.projectId,
+    action: "delete",
+    entityType: "RiskItem",
+    entityId: id,
+    summary: `Deleted risk "${existing.description.slice(0, 60)}"`,
+    diff: { before: existing },
+  });
+
+  revalidateRisks(existing.projectId);
 }

@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { renderPmPlanDocx } from "@/lib/pm-plan-docx";
+import { getModuleAccess, meetsLevel } from "@/lib/rbac";
 
 export async function GET(_req: NextRequest, { params }: { params: { projectId: string } }) {
-  const session = await getServerSession(authOptions);
-  if (!session) return new NextResponse("Unauthorized", { status: 401 });
+  // This is a guessable URL (/api/projects/<id>/pm-plan/export) — it must
+  // enforce the same module scoping as the page, not just "is logged in."
+  const access = await getModuleAccess(params.projectId, "PM_PLAN");
+  if (!meetsLevel(access, "READ_LIMITED")) {
+    return new NextResponse("Not found", { status: 404 });
+  }
 
   const project = await prisma.project.findUnique({ where: { id: params.projectId } });
   if (!project) return new NextResponse("Not found", { status: 404 });

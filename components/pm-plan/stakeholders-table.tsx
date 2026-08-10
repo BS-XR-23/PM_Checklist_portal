@@ -2,11 +2,29 @@
 
 import { useTransition } from "react";
 import { InlineText } from "@/components/ui/inline-edit";
+import { PersonPicker } from "@/components/resourcing/person-picker";
 import { addStakeholderRow, updateStakeholderRow, deleteStakeholderRow } from "@/app/projects/[projectId]/pm-plan/pmplan-actions";
 
-export type StakeholderRowData = { id: string; stakeholder: string; role: string; responsibility: string; accessRequired: string };
+export type StakeholderRowData = {
+  id: string;
+  stakeholder: string;
+  personId: string | null;
+  role: string;
+  responsibility: string;
+  accessRequired: string;
+};
 
-export function StakeholdersTable({ pmPlanId, projectId, rows }: { pmPlanId: string; projectId: string; rows: StakeholderRowData[] }) {
+export function StakeholdersTable({
+  pmPlanId,
+  projectId,
+  rows,
+  people,
+}: {
+  pmPlanId: string;
+  projectId: string;
+  rows: StakeholderRowData[];
+  people: { id: string; name: string }[];
+}) {
   const [pending, startTransition] = useTransition();
 
   return (
@@ -15,6 +33,7 @@ export function StakeholdersTable({ pmPlanId, projectId, rows }: { pmPlanId: str
         <thead>
           <tr className="text-left text-xs text-slate-500 border-b border-slate-100 bg-slate-50">
             <th className="px-3 py-2 font-medium">Stakeholder</th>
+            <th className="px-3 py-2 font-medium">Linked Person</th>
             <th className="px-3 py-2 font-medium">Role</th>
             <th className="px-3 py-2 font-medium">Responsibility</th>
             <th className="px-3 py-2 font-medium">Access Required</th>
@@ -26,6 +45,9 @@ export function StakeholdersTable({ pmPlanId, projectId, rows }: { pmPlanId: str
             <tr key={r.id} className="border-b border-slate-50 last:border-0">
               <td className="px-3 py-1.5">
                 <InlineText value={r.stakeholder} onSave={(v) => updateStakeholderRow(r.id, projectId, { stakeholder: v })} />
+              </td>
+              <td className="px-3 py-1.5">
+                <PersonPicker personId={r.personId} legacyText={null} people={people} onSave={(personId) => updateStakeholderRow(r.id, projectId, { personId })} />
               </td>
               <td className="px-3 py-1.5">
                 <InlineText value={r.role} onSave={(v) => updateStakeholderRow(r.id, projectId, { role: v })} />

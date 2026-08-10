@@ -12,6 +12,13 @@ export function formatDate(value: Date | string | null): string {
   return d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
 }
 
+/** No year — for tight spaces (card stat chips) where the full formatDate() truncates. Pair with a title="" tooltip for the exact date. */
+export function formatShortDate(value: Date | string | null): string {
+  if (!value) return "—";
+  const d = typeof value === "string" ? new Date(value) : value;
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
 /** Parses a yyyy-mm-dd <input type=date> value as a local-midnight Date, avoiding UTC off-by-one. */
 export function parseDateInput(value: string | null): Date | null {
   if (!value) return null;
@@ -26,4 +33,33 @@ export function toDateInputValue(value: Date | string | null): string | null {
   const month = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+/** Normalizes any date to the 1st of its month at UTC midnight — the unit ProjectEngagementMonth.month is stored/queried in. */
+export function startOfMonthUTC(date: Date): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
+}
+
+export function addMonthsUTC(date: Date, months: number): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + months, 1));
+}
+
+/** Parses a `?month=yyyy-MM` search param into a UTC first-of-month Date; falls back to the current month when missing/invalid. */
+export function parseMonthParam(value: string | string[] | undefined): Date {
+  const s = Array.isArray(value) ? value[0] : value;
+  if (s && /^\d{4}-\d{2}$/.test(s)) {
+    const [year, month] = s.split("-").map(Number);
+    if (month >= 1 && month <= 12) return new Date(Date.UTC(year, month - 1, 1));
+  }
+  return startOfMonthUTC(new Date());
+}
+
+/** yyyy-MM for building `?month=` links. */
+export function toMonthParam(date: Date): string {
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+/** "July 2026" display label for the month a Resourcing navigator is currently showing. */
+export function formatMonthLabel(date: Date): string {
+  return date.toLocaleDateString("en-US", { year: "numeric", month: "long", timeZone: "UTC" });
 }

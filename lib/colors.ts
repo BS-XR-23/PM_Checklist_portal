@@ -1,4 +1,5 @@
 import type { ItemStatus } from "@/lib/constants";
+import { HIGH_INTENSITY_THRESHOLD_PCT } from "@/lib/constants";
 
 // Exact hex values taken from the conditional-formatting `dxf` rules in
 // PM_Checklist_Tracker.xlsx (PM Checklist / DevOps Checklist H column).
@@ -9,6 +10,11 @@ export const STATUS_COLORS: Record<ItemStatus, { bg: string; text: string; label
   AT_RISK: { bg: "#FFD966", text: "#7A5B00", label: "At Risk" },
   DELAYED: { bg: "#F4B183", text: "#8A3B00", label: "Delayed" },
   BLOCKED: { bg: "#FF7C80", text: "#7A0000", label: "Blocked" },
+  // Not from the spreadsheet — added so an item genuinely out of scope for a
+  // specific project (e.g. a 3D-only step on a 2D project) can be excluded
+  // from that project's completion % without disappearing from the fixed
+  // template. Neutral gray, matching the "Custom" item badge's color.
+  NOT_APPLICABLE: { bg: "#E2E8F0", text: "#475569", label: "Not Applicable" },
 };
 
 export const STATUS_ORDER: ItemStatus[] = [
@@ -39,3 +45,21 @@ export const INDEX_UNFAVORABLE_COLOR = "#C00000";
 
 // Forecast Date slipped past Planned Date flag (G column CF), non-blocking.
 export const SLIPPED_FLAG_COLOR = "#C00000";
+
+// Engagement intensity Low/Med/High bands — same traffic-light palette as
+// risk severity, so "heavier allocation" reads the same as "higher risk"
+// everywhere else in the app. The High cutoff matches
+// HIGH_INTENSITY_THRESHOLD_PCT exactly, so a badge marked High here is
+// always the same engagement lib/overload.ts would flag for the
+// overlapping-date-range conflict check.
+export const INTENSITY_BAND_COLORS = {
+  low: { bg: "#C6E0B4", text: "#2C5F2D", label: "Low" },
+  medium: { bg: "#FFE699", text: "#7A5B00", label: "Medium" },
+  high: { bg: "#FF7C80", text: "#7A0000", label: "High" },
+};
+
+export function intensityBand(pct: number): keyof typeof INTENSITY_BAND_COLORS {
+  if (pct >= HIGH_INTENSITY_THRESHOLD_PCT) return "high";
+  if (pct >= 40) return "medium";
+  return "low";
+}

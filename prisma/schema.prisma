@@ -8,29 +8,146 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
+enum Role {
+  ADMIN
+  TPM
+  PROGRAM_MANAGER
+  CLIENT
+  PM
+  LIMITED
+}
+
+enum ModuleName {
+  DASHBOARD
+  PM_CHECKLIST
+  DEVOPS_CHECKLIST
+  MILESTONES
+  RISK_REGISTER
+  CR_LOG
+  BUDGET_TRACKER
+  PM_PLAN
+  DECISION_LOG
+  ACTION_ITEMS
+}
+
+enum AccessLevel {
+  NONE
+  READ_LIMITED
+  READ_FULL
+  WRITE
+}
+
+enum ProjectStatus {
+  ACTIVE
+  ARCHIVED
+}
+
 model User {
   id           String   @id @default(cuid())
   email        String   @unique
   passwordHash String
   name         String
+  role         Role     @default(LIMITED)
+  isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
+
+  memberships             ProjectMembership[]
+  auditLogs               AuditLog[]
+  escalationsRaised       EscalationItem[]
+  person                  Person?
+  presalesProjectsCreated PresalesProject[]
 }
 
 model Project {
-  id             String   @id @default(cuid())
+  id             String        @id @default(cuid())
   name           String
   client         String?
-  contractValue  Float    @default(0)
-  plannedManDays Float    @default(0)
-  crRate         Float    @default(0)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  contractValue  Float         @default(0)
+  plannedManDays Float         @default(0)
+  crRate         Float         @default(0)
+  status         ProjectStatus @default(ACTIVE)
+  deletedAt      DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
   checklistItems  ChecklistItem[]
   risks           RiskItem[]
   changeRequests  ChangeRequest[]
   budgetEntries   BudgetEntry[]
   pmPlan          PMPlan?
+  memberships     ProjectMembership[]
+  auditLogs       AuditLog[]
+  escalations     EscalationItem[]
+  engagements     ProjectEngagement[]
+  decisions       DecisionLogItem[]
+  actionItems     ActionItem[]
+  wonFromPresales PresalesProject?
+}
+
+/// A user's access to one specific project. Only meaningful for PM/CLIENT/LIMITED
+/// roles — ADMIN/TPM/PROGRAM_MANAGER get their scope from their global Role alone
+/// and don't need a row here.
+model ProjectMembership {
+  id        String   @id @default(cuid())
+  userId    String
+  projectId String
+  role      Role
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  permissions ModulePermission[]
+
+  @@unique([userId, projectId])
+}
+
+/// Per-module access override, consulted only for CLIENT / LIMITED members.
+/// Absence of a row means NONE (secure by default).
+model ModulePermission {
+  id           String            @id @default(cuid())
+  membershipId String
+  membership   ProjectMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  module       ModuleName
+  access       AccessLevel
+
+  @@unique([membershipId, module])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String
+  actor      User     @relation(fields: [actorId], references: [id])
+  actorRole  Role
+  projectId  String?
+  project    Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  action     String
+  entityType String
+  entityId   String?
+  summary    String
+  diff       Json?
+  isOverride Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([projectId])
+  @@index([actorId])
+  @@index([createdAt])
+}
+
+/// TPM's dedicated write surface — deliberately never touches the 7 project-data
+/// tables, so a TPM cannot silently edit a PM's checklist/milestone/risk/CR/budget.
+model EscalationItem {
+  id          String   @id @default(cuid())
+  projectId   String?
+  project     Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  type        String
+  title       String
+  notes       String?
+  status      String   @default("Open")
+  createdById String
+  createdBy   User     @relation(fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+
+  @@index([projectId])
 }
 
 model ChecklistItem {
@@ -42,15 +159,33 @@ model ChecklistItem {
   stage         String
   itemText      String
   milestoneName String?
-  owner         String?
+  owner         String? // legacy free-text name; prefer ownerPersonId once set
+  ownerPersonId String?
+  ownerPerson   Person?   @relation(fields: [ownerPersonId], references: [id], onDelete: SetNull)
   plannedDate   DateTime?
   forecastDate  DateTime?
   status        String    @default("NOT_STARTED") // see ItemStatus in lib/constants.ts
   notes         String?
+  isCustom      Boolean   @default(false) // true only for items added via "+ Add Item" / "Add Milestone", never the fixed template
 
   milestonePayment MilestonePayment?
 
   @@unique([projectId, type, order])
+}
+
+/// The editable master checklist — lib/create-project.ts copies this into a
+/// new project's ChecklistItem rows once, at creation. Deliberately has no
+/// relation back to Project/ChecklistItem: editing or deleting a row here
+/// only affects projects created afterward, never existing ones.
+model ChecklistTemplateItem {
+  id            String  @id @default(cuid())
+  type          String // "PM" | "DEVOPS" -- see ChecklistType in lib/constants.ts
+  order         Int
+  stage         String
+  itemText      String
+  milestoneName String?
+
+  @@unique([type, order])
 }
 
 model MilestonePayment {
@@ -64,21 +199,64 @@ model MilestonePayment {
 }
 
 model RiskItem {
-  id          String    @id @default(cuid())
-  projectId   String
-  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  type        String    @default("Risk")
-  category    String?
-  description String
-  probability String    @default("Medium")
-  impact      String    @default("Medium")
-  owner       String?
-  mitigation  String?
-  status      String    @default("Open")
-  dateRaised  DateTime?
-  dateClosed  DateTime?
-  notes       String?
-  order       Int       @default(0)
+  id            String    @id @default(cuid())
+  projectId     String
+  project       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  type          String    @default("Risk")
+  category      String?
+  description   String
+  probability   String    @default("Medium")
+  impact        String    @default("Medium")
+  owner         String? // legacy free-text name; prefer ownerPersonId once set
+  ownerPersonId String?
+  ownerPerson   Person?   @relation(fields: [ownerPersonId], references: [id], onDelete: SetNull)
+  mitigation    String?
+  status        String    @default("Open")
+  dateRaised    DateTime?
+  dateClosed    DateTime?
+  notes         String?
+  order         Int       @default(0)
+
+  @@index([projectId])
+}
+
+/// Append-only record of "what did we decide and why" — distinct from
+/// ChangeRequest (scope changes only) and from ChecklistItem (the fixed,
+/// formal stage-gated backbone). Freestanding in v1, no link to a
+/// Risk/CR.
+model DecisionLogItem {
+  id                String    @id @default(cuid())
+  projectId         String
+  project           Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  order             Int       @default(0)
+  date              DateTime?
+  decision          String
+  rationale         String?
+  decidedBy         String? // legacy free-text name; prefer decidedByPersonId once set
+  decidedByPersonId String?
+  decidedByPerson   Person?   @relation(fields: [decidedByPersonId], references: [id], onDelete: SetNull)
+  notes             String?
+
+  @@index([projectId])
+}
+
+/// Lightweight follow-ups that fall out of a call/meeting — too small for
+/// a formal Checklist entry, but still need an owner and a due date so
+/// they don't get forgotten.
+model ActionItem {
+  id            String    @id @default(cuid())
+  projectId     String
+  project       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  order         Int       @default(0)
+  description   String
+  ownerPersonId String?
+  ownerPerson   Person?   @relation(fields: [ownerPersonId], references: [id], onDelete: SetNull)
+  owner         String? // legacy free-text name; prefer ownerPersonId once set
+  dueDate       DateTime?
+  status        String    @default("Open") // "Open" | "Done"
+  notes         String?
+
+  @@index([projectId])
 }
 
 model ChangeRequest {
@@ -107,11 +285,49 @@ model BudgetEntry {
   project            Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   weekEnding         DateTime
   pctPlannedComplete Float
-  pctActualComplete  Float
-  actualCost         Float
+  pctActualComplete  Float // set via "Sync from Checklist", not hand-typed — see checklistCompletionPct()
+  actualCost         Float // cached sum of roleCosts — see recomputeActualCost()
   notes              String?
 
+  roleCosts BudgetEntryRoleCost[]
+
   @@unique([projectId, weekEnding])
+}
+
+// Admin-managed rate card, by role — not by named person, so no
+// salary-like data is stored against an individual. Used to auto-compute
+// BudgetEntry.actualCost from actual man-days logged per role each week.
+model RoleRate {
+  id         String   @id @default(cuid())
+  roleName   String   @unique
+  manDayRate Float
+  createdAt  DateTime @default(now())
+
+  budgetEntryRoleCosts BudgetEntryRoleCost[]
+  people               Person[]
+}
+
+// One row per role logged against a week's BudgetEntry. roleName/manDayRate
+// are snapshotted from RoleRate at add/edit time — a later rename or
+// deletion of the RoleRate must never rewrite historical cost data.
+// personId/personName tie the row to who actually did the work (resolved
+// via their People-registry Rate Role) — nullable because rows created
+// before this existed are pure role-only history, left untouched.
+model BudgetEntryRoleCost {
+  id            String      @id @default(cuid())
+  budgetEntryId String
+  budgetEntry   BudgetEntry @relation(fields: [budgetEntryId], references: [id], onDelete: Cascade)
+  personId      String?
+  person        Person?     @relation(fields: [personId], references: [id], onDelete: SetNull)
+  personName    String?
+  roleRateId    String?
+  roleRate      RoleRate?   @relation(fields: [roleRateId], references: [id], onDelete: SetNull)
+  roleName      String
+  manDayRate    Float
+  manDays       Float       @default(0)
+  createdAt     DateTime    @default(now())
+
+  @@index([budgetEntryId])
 }
 
 model PMPlan {
@@ -132,12 +348,12 @@ model PMPlan {
   charterAssumptions     String?
   charterPmAuthority     String?
 
-  methodApproach     String?
-  methodCadence      String?
-  methodCeremonies   String?
-  methodTools        String?
-  methodRoles        String?
-  methodChangeMgmt   String?
+  methodApproach   String?
+  methodCadence    String?
+  methodCeremonies String?
+  methodTools      String?
+  methodRoles      String?
+  methodChangeMgmt String?
 
   testLevels        String?
   testEnvironments  String?
@@ -162,11 +378,13 @@ model PMPlan {
 }
 
 model StakeholderRow {
-  id             String @id @default(cuid())
+  id             String  @id @default(cuid())
   pmPlanId       String
-  pmPlan         PMPlan @relation(fields: [pmPlanId], references: [id], onDelete: Cascade)
+  pmPlan         PMPlan  @relation(fields: [pmPlanId], references: [id], onDelete: Cascade)
   order          Int
-  stakeholder    String
+  stakeholder    String // legacy free-text name/label; prefer personId once set
+  personId       String?
+  person         Person? @relation(fields: [personId], references: [id], onDelete: SetNull)
   role           String
   responsibility String
   accessRequired String
@@ -194,4 +412,165 @@ model RaciRow {
   ba           String
   leadEng      String
   creativeLead String
+}
+
+/// Canonical registry of a real person — the single source of truth that
+/// checklist "Owner", risk "Owner", and stakeholder names should reference
+/// instead of re-typing free text on every row.
+model Person {
+  id         String    @id @default(cuid())
+  name       String
+  title      String? // e.g. "Lead Engineer", "Creative Lead", "QA", "BA"
+  email      String?
+  phone      String?
+  userId     String?   @unique // linked portal account, if they have one (typically LIMITED)
+  user       User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  roleRateId String? // which RoleRate this person's Actual Cost logging resolves to
+  roleRate   RoleRate? @relation(fields: [roleRateId], references: [id], onDelete: SetNull)
+  createdAt  DateTime  @default(now())
+
+  engagements             ProjectEngagement[]
+  checklistOwners         ChecklistItem[]
+  riskOwners              RiskItem[]
+  stakeholderRows         StakeholderRow[]
+  decisionsMade           DecisionLogItem[]
+  actionItemOwner         ActionItem[]
+  presalesDecisionsMade   PresalesDecisionItem[]
+  presalesActionItemOwner PresalesActionItem[]
+  presalesChecklistOwner  PresalesChecklistItem[]
+  budgetEntryRoleCosts    BudgetEntryRoleCost[]
+}
+
+enum PresalesOutcome {
+  OPEN
+  WON
+  LOST
+}
+
+/// A pre-contract opportunity — deliberately NOT a Project (no checklist,
+/// milestones, risk, budget, or PM Plan). Tracks just enough to reason about
+/// a deal before it's signed. On Win, createProject() (lib/create-project.ts)
+/// seeds a real Project the normal way and this row links to it via
+/// wonProjectId; on Lost, the row is kept (not deleted) as win/loss history.
+model PresalesProject {
+  id                String          @id @default(cuid())
+  name              String
+  client            String?
+  description       String?
+  estimatedValue    Float?
+  expectedCloseDate DateTime?
+  outcome           PresalesOutcome @default(OPEN)
+  lostReason        String? // set when outcome = LOST
+  wonProjectId      String?         @unique
+  wonProject        Project?        @relation(fields: [wonProjectId], references: [id], onDelete: SetNull)
+  createdById       String
+  createdBy         User            @relation(fields: [createdById], references: [id])
+  deletedAt         DateTime?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  decisions      PresalesDecisionItem[]
+  actionItems    PresalesActionItem[]
+  checklistItems PresalesChecklistItem[]
+
+  @@index([outcome])
+}
+
+model PresalesDecisionItem {
+  id                String          @id @default(cuid())
+  presalesProjectId String
+  presalesProject   PresalesProject @relation(fields: [presalesProjectId], references: [id], onDelete: Cascade)
+  order             Int             @default(0)
+  date              DateTime?
+  decision          String
+  rationale         String?
+  decidedBy         String? // legacy free-text name; prefer decidedByPersonId once set
+  decidedByPersonId String?
+  decidedByPerson   Person?         @relation(fields: [decidedByPersonId], references: [id], onDelete: SetNull)
+  notes             String?
+
+  @@index([presalesProjectId])
+}
+
+model PresalesActionItem {
+  id                String          @id @default(cuid())
+  presalesProjectId String
+  presalesProject   PresalesProject @relation(fields: [presalesProjectId], references: [id], onDelete: Cascade)
+  order             Int             @default(0)
+  description       String
+  ownerPersonId     String?
+  ownerPerson       Person?         @relation(fields: [ownerPersonId], references: [id], onDelete: SetNull)
+  owner             String? // legacy free-text name; prefer ownerPersonId once set
+  dueDate           DateTime?
+  status            String          @default("Open") // "Open" | "Done"
+  notes             String?
+
+  @@index([presalesProjectId])
+}
+
+/// Admin-managed playbook — flat (no stage grouping; presales is a much
+/// shorter, single-phase process than delivery). Deliberately a separate
+/// table from ChecklistTemplateItem: that one's `type` is tied to the
+/// ChecklistType/ModuleName system (PM/DEVOPS), which Presales isn't part of.
+model PresalesChecklistTemplateItem {
+  id       String @id @default(cuid())
+  order    Int    @unique
+  itemText String
+}
+
+/// Per-opportunity instance of the template above. On Win, these are copied
+/// into the resulting Project's ChecklistItem table (type: "PM", stage:
+/// "Presales") — see winPresalesProject in app/presales/actions.ts.
+model PresalesChecklistItem {
+  id                String          @id @default(cuid())
+  presalesProjectId String
+  presalesProject   PresalesProject @relation(fields: [presalesProjectId], references: [id], onDelete: Cascade)
+  order             Int
+  itemText          String
+  status            String          @default("NOT_STARTED") // see ItemStatus in lib/constants.ts
+  plannedDate       DateTime?
+  forecastDate      DateTime?
+  owner             String? // legacy free-text name; prefer ownerPersonId once set
+  ownerPersonId     String?
+  ownerPerson       Person?         @relation(fields: [ownerPersonId], references: [id], onDelete: SetNull)
+  notes             String?
+  isCustom          Boolean         @default(false) // false = seeded from the template; true = added ad hoc
+
+  @@index([presalesProjectId])
+}
+
+/// A person's lightweight staffing on one project: role, coarse intensity,
+/// and a date range. Not a scheduling tool — just enough to reason about how
+/// stretched someone is across projects.
+model ProjectEngagement {
+  id            String    @id @default(cuid())
+  personId      String
+  person        Person    @relation(fields: [personId], references: [id], onDelete: Cascade)
+  projectId     String
+  project       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  roleOnProject String // free text, defaults to Person.title, editable per engagement
+  startDate     DateTime?
+  endDate       DateTime?
+  notes         String?
+  createdAt     DateTime  @default(now())
+
+  months ProjectEngagementMonth[]
+
+  @@index([projectId])
+}
+
+// One row per calendar month an engagement has an explicit intensity set.
+// `month` is normalized to the 1st of the month (UTC midnight). A month
+// with no row here simply hasn't been set yet — resolved as 0% by
+// intensityForMonth() (lib/overload.ts), never inherited from a
+// neighboring month.
+model ProjectEngagementMonth {
+  id           String            @id @default(cuid())
+  engagementId String
+  engagement   ProjectEngagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  month        DateTime
+  intensityPct Int
+
+  @@unique([engagementId, month])
+  @@index([engagementId])
 }

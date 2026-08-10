@@ -17,6 +17,61 @@ Every project you create gets a fresh instance of all 8 modules. Status colors, 
 Forecast-slipped-past-Planned flag, risk severity, and SPI/CPI favorability all use
 the exact hex values from the source spreadsheet's conditional formatting.
 
+## Resourcing (People & Engagements)
+
+A `Person` registry is the single source of truth for a real person — name, title, contact info,
+and (optionally) a linked portal account. Checklist/Risk "Owner" and PM Plan Stakeholder rows can
+reference a `Person` instead of re-typing a name each time (the old free-text field is kept as a
+fallback for anything not yet linked — nothing is deleted). Each project has a `Resourcing` tab
+listing who's engaged on it: role on that project, a coarse intensity (0-100%, shown as Low/Med/
+High presets), and an optional date range — deliberately not a scheduling, timesheet, or cost
+tool.
+
+- **Admin > People** creates/edits the registry (Admin-only, to keep it from fragmenting into
+  duplicates). A project's **Resourcing** tab (Admin or that project's PM) assigns *existing*
+  people to that project.
+- A Person linked to a portal account (typically **Limited**) sees only their own assignments at
+  **My Engagement** — never anyone else's, resolved by their linked account, not by project
+  membership.
+- **TPM** sees every person's engagement everywhere (read-only); a **PM** sees engagement only for
+  people on their own project(s), including full detail on any *other* project a shared person is
+  also stretched across. **Client** has no resourcing access at all.
+- The **Portfolio** page's "Overload & Conflicts" section (Admin/TPM only) surfaces anyone whose
+  combined active-engagement intensity exceeds 100%, and anyone with two high-intensity (≥60%)
+  engagements on overlapping dates — even if their total doesn't cross the threshold. Both
+  thresholds are named constants in `lib/constants.ts`.
+
+Migrating existing free-text owner names into the registry is a two-step, human-reviewed process
+— never automatic merging of similar-but-different names:
+
+```bash
+npm run match-people             # dry run: proposes exact-match groups, flags anything ambiguous
+npm run apply-people-matches -- "Exact Name" ["Another Name" ...]   # only the names you approve
+```
+
+## Roles & access
+
+Six roles, enforced server-side (not just hidden UI): **Admin** (full control, manages
+users/roles/projects), **TPM** (read-everywhere, writes only through the Escalations
+tab or an explicit "TPM Override" — always logged and tagged distinctly from a PM's
+own edits), **Program Manager** (portfolio-only RAG rollup at `/portfolio`, never
+project detail), **Client** (hard-isolated to their assigned project(s), locked-down
+default visibility — no Risk Register/CR Log/Budget, no internal notes), **PM**
+(full read/write on their assigned project(s) only), **Limited** (per-project,
+per-module access an Admin configures by hand, starts at nothing).
+
+`lib/rbac.ts` is the single authorization module every page and server action goes
+through — `Admin > Users` sets a user's global role; a project's `Team` tab assigns
+them to specific projects and (for Client/Limited) configures per-module access.
+Every write is recorded in `AuditLog`, visible per-project (`Activity` tab) and
+globally (`Admin > Audit Log`).
+
+```bash
+npm test              # all unit + integration tests (role x module matrix, overload math, isolation)
+npm run test:unit      # just the fast, DB-free logic tests
+npm run test:isolation # just the Supabase-backed cross-project isolation test
+```
+
 ## Local development
 
 ```bash

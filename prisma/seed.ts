@@ -15,8 +15,8 @@ async function main() {
   }
 
   const passwordHash = await bcrypt.hash(password, 10);
-  await prisma.user.create({ data: { email, name, passwordHash } });
-  console.log(`Created user ${email}. Log in with the password from SEED_ADMIN_PASSWORD (.env).`);
+  await prisma.user.create({ data: { email, name, passwordHash, role: "ADMIN" } });
+  console.log(`Created ADMIN user ${email}. Log in with the password from SEED_ADMIN_PASSWORD (.env).`);
 }
 
 main()
