@@ -15,6 +15,7 @@
 - Production secrets (`DATABASE_URL`, `DIRECT_URL`, `NEXTAUTH_SECRET`, seed vars) live **only** in `/opt/portal-secrets/.env` on the VM — never committed, never put in GitHub Secrets (the runner already has local disk access, so there's no need to route them through GitHub).
 - The VM's Postgres is external (Supabase) — no database container, no volume to manage for data.
 - Existing `docker-entrypoint.sh` already runs `prisma migrate deploy` (and the optional seed) on container start — do not duplicate that logic in the workflow.
+- **This is a shared production VM** hosting ~30 other live client sites under PM2 (as `root`) and an existing Nginx reverse proxy with one vhost per subdomain. Confirmed via `pm2 list` and `ls /etc/nginx/sites-enabled/` during Task 4/5 — port 3000 was free at check time, and our Nginx vhost is additive (new file only, existing sites untouched). Any future troubleshooting should assume other tenants' uptime is also at stake, not just this app's.
 
 ---
 
@@ -203,8 +204,10 @@ git commit -m "chore: add VM bootstrap script"
 
 ### Task 5: Nginx reverse proxy + HTTPS (Certbot)
 
+**Note:** This VM turned out to already run Nginx 1.24.0 as a shared reverse proxy for ~30 other live client sites (one vhost file per subdomain in `/etc/nginx/sites-enabled/`, named after the subdomain, e.g. `nissan-car.xr-23.com`). We follow that existing convention instead of a generic filename, and we do **not** touch `nginx` itself, `sites-enabled/default`, or any other site's config — only add our own file.
+
 **Files:**
-- Create: `deploy/nginx.conf`
+- Create: `deploy/nginx.conf` (deployed to the VM as `/etc/nginx/sites-available/project-management.xr-23.com`)
 
 - [ ] **Step 1: Add the Nginx server block to the repo**
 
@@ -227,18 +230,18 @@ server {
 
 In your DNS provider, create an **A record**: `project-management.xr-23.com` → `<vm-public-ip>`. Wait for it to propagate (`dig +short project-management.xr-23.com` should return the VM's IP) — Certbot's HTTP-01 challenge in Step 4 will fail until this resolves correctly.
 
-- [ ] **Step 3: Install Nginx and deploy the config, on the VM**
+- [ ] **Step 3: Deploy the vhost file, on the VM**
+
+Nginx is already installed and running other sites — skip installing it, and only add our file:
 
 ```bash
-sudo apt-get install -y nginx
-sudo cp deploy/nginx.conf /etc/nginx/sites-available/portal
-sudo ln -sf /etc/nginx/sites-available/portal /etc/nginx/sites-enabled/portal
-sudo rm -f /etc/nginx/sites-enabled/default
+sudo cp deploy/nginx.conf /etc/nginx/sites-available/project-management.xr-23.com
+sudo ln -sf /etc/nginx/sites-available/project-management.xr-23.com /etc/nginx/sites-enabled/project-management.xr-23.com
 sudo nginx -t
 sudo systemctl reload nginx
 ```
 
-(Run this after Task 9's first deploy has the app listening on port 3000 — Nginx will 502 until then, which is fine; Certbot in Step 4 only needs port 80 to answer, not a working upstream.)
+(Run this after Task 9's first deploy has the app listening on port 3000 — Nginx will 502 until then, which is fine; Certbot in Step 4 only needs port 80 to answer, not a working upstream. We deliberately do not touch `sites-enabled/default` or any other existing site.)
 
 - [ ] **Step 4: Issue the HTTPS certificate with Certbot**
 
