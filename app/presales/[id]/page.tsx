@@ -54,7 +54,7 @@ export default async function PresalesDetailPage({ params }: { params: { id: str
           <div className="flex items-start justify-between">
             <div>
               <h2 className="text-base font-semibold text-slate-900">Presales Checklist</h2>
-              <p className="text-sm text-slate-500">The standard playbook for this deal. If Won, these carry into the project's PM Checklist.</p>
+              <p className="text-sm text-slate-500">The standard playbook for this deal. If Won, these carry into the project&apos;s PM Checklist.</p>
             </div>
           </div>
           <div className="space-y-3">
@@ -70,7 +70,7 @@ export default async function PresalesDetailPage({ params }: { params: { id: str
           <div className="flex items-start justify-between">
             <div>
               <h2 className="text-base font-semibold text-slate-900">Decision Log</h2>
-              <p className="text-sm text-slate-500">What's being decided, and why, before this becomes a real project.</p>
+              <p className="text-sm text-slate-500">What&apos;s being decided, and why, before this becomes a real project.</p>
             </div>
             {canWrite && <AddPresalesDecisionButton presalesProjectId={presales.id} />}
           </div>
