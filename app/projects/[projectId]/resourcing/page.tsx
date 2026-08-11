@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser, requireProjectAccess } from "@/lib/rbac";
 import { canViewResourcing } from "@/lib/resourcing-rbac";
 import { computePersonLoad, findOverlapConflicts, isActiveDuringMonth, intensityForMonth, type EngagementLike } from "@/lib/overload";
-import { toDateInputValue, parseMonthParam, toMonthParam, addMonthsUTC, formatMonthLabel } from "@/lib/format";
+import { toDateInputValue, parseMonthParam, toMonthParam, addMonthsUTC, formatMonthShortLabel } from "@/lib/format";
 import { SubNav } from "@/components/ui/sub-nav";
 import { AssignEngagementForm } from "./assign-engagement-form";
 import { EngagementRow, type EngagementRowData } from "./engagement-row";
@@ -112,20 +112,24 @@ export default async function ResourcingPage({
 
       {canEdit && <AssignEngagementForm projectId={params.projectId} people={allPeople} />}
 
-      <div className="flex items-center justify-center gap-3">
-        <Link
-          href={`?month=${toMonthParam(addMonthsUTC(targetMonth, -1))}`}
-          className="rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-600 hover:bg-slate-50"
-        >
-          ◂
-        </Link>
-        <span className="text-sm font-semibold text-slate-800 min-w-[10rem] text-center">{formatMonthLabel(targetMonth)}</span>
-        <Link
-          href={`?month=${toMonthParam(addMonthsUTC(targetMonth, 1))}`}
-          className="rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-600 hover:bg-slate-50"
-        >
-          ▸
-        </Link>
+      <div className="flex items-center justify-center gap-2">
+        {[-1, 0, 1].map((offset) => {
+          const m = addMonthsUTC(targetMonth, offset);
+          const isCurrent = offset === 0;
+          return (
+            <Link
+              key={offset}
+              href={`?month=${toMonthParam(m)}`}
+              className={
+                isCurrent
+                  ? "rounded-lg border border-slate-300 bg-white px-4 py-1.5 text-sm font-semibold text-slate-900"
+                  : "px-4 py-1.5 text-sm text-slate-500 hover:text-slate-700"
+              }
+            >
+              {formatMonthShortLabel(m)}
+            </Link>
+          );
+        })}
       </div>
 
       <div className="rounded-lg border border-slate-200 bg-white overflow-x-auto">
@@ -143,7 +147,13 @@ export default async function ResourcingPage({
           </thead>
           <tbody>
             {rows.map((r) => (
-              <EngagementRow key={r.id} projectId={params.projectId} month={toMonthParam(targetMonth)} engagement={r} canEdit={canEdit} />
+              <EngagementRow
+                key={`${r.id}-${toMonthParam(targetMonth)}`}
+                projectId={params.projectId}
+                month={toMonthParam(targetMonth)}
+                engagement={r}
+                canEdit={canEdit}
+              />
             ))}
           </tbody>
         </table>

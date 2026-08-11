@@ -63,3 +63,8 @@ export function toMonthParam(date: Date): string {
 export function formatMonthLabel(date: Date): string {
   return date.toLocaleDateString("en-US", { year: "numeric", month: "long", timeZone: "UTC" });
 }
+
+/** "Aug 26" compact label — for the Resourcing tab's prev/current/next month tab strip. */
+export function formatMonthShortLabel(date: Date): string {
+  return date.toLocaleDateString("en-US", { year: "2-digit", month: "short", timeZone: "UTC" });
+}

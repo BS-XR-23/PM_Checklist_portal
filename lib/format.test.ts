@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { startOfMonthUTC, addMonthsUTC, parseMonthParam, toMonthParam, formatMonthLabel } from "./format";
+import { startOfMonthUTC, addMonthsUTC, parseMonthParam, toMonthParam, formatMonthLabel, formatMonthShortLabel } from "./format";
 
 describe("startOfMonthUTC", () => {
   it("normalizes any day of the month to the 1st at UTC midnight", () => {
@@ -45,5 +45,11 @@ describe("toMonthParam", () => {
 describe("formatMonthLabel", () => {
   it("formats a month as a readable label", () => {
     expect(formatMonthLabel(new Date("2026-07-01T00:00:00Z"))).toBe("July 2026");
+  });
+});
+
+describe("formatMonthShortLabel", () => {
+  it("formats a month as a compact 'Mon YY' label", () => {
+    expect(formatMonthShortLabel(new Date("2026-07-01T00:00:00Z"))).toBe("Jul 26");
   });
 });
