@@ -19,11 +19,23 @@ export default async function PortfolioPage() {
     redirect("/projects");
   }
 
-  const projects = await prisma.project.findMany({
-    where: { deletedAt: null },
-    orderBy: { name: "asc" },
-    include: { budgetEntries: { orderBy: { weekEnding: "asc" } }, risks: true },
-  });
+  const showOverload = canViewPortfolioOverload(user.role);
+  const currentMonth = startOfMonthUTC(new Date());
+
+  // `projects` and `people` are independent of each other — fetched
+  // concurrently instead of as two serialized round trips.
+  const [projects, people] = await Promise.all([
+    prisma.project.findMany({
+      where: { deletedAt: null },
+      orderBy: { name: "asc" },
+      include: { budgetEntries: { orderBy: { weekEnding: "asc" } }, risks: true },
+    }),
+    showOverload
+      ? prisma.person.findMany({
+          include: { engagements: { include: { project: true, months: { where: { month: currentMonth } } } } },
+        })
+      : Promise.resolve([]),
+  ]);
 
   const rows = projects.map((p) => ({
     id: p.id,
@@ -36,15 +48,10 @@ export default async function PortfolioPage() {
   const exceptions = rows.filter((r) => r.rag === "RED");
   const totalContractValue = rows.reduce((sum, r) => sum + r.contractValue, 0);
 
-  const showOverload = canViewPortfolioOverload(user.role);
   const overloadedPeople: { personName: string; totalActivePct: number; breakdown: string }[] = [];
   const conflictPairs: { personName: string; a: EngagementLike; b: EngagementLike }[] = [];
 
   if (showOverload) {
-    const currentMonth = startOfMonthUTC(new Date());
-    const people = await prisma.person.findMany({
-      include: { engagements: { include: { project: true, months: { where: { month: currentMonth } } } } },
-    });
     for (const p of people) {
       const engagements: EngagementLike[] = p.engagements.map((e) => ({
         id: e.id,

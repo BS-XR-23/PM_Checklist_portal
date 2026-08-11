@@ -36,30 +36,26 @@ export default async function ResourcingPage({
       : null;
   const canEdit = user.role === "ADMIN" || (user.role === "PM" && membership?.role === "PM");
 
+  // For the conflict view, each row also needs EVERY engagement (any
+  // project) for that same person — the whole point of the signal is
+  // spotting a shared resource stretched across a project this viewer can't
+  // otherwise see. Pulled via a nested include on `person.engagements`
+  // rather than a second findMany keyed off the first query's personIds —
+  // one round trip instead of two serialized ones.
   const [engagements, allPeople] = await Promise.all([
     prisma.projectEngagement.findMany({
       where: { projectId: params.projectId },
-      include: { person: true, months: { where: { month: targetMonth } } },
+      include: {
+        person: { include: { engagements: { include: { project: true, months: { where: { month: targetMonth } } } } } },
+        months: { where: { month: targetMonth } },
+      },
       orderBy: { createdAt: "asc" },
     }),
     canEdit ? prisma.person.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, title: true } }) : Promise.resolve([]),
   ]);
 
-  // For the conflict view, pull EVERY engagement (any project) for the people
-  // on this roster — the whole point of the signal is spotting a shared
-  // resource stretched across a project this viewer can't otherwise see.
-  const personIds = Array.from(new Set(engagements.map((e) => e.personId)));
-  const allEngagementsForThesePeople =
-    personIds.length > 0
-      ? await prisma.projectEngagement.findMany({
-          where: { personId: { in: personIds } },
-          include: { project: true, months: { where: { month: targetMonth } } },
-        })
-      : [];
-
   const rows: EngagementRowData[] = engagements.map((e) => {
-    const forThisPerson = allEngagementsForThesePeople.filter((x) => x.personId === e.personId);
-    const asEngagementLike: EngagementLike[] = forThisPerson.map((x) => ({
+    const asEngagementLike: EngagementLike[] = e.person.engagements.map((x) => ({
       id: x.id,
       projectId: x.projectId,
       projectName: x.project.name,

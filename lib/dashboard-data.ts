@@ -4,9 +4,8 @@ import { ITEM_STATUSES, type ItemStatus } from "@/lib/constants";
 import { riskScore, computeEvm, trancheAmount, currentStage, reminderBand, checklistCompletionPct } from "@/lib/calculations";
 
 export async function getDashboardData(projectId: string) {
-  const project = await prisma.project.findUniqueOrThrow({ where: { id: projectId } });
-
-  const [allItems, risks, crs, budgetEntries, milestones, actionItems, recentDecisionsRaw] = await Promise.all([
+  const [project, allItems, risks, crs, budgetEntries, milestones, actionItems, recentDecisionsRaw] = await Promise.all([
+    prisma.project.findUniqueOrThrow({ where: { id: projectId } }),
     // One query for both checklists (differ only by `type`) instead of two —
     // filtering below preserves the orderBy order within each subset.
     prisma.checklistItem.findMany({ where: { projectId }, orderBy: { order: "asc" } }),

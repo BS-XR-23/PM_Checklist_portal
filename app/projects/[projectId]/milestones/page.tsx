@@ -12,13 +12,16 @@ export default async function MilestonesPage({ params }: { params: { projectId: 
   const canWrite = access === "WRITE";
   const notesHidden = access === "READ_LIMITED";
 
-  const project = await prisma.project.findUniqueOrThrow({ where: { id: params.projectId } });
-
-  const milestones = await prisma.milestonePayment.findMany({
-    where: { checklistItem: { projectId: params.projectId } },
-    include: { checklistItem: true },
-    orderBy: [{ checklistItem: { type: "asc" } }, { checklistItem: { order: "asc" } }],
-  });
+  // Independent of each other — fetched concurrently instead of as two
+  // serialized round trips.
+  const [project, milestones] = await Promise.all([
+    prisma.project.findUniqueOrThrow({ where: { id: params.projectId } }),
+    prisma.milestonePayment.findMany({
+      where: { checklistItem: { projectId: params.projectId } },
+      include: { checklistItem: true },
+      orderBy: [{ checklistItem: { type: "asc" } }, { checklistItem: { order: "asc" } }],
+    }),
+  ]);
 
   const totalAllocatedPct = milestones.reduce((sum, m) => sum + m.paymentPct, 0);
   const paidAmount = milestones
