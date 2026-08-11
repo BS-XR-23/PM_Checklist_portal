@@ -23,6 +23,19 @@ export function isCurrentlyActive(e: Pick<EngagementLike, "startDate" | "endDate
   return true;
 }
 
+/** Whether an engagement's Start/End range overlaps a given calendar month at
+ * all — not just whether the 1st of that month is in bounds. An engagement
+ * starting mid-month (e.g. Aug 9) still overlaps August, so its intensity
+ * should be settable for August; isCurrentlyActive(e, startOfMonthUTC(...))
+ * would wrongly say no since Aug 1 precedes Aug 9. `targetMonth` must be
+ * normalized to the 1st of its month (as startOfMonthUTC/parseMonthParam do). */
+export function isActiveDuringMonth(e: Pick<EngagementLike, "startDate" | "endDate">, targetMonth: Date): boolean {
+  const monthEnd = new Date(Date.UTC(targetMonth.getUTCFullYear(), targetMonth.getUTCMonth() + 1, 0, 23, 59, 59, 999));
+  if (e.startDate && e.startDate > monthEnd) return false;
+  if (e.endDate && e.endDate < targetMonth) return false;
+  return true;
+}
+
 export type PersonLoad = {
   totalActivePct: number;
   isOverloaded: boolean;

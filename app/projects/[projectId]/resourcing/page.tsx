@@ -3,7 +3,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireUser, requireProjectAccess } from "@/lib/rbac";
 import { canViewResourcing } from "@/lib/resourcing-rbac";
-import { computePersonLoad, findOverlapConflicts, isCurrentlyActive, intensityForMonth, type EngagementLike } from "@/lib/overload";
+import { computePersonLoad, findOverlapConflicts, isActiveDuringMonth, intensityForMonth, type EngagementLike } from "@/lib/overload";
 import { toDateInputValue, parseMonthParam, toMonthParam, addMonthsUTC, formatMonthLabel } from "@/lib/format";
 import { SubNav } from "@/components/ui/sub-nav";
 import { AssignEngagementForm } from "./assign-engagement-form";
@@ -80,7 +80,7 @@ export default async function ResourcingPage({
       personTitle: e.person.title,
       roleOnProject: e.roleOnProject,
       intensityPct: intensityForMonth(e.months, targetMonth),
-      inBounds: isCurrentlyActive({ startDate: e.startDate, endDate: e.endDate }, targetMonth),
+      inBounds: isActiveDuringMonth({ startDate: e.startDate, endDate: e.endDate }, targetMonth),
       startDate: toDateInputValue(e.startDate),
       endDate: toDateInputValue(e.endDate),
       totalActivePct: load.totalActivePct,

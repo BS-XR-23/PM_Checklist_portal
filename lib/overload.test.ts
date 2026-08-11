@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isCurrentlyActive, computePersonLoad, findOverlapConflicts, intensityForMonth, type EngagementLike } from "./overload";
+import { isCurrentlyActive, isActiveDuringMonth, computePersonLoad, findOverlapConflicts, intensityForMonth, type EngagementLike } from "./overload";
 
 const TODAY = new Date("2026-07-24T00:00:00Z");
 
@@ -92,6 +92,42 @@ describe("findOverlapConflicts", () => {
       eng({ id: "2", projectId: "B", intensityPct: 70, startDate: new Date("2030-01-01"), endDate: null }),
     ];
     expect(findOverlapConflicts(engagements)).toHaveLength(1);
+  });
+});
+
+describe("isActiveDuringMonth", () => {
+  const august = new Date("2026-08-01T00:00:00Z");
+
+  it("open-ended (no start/end) always overlaps", () => {
+    expect(isActiveDuringMonth({ startDate: null, endDate: null }, august)).toBe(true);
+  });
+
+  it("an engagement starting mid-month still overlaps that month (the bug: isCurrentlyActive with the 1st would say no)", () => {
+    expect(isActiveDuringMonth({ startDate: new Date("2026-08-09T00:00:00Z"), endDate: new Date("2026-09-29T00:00:00Z") }, august)).toBe(
+      true
+    );
+  });
+
+  it("an engagement ending mid-month still overlaps that month", () => {
+    expect(isActiveDuringMonth({ startDate: new Date("2026-07-01T00:00:00Z"), endDate: new Date("2026-08-05T00:00:00Z") }, august)).toBe(
+      true
+    );
+  });
+
+  it("an engagement entirely before the month does not overlap", () => {
+    expect(isActiveDuringMonth({ startDate: new Date("2026-06-01T00:00:00Z"), endDate: new Date("2026-07-29T00:00:00Z") }, august)).toBe(
+      false
+    );
+  });
+
+  it("an engagement entirely after the month does not overlap", () => {
+    expect(isActiveDuringMonth({ startDate: new Date("2026-09-01T00:00:00Z"), endDate: null }, august)).toBe(false);
+  });
+
+  it("an engagement spanning the whole month overlaps", () => {
+    expect(isActiveDuringMonth({ startDate: new Date("2026-07-15T00:00:00Z"), endDate: new Date("2026-09-15T00:00:00Z") }, august)).toBe(
+      true
+    );
   });
 });
 

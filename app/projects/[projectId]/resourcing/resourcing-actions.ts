@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser, requireProjectAccess, writeAudit } from "@/lib/rbac";
 import { canManageEngagementsOnProject } from "@/lib/resourcing-rbac";
 import { parseDateInput, startOfMonthUTC, parseMonthParam } from "@/lib/format";
-import { isCurrentlyActive } from "@/lib/overload";
+import { isActiveDuringMonth } from "@/lib/overload";
 
 async function requireResourcingWrite(projectId: string) {
   const user = await requireUser();
@@ -105,7 +105,7 @@ export async function setEngagementMonthIntensity(engagementId: string, projectI
   if (intensityPct < 0 || intensityPct > 100) throw new Error("Intensity must be between 0 and 100.");
 
   const targetMonth = parseMonthParam(month);
-  if (!isCurrentlyActive({ startDate: existing.startDate, endDate: existing.endDate }, targetMonth)) {
+  if (!isActiveDuringMonth({ startDate: existing.startDate, endDate: existing.endDate }, targetMonth)) {
     throw new Error("That month falls outside this engagement's Start/End range.");
   }
 
