@@ -11,7 +11,15 @@ async function requirePersonAdmin() {
   return user;
 }
 
-export async function createPerson(input: { name: string; title?: string; email?: string; phone?: string; userId?: string; roleRateId?: string }) {
+export async function createPerson(input: {
+  name: string;
+  title?: string;
+  email?: string;
+  phone?: string;
+  userId?: string;
+  roleRateId?: string;
+  competencyId?: string;
+}) {
   const admin = await requirePersonAdmin();
   if (!input.name.trim()) throw new Error("Name is required.");
 
@@ -28,6 +36,7 @@ export async function createPerson(input: { name: string; title?: string; email?
       phone: input.phone?.trim() || null,
       userId: input.userId || null,
       roleRateId: input.roleRateId || null,
+      competencyId: input.competencyId || null,
     },
   });
 
@@ -37,7 +46,15 @@ export async function createPerson(input: { name: string; title?: string; email?
 
 export async function updatePerson(
   personId: string,
-  input: { name?: string; title?: string; email?: string; phone?: string; userId?: string | null; roleRateId?: string | null }
+  input: {
+    name?: string;
+    title?: string;
+    email?: string;
+    phone?: string;
+    userId?: string | null;
+    roleRateId?: string | null;
+    competencyId?: string | null;
+  }
 ) {
   const admin = await requirePersonAdmin();
   const existing = await prisma.person.findUniqueOrThrow({ where: { id: personId } });
@@ -56,6 +73,7 @@ export async function updatePerson(
       ...(input.phone !== undefined ? { phone: input.phone.trim() || null } : {}),
       ...(input.userId !== undefined ? { userId: input.userId || null } : {}),
       ...(input.roleRateId !== undefined ? { roleRateId: input.roleRateId || null } : {}),
+      ...(input.competencyId !== undefined ? { competencyId: input.competencyId || null } : {}),
     },
   });
 

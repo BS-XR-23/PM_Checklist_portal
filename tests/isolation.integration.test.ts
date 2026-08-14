@@ -904,7 +904,7 @@ describe("isolation boundary", () => {
     });
 
     try {
-      actAs(pmAUserId); // PM-A has WRITE on Project A's BUDGET_TRACKER
+      actAs(adminUserId); // Budget Tracker is Admin-only now
       await addBudgetEntryRoleCost(entry.id, projectA.id);
       const seniorRow = await prisma.budgetEntryRoleCost.findFirstOrThrow({ where: { budgetEntryId: entry.id } });
 
@@ -939,7 +939,7 @@ describe("isolation boundary", () => {
     });
 
     try {
-      actAs(pmAUserId);
+      actAs(adminUserId); // Budget Tracker is Admin-only now
       await addBudgetEntryRoleCost(entry.id, projectA.id);
       const row = await prisma.budgetEntryRoleCost.findFirstOrThrow({ where: { budgetEntryId: entry.id } });
       await expect(updateBudgetEntryRoleCost(row.id, projectA.id, { personId: person.id })).rejects.toThrow();
@@ -960,7 +960,7 @@ describe("isolation boundary", () => {
     });
 
     try {
-      actAs(pmAUserId);
+      actAs(adminUserId); // Budget Tracker is Admin-only now
       await addBudgetEntryRoleCost(entry.id, projectA.id);
       const row = await prisma.budgetEntryRoleCost.findFirstOrThrow({ where: { budgetEntryId: entry.id } });
       await expect(updateBudgetEntryRoleCost(row.id, projectA.id, { personId: person.id })).rejects.toThrow();
@@ -1000,7 +1000,7 @@ describe("isolation boundary", () => {
       data: { projectId: projectA.id, weekEnding: new Date("2026-09-08"), pctPlannedComplete: 0.5, pctActualComplete: 0, actualCost: 0 },
     });
     try {
-      actAs(pmAUserId);
+      actAs(adminUserId); // Budget Tracker is Admin-only now
       await syncActualCompleteFromChecklist(entry.id, projectA.id);
 
       const items = await prisma.checklistItem.findMany({ where: { projectId: projectA.id }, select: { status: true } });
@@ -1024,12 +1024,11 @@ describe("isolation boundary", () => {
     });
 
     try {
-      actAs(pmAUserId);
+      actAs(adminUserId); // Budget Tracker is Admin-only now
       await addBudgetEntryRoleCost(entry.id, projectA.id);
       const row = await prisma.budgetEntryRoleCost.findFirstOrThrow({ where: { budgetEntryId: entry.id } });
       await updateBudgetEntryRoleCost(row.id, projectA.id, { personId: person.id, manDays: 2 });
 
-      actAs(adminUserId);
       await deleteRoleRate(roleRate.id);
 
       const afterDelete = await prisma.budgetEntryRoleCost.findUniqueOrThrow({ where: { id: row.id } });

@@ -6,9 +6,11 @@ import { createPerson } from "./people-actions";
 export function CreatePersonForm({
   linkableUsers,
   roleRates,
+  competencies,
 }: {
   linkableUsers: { id: string; name: string; email: string }[];
   roleRates: { id: string; roleName: string }[];
+  competencies: { id: string; level: string }[];
 }) {
   const [name, setName] = useState("");
   const [title, setTitle] = useState("");
@@ -16,6 +18,7 @@ export function CreatePersonForm({
   const [phone, setPhone] = useState("");
   const [userId, setUserId] = useState("");
   const [roleRateId, setRoleRateId] = useState("");
+  const [competencyId, setCompetencyId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -26,13 +29,22 @@ export function CreatePersonForm({
         setError(null);
         startTransition(async () => {
           try {
-            await createPerson({ name, title, email, phone, userId: userId || undefined, roleRateId: roleRateId || undefined });
+            await createPerson({
+              name,
+              title,
+              email,
+              phone,
+              userId: userId || undefined,
+              roleRateId: roleRateId || undefined,
+              competencyId: competencyId || undefined,
+            });
             setName("");
             setTitle("");
             setEmail("");
             setPhone("");
             setUserId("");
             setRoleRateId("");
+            setCompetencyId("");
           } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to create person.");
           }
@@ -81,6 +93,17 @@ export function CreatePersonForm({
             {roleRates.map((r) => (
               <option key={r.id} value={r.id}>
                 {r.roleName}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="min-w-[160px]">
+          <label className="block text-xs font-medium text-slate-600 mb-1">Competency (optional)</label>
+          <select value={competencyId} onChange={(e) => setCompetencyId(e.target.value)} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
+            <option value="">None</option>
+            {competencies.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.level}
               </option>
             ))}
           </select>

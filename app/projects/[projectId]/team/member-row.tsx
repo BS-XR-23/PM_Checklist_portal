@@ -4,6 +4,9 @@ import { useTransition } from "react";
 import type { Role, ModuleName, AccessLevel } from "@prisma/client";
 import { removeProjectMember, setModulePermission } from "./team-actions";
 
+// BUDGET_TRACKER is intentionally omitted — it's Admin-only now
+// (lib/rbac-core.ts computeModuleAccess), so a per-membership permission
+// for it would be a no-op.
 const ALL_MODULES: ModuleName[] = [
   "DASHBOARD",
   "PM_CHECKLIST",
@@ -11,8 +14,10 @@ const ALL_MODULES: ModuleName[] = [
   "MILESTONES",
   "RISK_REGISTER",
   "CR_LOG",
-  "BUDGET_TRACKER",
   "PM_PLAN",
+  "DECISION_LOG",
+  "ACTION_ITEMS",
+  "DELIVERY",
 ];
 
 const ACCESS_LEVELS: AccessLevel[] = ["NONE", "READ_LIMITED", "READ_FULL", "WRITE"];

@@ -49,6 +49,7 @@ export default async function ProjectLayout({
     visibleTabs.push({ href: "/risks", label: "Risk & CR", matchHrefs: ["/change-requests"] });
   }
   if (moduleAccess.BUDGET_TRACKER !== "NONE") visibleTabs.push({ href: "/budget", label: "Budget Tracker" });
+  if (moduleAccess.DELIVERY !== "NONE") visibleTabs.push({ href: "/delivery", label: "Delivery", matchHrefs: ["/delivery/tasks"] });
   if (moduleAccess.PM_PLAN !== "NONE") visibleTabs.push({ href: "/pm-plan", label: "PM Plan" });
   if (moduleAccess.DECISION_LOG !== "NONE" || moduleAccess.ACTION_ITEMS !== "NONE") {
     visibleTabs.push({ href: "/decisions", label: "Decisions", matchHrefs: ["/action-items"] });

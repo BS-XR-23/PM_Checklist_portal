@@ -97,6 +97,26 @@ export function sumRoleCosts(rows: { manDays: number; manDayRate: number }[]): n
   return rows.reduce((sum, r) => sum + r.manDays * r.manDayRate, 0);
 }
 
+/** Delivery / Weekly CPI: Planned Value = sum of a week's estimated man-days. */
+export function wbsPlannedValue(tasks: { manDays: number }[]): number {
+  return tasks.reduce((sum, t) => sum + t.manDays, 0);
+}
+
+/** Delivery / Weekly CPI: Earned Value = estimated man-days weighted by % complete. */
+export function wbsEarnedValue(tasks: { manDays: number; pctComplete: number }[]): number {
+  return tasks.reduce((sum, t) => sum + t.manDays * t.pctComplete, 0);
+}
+
+/** Delivery / Weekly CPI: Actual Value = real days spent, adjusted by each assignee's Competency multiplier. */
+export function wbsActualValue(tasks: { actualManDays: number; competencyMultiplier: number }[]): number {
+  return tasks.reduce((sum, t) => sum + t.actualManDays * t.competencyMultiplier, 0);
+}
+
+/** EV/AV > 1 = over-estimated (took less effort than planned); < 1 = under-estimated. Null when AV is 0 — nothing logged yet. */
+export function competencyCpi(ev: number, av: number): number | null {
+  return av ? ev / av : null;
+}
+
 /** Forecast Date slipped past Planned Date on an incomplete item (non-blocking flag). */
 export function isSlipped(
   plannedDate: Date | null,

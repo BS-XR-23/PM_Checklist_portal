@@ -28,6 +28,7 @@ enum ModuleName {
   PM_PLAN
   DECISION_LOG
   ACTION_ITEMS
+  DELIVERY
 }
 
 enum AccessLevel {
@@ -82,6 +83,7 @@ model Project {
   decisions       DecisionLogItem[]
   actionItems     ActionItem[]
   wonFromPresales PresalesProject?
+  wbsWeeks        WbsWeek[]
 }
 
 /// A user's access to one specific project. Only meaningful for PM/CLIENT/LIMITED
@@ -307,6 +309,20 @@ model RoleRate {
   people               Person[]
 }
 
+// Velocity/capacity multiplier — separate axis from RoleRate. RoleRate
+// drives currency cost; Competency never touches currency, it converts
+// real days worked into "standard effort units" (1.0 = baseline/Mid,
+// 1.3 = Senior finishes the same estimated work ~30% faster) for the
+// Delivery tab's Competency CPI (EV/AV).
+model Competency {
+  id         String   @id @default(cuid())
+  level      String   @unique // "Intern/Junior<6", "Junior 1B", "Mid", "Senior", "PM"
+  multiplier Float
+  createdAt  DateTime @default(now())
+
+  people Person[]
+}
+
 // One row per role logged against a week's BudgetEntry. roleName/manDayRate
 // are snapshotted from RoleRate at add/edit time — a later rename or
 // deletion of the RoleRate must never rewrite historical cost data.
@@ -328,6 +344,42 @@ model BudgetEntryRoleCost {
   createdAt     DateTime    @default(now())
 
   @@index([budgetEntryId])
+}
+
+model WbsWeek {
+  id         String    @id @default(cuid())
+  projectId  String
+  project    Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  weekEnding DateTime
+  createdAt  DateTime  @default(now())
+  tasks      WbsTask[]
+
+  @@unique([projectId, weekEnding])
+  @@index([projectId])
+}
+
+// manDays/pctComplete are the estimate side (drives Weekly CPI's Planned
+// Value / Earned Value). actualManDays is the real days spent, entered per
+// task ("Jira entry value"). competencyMultiplier is snapshotted from the
+// assignee's Competency at assignment time — same snapshot-not-live-join
+// reasoning as BudgetEntryRoleCost.roleName/manDayRate: a later Competency
+// edit must never rewrite a task's already-recorded Actual Value.
+model WbsTask {
+  id                   String   @id @default(cuid())
+  wbsWeekId            String
+  wbsWeek              WbsWeek  @relation(fields: [wbsWeekId], references: [id], onDelete: Cascade)
+  wbsNumber            String
+  title                String
+  manDays              Float    @default(0)
+  pctComplete          Float    @default(0)
+  actualManDays        Float    @default(0)
+  personId             String?
+  person               Person?  @relation(fields: [personId], references: [id], onDelete: SetNull)
+  personName           String?
+  competencyMultiplier Float    @default(1)
+  createdAt            DateTime @default(now())
+
+  @@index([wbsWeekId])
 }
 
 model PMPlan {
@@ -418,16 +470,18 @@ model RaciRow {
 /// checklist "Owner", risk "Owner", and stakeholder names should reference
 /// instead of re-typing free text on every row.
 model Person {
-  id         String    @id @default(cuid())
-  name       String
-  title      String? // e.g. "Lead Engineer", "Creative Lead", "QA", "BA"
-  email      String?
-  phone      String?
-  userId     String?   @unique // linked portal account, if they have one (typically LIMITED)
-  user       User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
-  roleRateId String? // which RoleRate this person's Actual Cost logging resolves to
-  roleRate   RoleRate? @relation(fields: [roleRateId], references: [id], onDelete: SetNull)
-  createdAt  DateTime  @default(now())
+  id           String      @id @default(cuid())
+  name         String
+  title        String? // e.g. "Lead Engineer", "Creative Lead", "QA", "BA"
+  email        String?
+  phone        String?
+  userId       String?     @unique // linked portal account, if they have one (typically LIMITED)
+  user         User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  roleRateId   String? // which RoleRate this person's Actual Cost logging resolves to
+  roleRate     RoleRate?   @relation(fields: [roleRateId], references: [id], onDelete: SetNull)
+  competencyId String? // which Competency multiplier this person's WBS Actual Value resolves to
+  competency   Competency? @relation(fields: [competencyId], references: [id], onDelete: SetNull)
+  createdAt    DateTime    @default(now())
 
   engagements             ProjectEngagement[]
   checklistOwners         ChecklistItem[]
@@ -439,6 +493,7 @@ model Person {
   presalesActionItemOwner PresalesActionItem[]
   presalesChecklistOwner  PresalesChecklistItem[]
   budgetEntryRoleCosts    BudgetEntryRoleCost[]
+  wbsTasks                WbsTask[]
 }
 
 enum PresalesOutcome {

@@ -30,6 +30,10 @@ export function computeProjectAccess(userRole: Role, membership: MembershipLike)
 /** Fine-grained, per-module access. Absence of a permission row means NONE. */
 export function computeModuleAccess(userRole: Role, membership: MembershipLike, module: ModuleName): AccessLevel {
   if (userRole === "ADMIN") return "WRITE";
+  // Budget Tracker is Admin-only, testing-purposes-only now that real
+  // budget tracking lives in a separate portal — no TPM/PM/permission path
+  // can ever grant it, regardless of membership or per-user overrides.
+  if (module === "BUDGET_TRACKER") return "NONE";
   if (userRole === "TPM") return "READ_FULL"; // never WRITE through the normal path — see performTpmOverride
   if (userRole === "PROGRAM_MANAGER") return "NONE"; // no per-project module access; they use /portfolio
 
@@ -53,6 +57,7 @@ export const DEFAULT_CLIENT_PERMISSIONS: { module: ModuleName; access: AccessLev
   { module: "PM_PLAN", access: "NONE" },
   { module: "DECISION_LOG", access: "NONE" },
   { module: "ACTION_ITEMS", access: "NONE" },
+  { module: "DELIVERY", access: "NONE" },
 ];
 
 export const ALL_MODULES: ModuleName[] = [
@@ -66,4 +71,5 @@ export const ALL_MODULES: ModuleName[] = [
   "PM_PLAN",
   "DECISION_LOG",
   "ACTION_ITEMS",
+  "DELIVERY",
 ];

@@ -46,10 +46,12 @@ describe("computeModuleAccess — role x module matrix", () => {
     }
   });
 
-  it("TPM gets READ_FULL on every module, never WRITE through the normal path", () => {
+  it("TPM gets READ_FULL on every module except Budget Tracker (Admin-only), never WRITE through the normal path", () => {
     for (const m of ALL_MODULES) {
+      if (m === "BUDGET_TRACKER") continue;
       expect(computeModuleAccess("TPM", null, m)).toBe("READ_FULL");
     }
+    expect(computeModuleAccess("TPM", null, "BUDGET_TRACKER")).toBe("NONE");
   });
 
   it("PROGRAM_MANAGER gets NONE on every module", () => {
@@ -59,11 +61,22 @@ describe("computeModuleAccess — role x module matrix", () => {
     }
   });
 
-  it("PM gets WRITE on every module of their assigned project, NONE without membership", () => {
+  it("PM gets WRITE on every module of their assigned project except Budget Tracker (Admin-only), NONE without membership", () => {
     for (const m of ALL_MODULES) {
+      if (m === "BUDGET_TRACKER") continue;
       expect(computeModuleAccess("PM", membership("PM"), m)).toBe("WRITE");
       expect(computeModuleAccess("PM", null, m)).toBe("NONE");
     }
+    expect(computeModuleAccess("PM", membership("PM"), "BUDGET_TRACKER")).toBe("NONE");
+  });
+
+  it("Budget Tracker is Admin-only regardless of role, membership, or per-user permission overrides", () => {
+    expect(computeModuleAccess("ADMIN", null, "BUDGET_TRACKER")).toBe("WRITE");
+    expect(computeModuleAccess("TPM", null, "BUDGET_TRACKER")).toBe("NONE");
+    expect(computeModuleAccess("PM", membership("PM"), "BUDGET_TRACKER")).toBe("NONE");
+    // Even an explicit CLIENT permission override granting WRITE can't get through the special-case.
+    const mem = membership("CLIENT", [{ module: "BUDGET_TRACKER", access: "WRITE" }]);
+    expect(computeModuleAccess("CLIENT", mem, "BUDGET_TRACKER")).toBe("NONE");
   });
 
   it("CLIENT/LIMITED get NONE for any module with no explicit permission row (secure by default)", () => {

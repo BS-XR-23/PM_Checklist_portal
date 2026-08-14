@@ -1,5 +1,15 @@
 import { describe, it, expect } from "vitest";
-import { currentStage, isSlipped, reminderBand, checklistCompletionPct, sumRoleCosts } from "./calculations";
+import {
+  currentStage,
+  isSlipped,
+  reminderBand,
+  checklistCompletionPct,
+  sumRoleCosts,
+  wbsPlannedValue,
+  wbsEarnedValue,
+  wbsActualValue,
+  competencyCpi,
+} from "./calculations";
 
 describe("currentStage", () => {
   const STAGES = ["Planning", "Development", "Release"] as const;
@@ -120,5 +130,57 @@ describe("sumRoleCosts", () => {
 
   it("returns 0 for an empty breakdown", () => {
     expect(sumRoleCosts([])).toBe(0);
+  });
+});
+
+describe("wbsPlannedValue", () => {
+  it("sums estimated man-days across tasks", () => {
+    expect(wbsPlannedValue([{ manDays: 7 }, { manDays: 3.5 }])).toBe(10.5);
+  });
+
+  it("returns 0 for no tasks", () => {
+    expect(wbsPlannedValue([])).toBe(0);
+  });
+});
+
+describe("wbsEarnedValue", () => {
+  it("sums man-days weighted by % complete", () => {
+    const tasks = [
+      { manDays: 10, pctComplete: 0.7 },
+      { manDays: 4, pctComplete: 0.5 },
+    ];
+    expect(wbsEarnedValue(tasks)).toBe(10 * 0.7 + 4 * 0.5);
+  });
+
+  it("a 0% task contributes nothing", () => {
+    expect(wbsEarnedValue([{ manDays: 10, pctComplete: 0 }])).toBe(0);
+  });
+});
+
+describe("wbsActualValue", () => {
+  it("sums real days spent weighted by each assignee's competency multiplier", () => {
+    const tasks = [
+      { actualManDays: 4, competencyMultiplier: 1.3 }, // Senior
+      { actualManDays: 2, competencyMultiplier: 1 }, // Mid/baseline
+    ];
+    expect(wbsActualValue(tasks)).toBeCloseTo(4 * 1.3 + 2 * 1, 5);
+  });
+
+  it("returns 0 for no tasks", () => {
+    expect(wbsActualValue([])).toBe(0);
+  });
+});
+
+describe("competencyCpi", () => {
+  it("EV/AV > 1 means over-estimated — took less effort than planned", () => {
+    expect(competencyCpi(10, 5)).toBe(2);
+  });
+
+  it("EV/AV < 1 means under-estimated — took more effort than planned", () => {
+    expect(competencyCpi(5, 10)).toBe(0.5);
+  });
+
+  it("returns null when nothing has been logged yet (AV = 0), not Infinity", () => {
+    expect(competencyCpi(10, 0)).toBeNull();
   });
 });

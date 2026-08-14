@@ -14,10 +14,19 @@ export type PersonRowData = {
   linkedUserId: string | null;
   linkableUsers: { id: string; name: string; email: string }[];
   roleRateId: string | null;
+  competencyId: string | null;
   engagements: { projectName: string; roleOnProject: string; intensityPct: number }[];
 };
 
-export function PersonRow({ person, roleRates }: { person: PersonRowData; roleRates: { id: string; roleName: string }[] }) {
+export function PersonRow({
+  person,
+  roleRates,
+  competencies,
+}: {
+  person: PersonRowData;
+  roleRates: { id: string; roleName: string }[];
+  competencies: { id: string; level: string }[];
+}) {
   const [pending, startTransition] = useTransition();
 
   return (
@@ -55,6 +64,17 @@ export function PersonRow({ person, roleRates }: { person: PersonRowData; roleRa
             return roleRates.find((r) => r.id === id)?.roleName ?? id;
           }}
           onSave={(v) => updatePerson(person.id, { roleRateId: v || null })}
+        />
+      </td>
+      <td className="px-4 py-3">
+        <InlineSelect
+          value={person.competencyId ?? ""}
+          options={["", ...competencies.map((c) => c.id)]}
+          renderOption={(id) => {
+            if (id === "") return "— None —";
+            return competencies.find((c) => c.id === id)?.level ?? id;
+          }}
+          onSave={(v) => updatePerson(person.id, { competencyId: v || null })}
         />
       </td>
       <td className="px-4 py-3 max-w-[18rem]">
