@@ -202,11 +202,26 @@ export function ChecklistTable({
                       </CardField>
                       <CardField label="Link">
                         {canWrite ? (
-                          <InlineText
-                            value={item.link ?? ""}
-                            placeholder="—"
-                            onSave={(v) => updateChecklistItem(item.id, projectId, checklistType, { link: v })}
-                          />
+                          <div className="flex items-center gap-1.5">
+                            <div className="flex-1 min-w-0">
+                              <InlineText
+                                value={item.link ?? ""}
+                                placeholder="—"
+                                onSave={(v) => updateChecklistItem(item.id, projectId, checklistType, { link: v })}
+                              />
+                            </div>
+                            {item.link && (
+                              <a
+                                href={item.link}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                title="Open link"
+                                className="shrink-0 text-slate-400 hover:text-indigo-600"
+                              >
+                                ↗
+                              </a>
+                            )}
+                          </div>
                         ) : item.link ? (
                           <a href={item.link} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline truncate block">
                             {item.link}
