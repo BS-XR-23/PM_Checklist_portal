@@ -57,9 +57,9 @@ export async function getDashboardData(projectId: string) {
       const applicable = rows.filter((i) => i.status !== "NOT_APPLICABLE");
       const completed = applicable.filter((i) => i.status === "COMPLETED").length;
       const plannedDates = applicable.map((r) => r.plannedDate).filter((d): d is Date => d != null);
-      const forecastDates = applicable.map((r) => r.forecastDate).filter((d): d is Date => d != null);
+      const actualDates = applicable.map((r) => r.actualDate).filter((d): d is Date => d != null);
       const start = plannedDates.length ? new Date(Math.min(...plannedDates.map((d) => d.getTime()))) : null;
-      const end = forecastDates.length ? new Date(Math.max(...forecastDates.map((d) => d.getTime()))) : null;
+      const end = actualDates.length ? new Date(Math.max(...actualDates.map((d) => d.getTime()))) : null;
       return { stage, total: applicable.length, completed, pct: applicable.length ? completed / applicable.length : 0, start, end };
     });
   }
@@ -73,12 +73,12 @@ export async function getDashboardData(projectId: string) {
 
   // Derived, not stored — the current stage (per the resolved PM-Checklist-
   // is-canonical definition, same as the Projects list) and the project's
-  // "end date" (latest Forecast Date across every checklist item), so
+  // "end date" (latest Actual Date across every checklist item), so
   // neither can drift out of sync with the checklist itself.
   const pmStage = currentStage(pmItems, PM_STAGES) ?? "Complete";
   const endDate = applicableItems.reduce<Date | null>((latest, i) => {
-    if (!i.forecastDate) return latest;
-    return !latest || i.forecastDate > latest ? i.forecastDate : latest;
+    if (!i.actualDate) return latest;
+    return !latest || i.actualDate > latest ? i.actualDate : latest;
   }, null);
 
   // Same reminder-worthy definition as lib/notifications.ts (cross-project
@@ -127,7 +127,7 @@ export async function getDashboardData(projectId: string) {
       source: m.checklistItem.type === "PM" ? "PM Checklist" : "DevOps Checklist",
       stage: m.checklistItem.stage,
       milestoneName: m.checklistItem.milestoneName ?? "",
-      forecastDate: m.checklistItem.forecastDate,
+      actualDate: m.checklistItem.actualDate,
       status: m.checklistItem.status as ItemStatus,
       order: m.checklistItem.order,
       type: m.checklistItem.type,
@@ -145,10 +145,10 @@ export async function getDashboardData(projectId: string) {
     .filter((c) => c.status === "Approved" || c.status === "In Progress")
     .reduce((sum, c) => sum + (c.billableManDays ?? 0), 0);
 
-  const notInvoiced = milestones.filter((m) => m.invoiceStatus === "Not Invoiced" && m.checklistItem.forecastDate);
+  const notInvoiced = milestones.filter((m) => m.invoiceStatus === "Not Invoiced" && m.checklistItem.actualDate);
   const nextPaymentDue = notInvoiced.length
     ? notInvoiced.reduce((min, m) => {
-        const d = m.checklistItem.forecastDate!;
+        const d = m.checklistItem.actualDate!;
         return !min || d < min ? d : min;
       }, null as Date | null)
     : null;
@@ -156,7 +156,7 @@ export async function getDashboardData(projectId: string) {
   const totalAllocatedPct = milestones.reduce((sum, m) => sum + m.paymentPct, 0);
   const nextPaymentAmount = nextPaymentDue
     ? notInvoiced
-        .filter((m) => m.checklistItem.forecastDate?.getTime() === nextPaymentDue.getTime())
+        .filter((m) => m.checklistItem.actualDate?.getTime() === nextPaymentDue.getTime())
         .reduce((sum, m) => sum + trancheAmount(project.contractValue, m.paymentPct), 0)
     : 0;
 

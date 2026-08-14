@@ -78,7 +78,7 @@ export default async function MilestonesPage({ params }: { params: { projectId: 
               sourceChecklist: m.checklistItem.type === "PM" ? "PM Checklist" : "DevOps Checklist",
               stage: m.checklistItem.stage,
               milestoneName: m.checklistItem.milestoneName ?? "",
-              forecastDate: m.checklistItem.forecastDate,
+              actualDate: m.checklistItem.actualDate,
               status: m.checklistItem.status as ItemStatus,
             }}
           />

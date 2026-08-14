@@ -24,7 +24,8 @@ type ChecklistUpdateData = Partial<{
   owner: string;
   ownerPersonId: string | null;
   plannedDate: string | null;
-  forecastDate: string | null;
+  actualDate: string | null;
+  link: string;
   status: ItemStatus;
   notes: string;
 }>;
@@ -35,7 +36,8 @@ function toPrismaData(data: ChecklistUpdateData) {
     ...(data.owner !== undefined ? { owner: data.owner || null } : {}),
     ...(data.ownerPersonId !== undefined ? { ownerPersonId: data.ownerPersonId } : {}),
     ...(data.plannedDate !== undefined ? { plannedDate: parseDateInput(data.plannedDate) } : {}),
-    ...(data.forecastDate !== undefined ? { forecastDate: parseDateInput(data.forecastDate) } : {}),
+    ...(data.actualDate !== undefined ? { actualDate: parseDateInput(data.actualDate) } : {}),
+    ...(data.link !== undefined ? { link: data.link || null } : {}),
     ...(data.status !== undefined ? { status: data.status } : {}),
     ...(data.notes !== undefined ? { notes: data.notes || null } : {}),
   };

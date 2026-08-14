@@ -24,7 +24,8 @@ export type ChecklistTableItem = {
   ownerPersonId: string | null;
   ownerPersonName: string | null;
   plannedDate: Date | null;
-  forecastDate: Date | null;
+  actualDate: Date | null;
+  link: string | null;
   status: string;
   notes: string | null; // null when stripped by READ_LIMITED access
   isCustom: boolean;
@@ -106,7 +107,7 @@ export function ChecklistTable({
 
             <div className="space-y-3">
               {group.rows.map((item) => {
-                const slipped = isSlipped(item.plannedDate, item.forecastDate, item.status);
+                const slipped = isSlipped(item.plannedDate, item.actualDate, item.status);
                 // A PM may reword an item they added themselves; rewording a fixed
                 // template item's text is Admin-only (enforced server-side too).
                 const canEditText = item.isCustom ? canWrite : viewerRole === "ADMIN";
@@ -182,22 +183,37 @@ export function ChecklistTable({
                           formatDate(item.plannedDate)
                         )}
                       </CardField>
-                      <CardField label="Forecast Date">
+                      <CardField label="Actual Date">
                         <div className="flex items-center gap-1.5">
                           {canWrite ? (
                             <InlineDate
-                              value={toDateInputValue(item.forecastDate)}
-                              onSave={(v) => updateChecklistItem(item.id, projectId, checklistType, { forecastDate: v })}
+                              value={toDateInputValue(item.actualDate)}
+                              onSave={(v) => updateChecklistItem(item.id, projectId, checklistType, { actualDate: v })}
                             />
                           ) : (
-                            <span>{formatDate(item.forecastDate)}</span>
+                            <span>{formatDate(item.actualDate)}</span>
                           )}
                           {slipped && (
-                            <span title="Forecast Date has slipped past Planned Date" className="text-xs font-bold shrink-0" style={{ color: SLIPPED_FLAG_COLOR }}>
+                            <span title="Actual Date has slipped past Planned Date" className="text-xs font-bold shrink-0" style={{ color: SLIPPED_FLAG_COLOR }}>
                               ⚠
                             </span>
                           )}
                         </div>
+                      </CardField>
+                      <CardField label="Link">
+                        {canWrite ? (
+                          <InlineText
+                            value={item.link ?? ""}
+                            placeholder="—"
+                            onSave={(v) => updateChecklistItem(item.id, projectId, checklistType, { link: v })}
+                          />
+                        ) : item.link ? (
+                          <a href={item.link} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline truncate block">
+                            {item.link}
+                          </a>
+                        ) : (
+                          "—"
+                        )}
                       </CardField>
                       {!notesHidden && (
                         <CardField label="Notes" className="col-span-2 sm:col-span-3 lg:col-span-1">

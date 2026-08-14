@@ -160,7 +160,7 @@ export default async function DashboardPage({ params }: { params: { projectId: s
         </div>
 
         <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <h3 className="text-sm font-semibold text-slate-700 mb-3">Timeline (Planned → Forecast, by Stage/Category)</h3>
+          <h3 className="text-sm font-semibold text-slate-700 mb-3">Timeline (Planned → Actual, by Stage/Category)</h3>
           <TimelineStrip rows={data.timelineStrip} />
         </div>
       </div>
@@ -175,7 +175,7 @@ export default async function DashboardPage({ params }: { params: { projectId: s
               <th className="px-3 py-2 font-medium">Checklist</th>
               <th className="px-3 py-2 font-medium">Stage / Category</th>
               <th className="px-3 py-2 font-medium">Milestone</th>
-              <th className="px-3 py-2 font-medium">Forecast Date</th>
+              <th className="px-3 py-2 font-medium">Actual Date</th>
               <th className="px-3 py-2 font-medium">Status</th>
             </tr>
           </thead>
@@ -185,7 +185,7 @@ export default async function DashboardPage({ params }: { params: { projectId: s
                 <td className="px-3 py-1.5 text-slate-500 whitespace-nowrap">{m.source}</td>
                 <td className="px-3 py-1.5 text-slate-500 whitespace-nowrap">{m.stage}</td>
                 <td className="px-3 py-1.5 text-slate-800 font-medium whitespace-nowrap">{m.milestoneName}</td>
-                <td className="px-3 py-1.5 text-slate-500 whitespace-nowrap">{formatDate(m.forecastDate)}</td>
+                <td className="px-3 py-1.5 text-slate-500 whitespace-nowrap">{formatDate(m.actualDate)}</td>
                 <td className="px-3 py-1.5">
                   <span
                     className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap"

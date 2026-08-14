@@ -14,7 +14,7 @@ export function TimelineStrip({ rows }: { rows: TimelineRow[] }) {
   if (withDates.length === 0) {
     return (
       <p className="text-sm text-slate-400">
-        Add Planned and Forecast dates on the checklists to populate the timeline.
+        Add Planned and Actual dates on the checklists to populate the timeline.
       </p>
     );
   }

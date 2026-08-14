@@ -23,7 +23,7 @@ export default async function ProjectsPage() {
     where: canSeeAll ? {} : { memberships: { some: { userId: user.id } }, deletedAt: null },
     orderBy: { createdAt: "desc" },
     include: {
-      checklistItems: { select: { type: true, stage: true, status: true, forecastDate: true } },
+      checklistItems: { select: { type: true, stage: true, status: true, actualDate: true } },
       budgetEntries: { orderBy: { weekEnding: "asc" } },
       risks: true,
     },
@@ -47,11 +47,11 @@ export default async function ProjectsPage() {
     const completed = applicable.filter((i) => i.status === "COMPLETED").length;
     const pct = total ? completed / total : 0;
     const pmStage = currentStage(p.checklistItems.filter((i) => i.type === "PM"), PM_STAGES) ?? "Complete";
-    // Derived "end date" — latest Forecast Date across PM+DevOps items, same
+    // Derived "end date" — latest Actual Date across PM+DevOps items, same
     // definition used on the project's own Dashboard (lib/dashboard-data.ts).
     const endDate = applicable.reduce<Date | null>((latest, i) => {
-      if (!i.forecastDate) return latest;
-      return !latest || i.forecastDate > latest ? i.forecastDate : latest;
+      if (!i.actualDate) return latest;
+      return !latest || i.actualDate > latest ? i.actualDate : latest;
     }, null);
     // Same RAG definition as the Portfolio rollup (lib/rag.ts) — SPI/CPI +
     // open high risks — so a project's health reads the same everywhere,

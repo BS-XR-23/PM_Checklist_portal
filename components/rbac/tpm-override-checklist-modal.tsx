@@ -18,7 +18,8 @@ export function TpmOverrideChecklistModal({
     itemText: string;
     owner: string | null;
     plannedDate: Date | null;
-    forecastDate: Date | null;
+    actualDate: Date | null;
+    link: string | null;
     status: string;
     notes: string | null;
   };
@@ -26,7 +27,8 @@ export function TpmOverrideChecklistModal({
   const [open, setOpen] = useState(false);
   const [owner, setOwner] = useState(item.owner ?? "");
   const [plannedDate, setPlannedDate] = useState(toDateInputValue(item.plannedDate) ?? "");
-  const [forecastDate, setForecastDate] = useState(toDateInputValue(item.forecastDate) ?? "");
+  const [actualDate, setActualDate] = useState(toDateInputValue(item.actualDate) ?? "");
+  const [link, setLink] = useState(item.link ?? "");
   const [status, setStatus] = useState(item.status);
   const [notes, setNotes] = useState(item.notes ?? "");
   const [reason, setReason] = useState("");
@@ -82,9 +84,13 @@ export function TpmOverrideChecklistModal({
             <input type="date" value={plannedDate} onChange={(e) => setPlannedDate(e.target.value)} className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm" />
           </div>
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Forecast Date</label>
-            <input type="date" value={forecastDate} onChange={(e) => setForecastDate(e.target.value)} className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm" />
+            <label className="block text-xs font-medium text-slate-600 mb-1">Actual Date</label>
+            <input type="date" value={actualDate} onChange={(e) => setActualDate(e.target.value)} className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm" />
           </div>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-slate-600 mb-1">Link</label>
+          <input value={link} onChange={(e) => setLink(e.target.value)} className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm" />
         </div>
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">Notes</label>
@@ -117,7 +123,7 @@ export function TpmOverrideChecklistModal({
                   item.id,
                   projectId,
                   checklistType,
-                  { owner, plannedDate: plannedDate || null, forecastDate: forecastDate || null, status: status as ItemStatus, notes },
+                  { owner, plannedDate: plannedDate || null, actualDate: actualDate || null, link, status: status as ItemStatus, notes },
                   reason
                 );
                 setOpen(false);

@@ -265,7 +265,7 @@ export async function winPresalesProject(id: string) {
         itemText: c.itemText,
         status: c.status,
         plannedDate: c.plannedDate,
-        forecastDate: c.forecastDate,
+        actualDate: c.forecastDate,
         owner: c.owner,
         ownerPersonId: c.ownerPersonId,
         notes: c.notes,

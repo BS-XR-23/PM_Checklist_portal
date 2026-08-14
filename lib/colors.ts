@@ -43,7 +43,7 @@ export function riskScoreSeverity(score: number): keyof typeof RISK_SEVERITY_COL
 export const INDEX_FAVORABLE_COLOR = "#00713C";
 export const INDEX_UNFAVORABLE_COLOR = "#C00000";
 
-// Forecast Date slipped past Planned Date flag (G column CF), non-blocking.
+// Actual Date slipped past Planned Date flag (G column CF), non-blocking.
 export const SLIPPED_FLAG_COLOR = "#C00000";
 
 // Engagement intensity Low/Med/High bands — same traffic-light palette as

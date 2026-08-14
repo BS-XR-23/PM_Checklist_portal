@@ -117,15 +117,15 @@ export function competencyCpi(ev: number, av: number): number | null {
   return av ? ev / av : null;
 }
 
-/** Forecast Date slipped past Planned Date on an incomplete item (non-blocking flag). */
+/** Actual Date slipped past Planned Date on an incomplete item (non-blocking flag). */
 export function isSlipped(
   plannedDate: Date | null,
-  forecastDate: Date | null,
+  actualDate: Date | null,
   status: string
 ): boolean {
-  if (!plannedDate || !forecastDate) return false;
+  if (!plannedDate || !actualDate) return false;
   if (status === "COMPLETED" || status === "NOT_APPLICABLE") return false;
-  return forecastDate.getTime() > plannedDate.getTime();
+  return actualDate.getTime() > plannedDate.getTime();
 }
 
 /**
@@ -150,8 +150,8 @@ export type ReminderBand = "OVERDUE" | "DUE_SOON" | null;
 /**
  * App-derived: an incomplete item whose Planned Date has already passed
  * (OVERDUE) or falls within the next `dueSoonDays` (DUE_SOON). Deliberately
- * distinct from isSlipped() above — that flags "the forecast moved past the
- * plan" (a re-estimate signal); this flags "this was due and nothing's
+ * distinct from isSlipped() above — that flags "the actual date moved past
+ * the plan" (a re-estimate signal); this flags "this was due and nothing's
  * happened" (a forgot-about-it signal), which is what actually needs to
  * proactively surface to whoever owns the item.
  */

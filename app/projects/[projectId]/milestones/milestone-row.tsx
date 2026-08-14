@@ -18,7 +18,7 @@ export type MilestoneRowData = {
   sourceChecklist: string;
   stage: string;
   milestoneName: string;
-  forecastDate: Date | null;
+  actualDate: Date | null;
   status: ItemStatus;
 };
 
@@ -62,7 +62,7 @@ export function MilestoneRow({
       </div>
 
       <CardFieldGrid>
-        <CardField label="Forecast Date">{formatDate(milestone.forecastDate)}</CardField>
+        <CardField label="Actual Date">{formatDate(milestone.actualDate)}</CardField>
         <CardField label="Payment %">
           {canWrite ? (
             <InlinePercent value={milestone.paymentPct} onSave={(v) => updateMilestonePayment(milestone.id, projectId, { paymentPct: v })} />

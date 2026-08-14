@@ -165,7 +165,8 @@ model ChecklistItem {
   ownerPersonId String?
   ownerPerson   Person?   @relation(fields: [ownerPersonId], references: [id], onDelete: SetNull)
   plannedDate   DateTime?
-  forecastDate  DateTime?
+  actualDate    DateTime?
+  link          String?
   status        String    @default("NOT_STARTED") // see ItemStatus in lib/constants.ts
   notes         String?
   isCustom      Boolean   @default(false) // true only for items added via "+ Add Item" / "Add Milestone", never the fixed template

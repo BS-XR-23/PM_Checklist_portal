@@ -50,7 +50,7 @@ async function main() {
         status: "COMPLETED",
         ownerPersonId: owner.id,
         plannedDate: completedOn,
-        forecastDate: completedOn,
+        actualDate: completedOn,
         notes: item.notes ?? "Completed — demo walkthrough data.",
       },
     });

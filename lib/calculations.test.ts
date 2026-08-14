@@ -49,22 +49,22 @@ describe("currentStage", () => {
 
 describe("isSlipped", () => {
   const planned = new Date("2026-01-01");
-  const forecastPastDue = new Date("2026-02-01");
+  const actualPastDue = new Date("2026-02-01");
 
-  it("flags a forecast date that's slipped past the planned date on an incomplete item", () => {
-    expect(isSlipped(planned, forecastPastDue, "IN_PROGRESS")).toBe(true);
+  it("flags an actual date that's slipped past the planned date on an incomplete item", () => {
+    expect(isSlipped(planned, actualPastDue, "IN_PROGRESS")).toBe(true);
   });
 
-  it("never flags a COMPLETED item, even if the forecast slipped", () => {
-    expect(isSlipped(planned, forecastPastDue, "COMPLETED")).toBe(false);
+  it("never flags a COMPLETED item, even if the actual date slipped", () => {
+    expect(isSlipped(planned, actualPastDue, "COMPLETED")).toBe(false);
   });
 
-  it("never flags a NOT_APPLICABLE item, even if the forecast slipped", () => {
-    expect(isSlipped(planned, forecastPastDue, "NOT_APPLICABLE")).toBe(false);
+  it("never flags a NOT_APPLICABLE item, even if the actual date slipped", () => {
+    expect(isSlipped(planned, actualPastDue, "NOT_APPLICABLE")).toBe(false);
   });
 
   it("no flag when either date is missing", () => {
-    expect(isSlipped(null, forecastPastDue, "IN_PROGRESS")).toBe(false);
+    expect(isSlipped(null, actualPastDue, "IN_PROGRESS")).toBe(false);
     expect(isSlipped(planned, null, "IN_PROGRESS")).toBe(false);
   });
 });

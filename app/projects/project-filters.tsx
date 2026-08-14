@@ -22,7 +22,7 @@ export type ProjectCardData = {
   status: ProjectStatus;
   deletedAt: Date | null;
   pmStage: string; // one of PM_STAGES, or "Complete"
-  endDate: Date | null; // derived — latest Forecast Date across the checklist
+  endDate: Date | null; // derived — latest Actual Date across the checklist
   rag: Rag; // same SPI/CPI/open-high-risk definition as the Portfolio rollup
   overdueCount: number; // items past their Planned Date, empty for viewers who can't see Reminders
 };
