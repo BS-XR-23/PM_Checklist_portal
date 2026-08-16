@@ -84,6 +84,7 @@ model Project {
   wonFromPresales PresalesProject?
   wbsWeeks        WbsWeek[]
   wbsTasks        WbsTask[]
+  sprints         Sprint[]
 }
 
 /// A user's access to one specific project. Only meaningful for PM/CLIENT/LIMITED
@@ -327,18 +328,61 @@ model WbsWeek {
 // week by week via WbsWeekEntry (Weekly CPI tab). manDays is the estimate;
 // personId is the default/suggested assignee a new week's entry starts
 // from (a given week can still assign someone else for just that week).
+// sprintId optionally commits this task to a Sprint's backlog at planning
+// time (independent of week-by-week tracking); storyPoints is a
+// display/velocity figure only — man-days remains the sole unit driving
+// PV/EV/AV/CPI everywhere, including Sprint Summary, so CPI stays
+// dimensionally consistent across sprint and non-sprint tasks alike.
 model WbsTask {
-  id         String         @id @default(cuid())
-  projectId  String
-  project    Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  wbsNumber  String
-  title      String
-  manDays    Float          @default(0)
-  personId   String?
-  person     Person?        @relation(fields: [personId], references: [id], onDelete: SetNull)
-  personName String?
-  createdAt  DateTime       @default(now())
-  entries    WbsWeekEntry[]
+  id           String         @id @default(cuid())
+  projectId    String
+  project      Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  wbsNumber    String
+  title        String
+  manDays      Float          @default(0)
+  storyPoints  Float?
+  personId     String?
+  person       Person?        @relation(fields: [personId], references: [id], onDelete: SetNull)
+  personName   String?
+  sprintId     String?
+  sprint       Sprint?        @relation(fields: [sprintId], references: [id], onDelete: SetNull)
+  createdAt    DateTime       @default(now())
+  entries      WbsWeekEntry[]
+
+  @@index([projectId])
+  @@index([sprintId])
+}
+
+// A Scrum sprint, layered onto the WBS as an optional grouping — a WbsTask
+// may be committed to one at planning time (sprintId), giving an explicit
+// Planned Value baseline before any week is tracked. Earned Value follows
+// the 0/100 rule (a committed task earns its full manDays once its latest
+// tracked % reaches 100%, else 0) — deliberately NOT the same weighted
+// %-complete rule the Weekly CPI tab uses, since that rule must keep
+// meaning exactly what it means today wherever it's already shown.
+//
+// closedAt is the whole point: while null, PV/EV/AV are computed live from
+// current WbsTask/WbsWeekEntry state (see sprintEarnedValue in
+// calculations.ts). Once closeSprint() sets it, the three frozen* fields
+// are a permanent snapshot the UI reads directly instead of recomputing —
+// so a task carrying over into a later sprint (completely normal Scrum
+// behavior) can never silently rewrite this sprint's already-reported
+// numbers. There is no "reopen" — closing is one-way.
+model Sprint {
+  id        String    @id @default(cuid())
+  projectId String
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name      String
+  startDate DateTime
+  endDate   DateTime
+  createdAt DateTime  @default(now())
+
+  closedAt             DateTime?
+  frozenPlannedManDays Float?
+  frozenEarnedManDays  Float?
+  frozenActualValue    Float?
+
+  tasks WbsTask[]
 
   @@index([projectId])
 }

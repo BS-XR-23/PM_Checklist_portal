@@ -16,6 +16,7 @@ export type WeekEntryData = {
   actualManDays: number;
   personId: string | null;
   personName: string | null;
+  sprintName: string | null; // resolved from the task's WbsTask.sprintId — commit on the Tasks tab, read-only here
 };
 export type MasterTaskOption = { id: string; wbsNumber: string; title: string };
 
@@ -156,6 +157,7 @@ export function WeekEntriesTable({
             <th className="font-medium py-1 pr-2 w-24">Actual MD</th>
             <th className="font-medium py-1 pr-2 w-20">Total</th>
             <th className="font-medium py-1 pr-2 w-44">Assignee</th>
+            <th className="font-medium py-1 pr-2 w-28">Sprint</th>
             {canWrite && <th className="w-6" />}
           </tr>
         </thead>
@@ -187,6 +189,7 @@ export function WeekEntriesTable({
                   <span className="text-slate-600">{e.personName ?? "—"}</span>
                 )}
               </td>
+              <td className="py-1.5 pr-2 text-slate-500">{e.sprintName ?? "—"}</td>
               {canWrite && (
                 <td className="py-1.5">
                   <button

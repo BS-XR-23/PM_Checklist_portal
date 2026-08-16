@@ -9,6 +9,7 @@ import {
   wbsActualValue,
   competencyCpi,
   budgetEntriesFromWbs,
+  sprintEarnedValue,
 } from "./calculations";
 
 describe("currentStage", () => {
@@ -168,6 +169,29 @@ describe("competencyCpi", () => {
 
   it("returns null when nothing has been logged yet (AV = 0), not Infinity", () => {
     expect(competencyCpi(10, 0)).toBeNull();
+  });
+});
+
+describe("sprintEarnedValue", () => {
+  it("a task at exactly 100% earns its full man-days", () => {
+    expect(sprintEarnedValue([{ manDays: 10, pctComplete: 1 }])).toBe(10);
+  });
+
+  it("a task at 60% earns nothing — 0/100 rule, no partial credit", () => {
+    expect(sprintEarnedValue([{ manDays: 10, pctComplete: 0.6 }])).toBe(0);
+  });
+
+  it("mixes done and not-done tasks correctly", () => {
+    const tasks = [
+      { manDays: 10, pctComplete: 1 },
+      { manDays: 5, pctComplete: 0.99 },
+      { manDays: 8, pctComplete: 1 },
+    ];
+    expect(sprintEarnedValue(tasks)).toBe(18);
+  });
+
+  it("returns 0 for an empty list", () => {
+    expect(sprintEarnedValue([])).toBe(0);
   });
 });
 

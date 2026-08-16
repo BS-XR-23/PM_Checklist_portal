@@ -112,6 +112,19 @@ export function competencyCpi(ev: number, av: number): number | null {
   return av ? ev / av : null;
 }
 
+/**
+ * Sprint Summary: 0/100 rule — a sprint-committed task earns its full
+ * man-days once its latest tracked % complete reaches 100%, otherwise 0.
+ * Deliberately a separate function, not a branch inside wbsEarnedValue()
+ * above: that function's weighted-%-complete meaning must stay exactly what
+ * it means everywhere it's already shown (the Weekly CPI tab), so a task
+ * being committed to a sprint can never retroactively change an
+ * already-reported weekly EV number.
+ */
+export function sprintEarnedValue(tasks: { manDays: number; pctComplete: number }[]): number {
+  return tasks.reduce((sum, t) => sum + (t.pctComplete >= 1 ? t.manDays : 0), 0);
+}
+
 export type WbsWeekForBudget = {
   weekEnding: Date;
   entries: { wbsTaskId: string; manDays: number; pctComplete: number; actualManDays: number; manDayRate: number }[];

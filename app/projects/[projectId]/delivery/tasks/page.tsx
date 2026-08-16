@@ -3,6 +3,7 @@ import { requireModuleAccess } from "@/lib/rbac";
 import { SubNav } from "@/components/ui/sub-nav";
 import { WbsTasksTable } from "../delivery-tasks-table";
 import { UploadWbsTasksForm } from "../upload-wbs-tasks-form";
+import { AddSprintModal } from "../add-sprint-modal";
 
 export const dynamic = "force-dynamic";
 
@@ -10,13 +11,14 @@ export default async function DeliveryTasksPage({ params }: { params: { projectI
   const access = await requireModuleAccess(params.projectId, "DELIVERY", "READ_LIMITED");
   const canWrite = access === "WRITE";
 
-  const [tasks, engagements] = await Promise.all([
+  const [tasks, engagements, sprints] = await Promise.all([
     prisma.wbsTask.findMany({ where: { projectId: params.projectId }, orderBy: { createdAt: "asc" } }),
     prisma.projectEngagement.findMany({
       where: { projectId: params.projectId },
       include: { person: { include: { competency: true } } },
       orderBy: { person: { name: "asc" } },
     }),
+    prisma.sprint.findMany({ where: { projectId: params.projectId }, orderBy: { createdAt: "asc" } }),
   ]);
 
   const roster = Array.from(new Map(engagements.map((e) => [e.personId, e])).values()).map((e) => ({
@@ -24,6 +26,8 @@ export default async function DeliveryTasksPage({ params }: { params: { projectI
     personName: e.person.name,
     competencyLevel: e.person.competency?.level ?? null,
   }));
+
+  const sprintOptions = sprints.map((s) => ({ id: s.id, name: s.name, closedAt: s.closedAt }));
 
   return (
     <div className="space-y-6">
@@ -34,15 +38,20 @@ export default async function DeliveryTasksPage({ params }: { params: { projectI
           { href: "/delivery/tasks", label: "Tasks" },
         ]}
       />
-      <div>
-        <h2 className="text-base font-semibold text-slate-900">Delivery — Tasks</h2>
-        <p className="text-sm text-slate-500">
-          The project-wide WBS — defined once here, tracked week by week on the Weekly CPI tab. Man-days is the
-          estimate; the default assignee here is just a starting point, overridable per week.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-base font-semibold text-slate-900">Delivery — Tasks</h2>
+          <p className="text-sm text-slate-500">
+            The project-wide WBS — defined once here, tracked week by week on the Weekly CPI tab. Man-days is the
+            estimate; the default assignee here is just a starting point, overridable per week. Story Points and
+            Sprint are optional — commit a task to a sprint here to include it in that sprint&apos;s Summary on the
+            Weekly CPI tab.
+          </p>
+        </div>
+        {canWrite && <AddSprintModal projectId={params.projectId} suggestedName={`Sprint ${sprints.length + 1}`} />}
       </div>
 
-      <WbsTasksTable projectId={params.projectId} tasks={tasks} roster={roster} canWrite={canWrite} />
+      <WbsTasksTable projectId={params.projectId} tasks={tasks} roster={roster} sprints={sprintOptions} canWrite={canWrite} />
       {canWrite && <UploadWbsTasksForm projectId={params.projectId} />}
     </div>
   );

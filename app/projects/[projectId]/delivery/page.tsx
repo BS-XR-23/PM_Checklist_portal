@@ -1,11 +1,12 @@
 import { prisma } from "@/lib/prisma";
 import { requireModuleAccess } from "@/lib/rbac";
-import { wbsPlannedValue, wbsEarnedValue, wbsActualValue, competencyCpi } from "@/lib/calculations";
+import { wbsPlannedValue, wbsEarnedValue, wbsActualValue, competencyCpi, sprintEarnedValue } from "@/lib/calculations";
 import { formatDate, toDateInputValue } from "@/lib/format";
 import { INDEX_FAVORABLE_COLOR, INDEX_UNFAVORABLE_COLOR } from "@/lib/colors";
 import { SubNav } from "@/components/ui/sub-nav";
 import { AddWeekModal } from "./add-week-modal";
 import { DeliveryWeekRow } from "./delivery-week-row";
+import { SprintSummaryRow, type SprintSummaryData } from "./sprint-summary-row";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +28,7 @@ export default async function DeliveryWeeklyCpiPage({ params }: { params: { proj
   const access = await requireModuleAccess(params.projectId, "DELIVERY", "READ_LIMITED");
   const canWrite = access === "WRITE";
 
-  const [weeks, masterTasks, engagements] = await Promise.all([
+  const [weeks, masterTasks, engagements, sprints] = await Promise.all([
     prisma.wbsWeek.findMany({
       where: { projectId: params.projectId },
       orderBy: { weekEnding: "asc" },
@@ -39,6 +40,11 @@ export default async function DeliveryWeeklyCpiPage({ params }: { params: { proj
       include: { person: { include: { competency: true } } },
       orderBy: { person: { name: "asc" } },
     }),
+    prisma.sprint.findMany({
+      where: { projectId: params.projectId },
+      orderBy: { createdAt: "asc" },
+      include: { tasks: { include: { entries: { include: { wbsWeek: true } } } } },
+    }),
   ]);
 
   const roster = Array.from(new Map(engagements.map((e) => [e.personId, e])).values()).map((e) => ({
@@ -48,6 +54,8 @@ export default async function DeliveryWeeklyCpiPage({ params }: { params: { proj
   }));
 
   const masterTaskOptions = masterTasks.map((t) => ({ id: t.id, wbsNumber: t.wbsNumber, title: t.title }));
+  const sprintNameById = new Map(sprints.map((s) => [s.id, s.name]));
+  const taskSprintById = new Map(masterTasks.map((t) => [t.id, t.sprintId ? sprintNameById.get(t.sprintId) ?? null : null]));
 
   const weeksForRows = weeks.map((w) => ({
     id: w.id,
@@ -62,8 +70,35 @@ export default async function DeliveryWeeklyCpiPage({ params }: { params: { proj
       actualManDays: e.actualManDays,
       personId: e.personId,
       personName: e.personName,
+      sprintName: taskSprintById.get(e.wbsTaskId) ?? null,
     })),
   }));
+
+  // Open sprints: PV/EV/AV computed live from current WbsTask/WbsWeekEntry
+  // state (0/100 rule for EV — see sprintEarnedValue). Closed sprints read
+  // their permanent frozen* snapshot instead of recomputing — see
+  // closeSprint in delivery-actions.ts for why.
+  const sprintSummaries: SprintSummaryData[] = sprints.map((s) => {
+    const taskDrillDowns = s.tasks.map((t) => {
+      const latest = [...t.entries].sort((a, b) => b.wbsWeek.weekEnding.getTime() - a.wbsWeek.weekEnding.getTime())[0];
+      return {
+        id: t.id,
+        wbsNumber: t.wbsNumber,
+        title: t.title,
+        manDays: t.manDays,
+        storyPoints: t.storyPoints,
+        pctComplete: latest?.pctComplete ?? 0,
+      };
+    });
+
+    const pv = s.closedAt ? s.frozenPlannedManDays ?? 0 : wbsPlannedValue(s.tasks.map((t) => ({ manDays: t.manDays })));
+    const ev = s.closedAt ? s.frozenEarnedManDays ?? 0 : sprintEarnedValue(taskDrillDowns.map((t) => ({ manDays: t.manDays, pctComplete: t.pctComplete })));
+    const av = s.closedAt
+      ? s.frozenActualValue ?? 0
+      : wbsActualValue(s.tasks.flatMap((t) => t.entries.map((e) => ({ actualManDays: e.actualManDays, competencyMultiplier: e.competencyMultiplier }))));
+
+    return { id: s.id, name: s.name, startDate: s.startDate, endDate: s.endDate, closedAt: s.closedAt, pv, ev, av, tasks: taskDrillDowns };
+  });
 
   const rows = weeks.map((w) => {
     const tasksShape = w.entries.map((e) => ({ manDays: e.wbsTask.manDays, pctComplete: e.pctComplete }));
@@ -99,6 +134,20 @@ export default async function DeliveryWeeklyCpiPage({ params }: { params: { proj
         </div>
         {canWrite && <AddWeekModal projectId={params.projectId} suggestedDate={suggestedDate} />}
       </div>
+
+      {sprintSummaries.length > 0 && (
+        <div className="space-y-3">
+          <h3 className="text-sm font-semibold text-slate-900">Sprints</h3>
+          <p className="text-xs text-slate-500 -mt-2">
+            0/100 rule: a committed task earns its full man-days only once it&apos;s fully done. PV/EV/AV are man-days,
+            same as the table below — Story Points shown per task are for velocity reference only. Close a sprint to
+            freeze its numbers permanently once it ends.
+          </p>
+          {sprintSummaries.map((s) => (
+            <SprintSummaryRow key={s.id} projectId={params.projectId} sprint={s} canWrite={canWrite} />
+          ))}
+        </div>
+      )}
 
       <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
         <div className="overflow-x-auto">

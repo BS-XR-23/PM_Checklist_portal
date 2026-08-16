@@ -5,6 +5,7 @@ import * as XLSX from "xlsx";
 import { prisma } from "@/lib/prisma";
 import { parseDateInput } from "@/lib/format";
 import { requireModuleWrite, writeAudit } from "@/lib/rbac";
+import { wbsPlannedValue, wbsActualValue, sprintEarnedValue } from "@/lib/calculations";
 
 function revalidateDelivery(projectId: string) {
   revalidatePath(`/projects/${projectId}/delivery`);
@@ -36,7 +37,7 @@ export async function createWbsTask(projectId: string) {
 export async function updateWbsTask(
   id: string,
   _projectId: string,
-  data: Partial<{ wbsNumber: string; title: string; manDays: number; personId: string | null }>
+  data: Partial<{ wbsNumber: string; title: string; manDays: number; storyPoints: number | null; personId: string | null }>
 ) {
   const existing = await prisma.wbsTask.findUniqueOrThrow({ where: { id } });
   const user = await requireModuleWrite(existing.projectId, "DELIVERY");
@@ -57,6 +58,7 @@ export async function updateWbsTask(
       ...(data.wbsNumber !== undefined ? { wbsNumber: data.wbsNumber } : {}),
       ...(data.title !== undefined ? { title: data.title } : {}),
       ...(data.manDays !== undefined ? { manDays: data.manDays } : {}),
+      ...(data.storyPoints !== undefined ? { storyPoints: data.storyPoints } : {}),
       ...personFields,
     },
   });
@@ -339,4 +341,181 @@ export async function deleteWbsWeekEntry(id: string, _projectId: string) {
   });
 
   revalidateDelivery(existing.wbsWeek.projectId);
+}
+
+// --- Sprints ---
+
+export async function createSprint(projectId: string, name: string, startDate: string, endDate: string) {
+  const user = await requireModuleWrite(projectId, "DELIVERY");
+
+  if (!name.trim()) throw new Error("A sprint name is required.");
+  const parsedStart = parseDateInput(startDate);
+  const parsedEnd = parseDateInput(endDate);
+  if (!parsedStart || !parsedEnd) throw new Error("A valid start and end date are required.");
+
+  const created = await prisma.sprint.create({
+    data: { projectId, name: name.trim(), startDate: parsedStart, endDate: parsedEnd },
+  });
+
+  await writeAudit({ actor: user, projectId, action: "create", entityType: "Sprint", entityId: created.id, summary: `Added sprint "${created.name}"` });
+  revalidateDelivery(projectId);
+}
+
+export async function updateSprint(
+  id: string,
+  _projectId: string,
+  data: Partial<{ name: string; startDate: string; endDate: string }>
+) {
+  const existing = await prisma.sprint.findUniqueOrThrow({ where: { id } });
+  const user = await requireModuleWrite(existing.projectId, "DELIVERY");
+
+  if (existing.closedAt) throw new Error("This sprint is closed and can no longer be edited.");
+
+  const updateData: { name?: string; startDate?: Date; endDate?: Date } = {};
+  if (data.name !== undefined) {
+    if (!data.name.trim()) throw new Error("A sprint name is required.");
+    updateData.name = data.name.trim();
+  }
+  if (data.startDate !== undefined) {
+    const parsed = parseDateInput(data.startDate);
+    if (!parsed) throw new Error("A valid start date is required.");
+    updateData.startDate = parsed;
+  }
+  if (data.endDate !== undefined) {
+    const parsed = parseDateInput(data.endDate);
+    if (!parsed) throw new Error("A valid end date is required.");
+    updateData.endDate = parsed;
+  }
+
+  await prisma.sprint.update({ where: { id }, data: updateData });
+
+  await writeAudit({
+    actor: user,
+    projectId: existing.projectId,
+    action: "update",
+    entityType: "Sprint",
+    entityId: id,
+    summary: "Updated a sprint",
+    diff: { before: existing, changes: data },
+  });
+
+  revalidateDelivery(existing.projectId);
+}
+
+/**
+ * One-way: freezes PV/EV/AV as a permanent snapshot so a task carrying over
+ * into a later sprint (normal Scrum behavior — reassigning its sprintId)
+ * can never silently rewrite this sprint's already-reported numbers. No
+ * "reopen" action exists — closing is deliberately final.
+ */
+export async function closeSprint(id: string, _projectId: string) {
+  const existing = await prisma.sprint.findUniqueOrThrow({
+    where: { id },
+    include: { tasks: { include: { entries: { include: { wbsWeek: true } } } } },
+  });
+  const user = await requireModuleWrite(existing.projectId, "DELIVERY");
+
+  if (existing.closedAt) throw new Error("This sprint is already closed.");
+
+  const plannedValue = wbsPlannedValue(existing.tasks.map((t) => ({ manDays: t.manDays })));
+  const earnedValue = sprintEarnedValue(
+    existing.tasks.map((t) => {
+      const latest = [...t.entries].sort((a, b) => b.wbsWeek.weekEnding.getTime() - a.wbsWeek.weekEnding.getTime())[0];
+      return { manDays: t.manDays, pctComplete: latest?.pctComplete ?? 0 };
+    })
+  );
+  const actualValue = wbsActualValue(
+    existing.tasks.flatMap((t) => t.entries.map((e) => ({ actualManDays: e.actualManDays, competencyMultiplier: e.competencyMultiplier })))
+  );
+
+  await prisma.sprint.update({
+    where: { id },
+    data: {
+      closedAt: new Date(),
+      frozenPlannedManDays: plannedValue,
+      frozenEarnedManDays: earnedValue,
+      frozenActualValue: actualValue,
+    },
+  });
+
+  await writeAudit({
+    actor: user,
+    projectId: existing.projectId,
+    action: "update",
+    entityType: "Sprint",
+    entityId: id,
+    summary: `Closed sprint "${existing.name}" — PV ${plannedValue.toFixed(1)}, EV ${earnedValue.toFixed(1)}, AV ${actualValue.toFixed(1)}`,
+  });
+
+  revalidateDelivery(existing.projectId);
+}
+
+export async function deleteSprint(id: string, _projectId: string) {
+  const existing = await prisma.sprint.findUniqueOrThrow({ where: { id } });
+  const user = await requireModuleWrite(existing.projectId, "DELIVERY");
+
+  const taskCount = await prisma.wbsTask.count({ where: { sprintId: id } });
+  if (taskCount > 0) {
+    throw new Error(`This sprint has ${taskCount} committed task${taskCount === 1 ? "" : "s"} — remove them from the sprint first.`);
+  }
+
+  await prisma.sprint.delete({ where: { id } });
+
+  await writeAudit({
+    actor: user,
+    projectId: existing.projectId,
+    action: "delete",
+    entityType: "Sprint",
+    entityId: id,
+    summary: `Deleted sprint "${existing.name}"`,
+    diff: { before: existing },
+  });
+
+  revalidateDelivery(existing.projectId);
+}
+
+/**
+ * Two independent parent chains (task→project, sprint→project) must both be
+ * verified, same pattern as addWbsWeekEntry above — never trust the
+ * caller's projectId. sprintId: null uncommits the task and needs no
+ * second fetch.
+ */
+export async function assignTaskToSprint(taskId: string, sprintId: string | null, _projectId: string) {
+  const task = await prisma.wbsTask.findUniqueOrThrow({ where: { id: taskId } });
+
+  if (sprintId === null) {
+    const user = await requireModuleWrite(task.projectId, "DELIVERY");
+    await prisma.wbsTask.update({ where: { id: taskId }, data: { sprintId: null } });
+    await writeAudit({
+      actor: user,
+      projectId: task.projectId,
+      action: "update",
+      entityType: "WbsTask",
+      entityId: taskId,
+      summary: `Removed "${task.title}" from its sprint`,
+    });
+    revalidateDelivery(task.projectId);
+    return;
+  }
+
+  const sprint = await prisma.sprint.findUniqueOrThrow({ where: { id: sprintId } });
+  if (task.projectId !== sprint.projectId) {
+    throw new Error("This task and sprint belong to different projects.");
+  }
+  if (sprint.closedAt) {
+    throw new Error("This sprint is closed — new tasks can no longer be committed to it.");
+  }
+  const user = await requireModuleWrite(task.projectId, "DELIVERY");
+
+  await prisma.wbsTask.update({ where: { id: taskId }, data: { sprintId } });
+
+  await writeAudit({
+    actor: user,
+    projectId: task.projectId,
+    action: "update",
+    entityType: "WbsTask",
+    entityId: taskId,
+    summary: `Committed "${task.title}" to sprint "${sprint.name}"`,
+  });
+  revalidateDelivery(task.projectId);
 }

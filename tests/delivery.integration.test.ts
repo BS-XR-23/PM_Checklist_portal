@@ -242,4 +242,151 @@ describe("Delivery isolation boundary", () => {
     await expect(uploadWbsTasks(projectB.id, formData)).rejects.toThrow();
     expect(await prisma.wbsTask.count({ where: { projectId: projectB.id } })).toBe(0);
   });
+
+  it("createSprint + updateSprint: CRUD works, and editing a closed sprint is rejected", async () => {
+    const { createSprint, updateSprint, closeSprint, deleteSprint } = await import("@/app/projects/[projectId]/delivery/delivery-actions");
+
+    actAs(pmAUserId);
+    await createSprint(projectA.id, "[TEST] Sprint 1", "2026-01-01", "2026-01-14");
+    const sprint = await prisma.sprint.findFirstOrThrow({ where: { projectId: projectA.id }, orderBy: { createdAt: "desc" } });
+
+    await updateSprint(sprint.id, projectA.id, { name: "[TEST] Sprint 1 renamed" });
+    expect((await prisma.sprint.findUniqueOrThrow({ where: { id: sprint.id } })).name).toBe("[TEST] Sprint 1 renamed");
+
+    await closeSprint(sprint.id, projectA.id);
+    await expect(updateSprint(sprint.id, projectA.id, { name: "should fail" })).rejects.toThrow(/closed/);
+
+    await deleteSprint(sprint.id, projectA.id);
+    expect(await prisma.sprint.findUnique({ where: { id: sprint.id } })).toBeNull();
+  });
+
+  it("deleteSprint is rejected once it has committed tasks", async () => {
+    const { createSprint, createWbsTask, assignTaskToSprint, deleteSprint } = await import("@/app/projects/[projectId]/delivery/delivery-actions");
+
+    actAs(pmAUserId);
+    await createSprint(projectA.id, "[TEST] Sprint 2", "2026-02-01", "2026-02-14");
+    const sprint = await prisma.sprint.findFirstOrThrow({ where: { projectId: projectA.id }, orderBy: { createdAt: "desc" } });
+    await createWbsTask(projectA.id);
+    const task = await prisma.wbsTask.findFirstOrThrow({ where: { projectId: projectA.id }, orderBy: { createdAt: "desc" } });
+    await assignTaskToSprint(task.id, sprint.id, projectA.id);
+
+    await expect(deleteSprint(sprint.id, projectA.id)).rejects.toThrow(/committed task/);
+
+    await assignTaskToSprint(task.id, null, projectA.id);
+    await deleteSprint(sprint.id, projectA.id);
+    await prisma.wbsTask.delete({ where: { id: task.id } });
+  });
+
+  it("two-parent guessed-ID: assignTaskToSprint rejects a task from Project A paired with a sprint from Project B", async () => {
+    const { createWbsTask, assignTaskToSprint } = await import("@/app/projects/[projectId]/delivery/delivery-actions");
+    const sprintB = await prisma.sprint.create({
+      data: { projectId: projectB.id, name: "[TEST] B Sprint", startDate: new Date("2026-03-01"), endDate: new Date("2026-03-14") },
+    });
+
+    try {
+      actAs(pmAUserId);
+      await createWbsTask(projectA.id);
+      const task = await prisma.wbsTask.findFirstOrThrow({ where: { projectId: projectA.id }, orderBy: { createdAt: "desc" } });
+
+      await expect(assignTaskToSprint(task.id, sprintB.id, projectA.id)).rejects.toThrow();
+      expect((await prisma.wbsTask.findUniqueOrThrow({ where: { id: task.id } })).sprintId).toBeNull();
+
+      await prisma.wbsTask.delete({ where: { id: task.id } });
+    } finally {
+      await prisma.sprint.delete({ where: { id: sprintB.id } });
+    }
+  });
+
+  it("assignTaskToSprint rejects committing a task into an already-closed sprint", async () => {
+    const { createSprint, closeSprint, createWbsTask, assignTaskToSprint } = await import("@/app/projects/[projectId]/delivery/delivery-actions");
+
+    actAs(pmAUserId);
+    await createSprint(projectA.id, "[TEST] Sprint 3", "2026-04-01", "2026-04-14");
+    const sprint = await prisma.sprint.findFirstOrThrow({ where: { projectId: projectA.id }, orderBy: { createdAt: "desc" } });
+    await closeSprint(sprint.id, projectA.id);
+
+    await createWbsTask(projectA.id);
+    const task = await prisma.wbsTask.findFirstOrThrow({ where: { projectId: projectA.id }, orderBy: { createdAt: "desc" } });
+
+    await expect(assignTaskToSprint(task.id, sprint.id, projectA.id)).rejects.toThrow(/closed/);
+
+    await prisma.wbsTask.delete({ where: { id: task.id } });
+    await prisma.sprint.delete({ where: { id: sprint.id } });
+  });
+
+  it("guessed-ID: PM-A cannot create a Sprint on Project B, or touch a Sprint belonging to Project B", async () => {
+    const { createSprint, updateSprint, closeSprint, deleteSprint } = await import("@/app/projects/[projectId]/delivery/delivery-actions");
+    actAs(pmAUserId);
+    await expect(createSprint(projectB.id, "[TEST] Sneaky Sprint", "2026-05-01", "2026-05-14")).rejects.toThrow();
+
+    const sprintB = await prisma.sprint.create({
+      data: { projectId: projectB.id, name: "[TEST] B Sprint 2", startDate: new Date("2026-06-01"), endDate: new Date("2026-06-14") },
+    });
+    try {
+      await expect(updateSprint(sprintB.id, projectA.id, { name: "hacked" })).rejects.toThrow();
+      await expect(closeSprint(sprintB.id, projectA.id)).rejects.toThrow();
+      await expect(deleteSprint(sprintB.id, projectA.id)).rejects.toThrow();
+      const stillThere = await prisma.sprint.findUniqueOrThrow({ where: { id: sprintB.id } });
+      expect(stillThere.name).toBe("[TEST] B Sprint 2");
+      expect(stillThere.closedAt).toBeNull();
+    } finally {
+      await prisma.sprint.delete({ where: { id: sprintB.id } });
+    }
+  });
+
+  it("closeSprint freezes PV/EV/AV via the 0/100 rule, matching hand-computed numbers", async () => {
+    const {
+      createSprint,
+      createWbsTask,
+      updateWbsTask,
+      assignTaskToSprint,
+      createWbsWeek,
+      addWbsWeekEntry,
+      updateWbsWeekEntry,
+      closeSprint,
+    } = await import("@/app/projects/[projectId]/delivery/delivery-actions");
+
+    actAs(pmAUserId);
+    await createSprint(projectA.id, "[TEST] Sprint 4", "2026-07-01", "2026-07-14");
+    const sprint = await prisma.sprint.findFirstOrThrow({ where: { projectId: projectA.id }, orderBy: { createdAt: "desc" } });
+
+    await createWbsTask(projectA.id);
+    const taskDone = await prisma.wbsTask.findFirstOrThrow({ where: { projectId: projectA.id }, orderBy: { createdAt: "desc" } });
+    await updateWbsTask(taskDone.id, projectA.id, { manDays: 10, personId: engagedPerson.id });
+    await assignTaskToSprint(taskDone.id, sprint.id, projectA.id);
+
+    await createWbsTask(projectA.id);
+    const taskPartial = await prisma.wbsTask.findFirstOrThrow({ where: { projectId: projectA.id }, orderBy: { createdAt: "desc" } });
+    await updateWbsTask(taskPartial.id, projectA.id, { manDays: 6, personId: engagedPerson.id });
+    await assignTaskToSprint(taskPartial.id, sprint.id, projectA.id);
+
+    await createWbsWeek(projectA.id, "2026-07-07");
+    const week = await prisma.wbsWeek.findFirstOrThrow({ where: { projectId: projectA.id }, orderBy: { weekEnding: "desc" } });
+
+    await addWbsWeekEntry(week.id, taskDone.id, projectA.id);
+    const entryDone = await prisma.wbsWeekEntry.findFirstOrThrow({ where: { wbsWeekId: week.id, wbsTaskId: taskDone.id } });
+    await updateWbsWeekEntry(entryDone.id, projectA.id, { pctComplete: 1, actualManDays: 9 });
+
+    await addWbsWeekEntry(week.id, taskPartial.id, projectA.id);
+    const entryPartial = await prisma.wbsWeekEntry.findFirstOrThrow({ where: { wbsWeekId: week.id, wbsTaskId: taskPartial.id } });
+    await updateWbsWeekEntry(entryPartial.id, projectA.id, { pctComplete: 0.6, actualManDays: 4 });
+
+    await closeSprint(sprint.id, projectA.id);
+
+    const closed = await prisma.sprint.findUniqueOrThrow({ where: { id: sprint.id } });
+    expect(closed.closedAt).not.toBeNull();
+    // PV = sum of committed manDays = 10 + 6
+    expect(closed.frozenPlannedManDays).toBe(16);
+    // EV via 0/100 rule: taskDone at 100% earns its 10 manDays; taskPartial at 60% earns 0
+    expect(closed.frozenEarnedManDays).toBe(10);
+    // AV = actualManDays x competencyMultiplier (1.3, Senior), summed: 9*1.3 + 4*1.3
+    expect(closed.frozenActualValue).toBeCloseTo(16.9, 5);
+
+    await expect(closeSprint(sprint.id, projectA.id)).rejects.toThrow(/already closed/);
+
+    await prisma.wbsWeekEntry.deleteMany({ where: { wbsWeekId: week.id } });
+    await prisma.wbsWeek.delete({ where: { id: week.id } });
+    await prisma.wbsTask.deleteMany({ where: { id: { in: [taskDone.id, taskPartial.id] } } });
+    await prisma.sprint.delete({ where: { id: sprint.id } });
+  });
 });
