@@ -43,7 +43,10 @@ export default async function DeliveryWeeklyCpiPage({ params }: { params: { proj
     prisma.sprint.findMany({
       where: { projectId: params.projectId },
       orderBy: { createdAt: "asc" },
-      include: { tasks: { include: { entries: { include: { wbsWeek: true } } } } },
+      include: {
+        tasks: { include: { entries: { include: { wbsWeek: true } } } },
+        allocations: { include: { person: { include: { competency: true } } }, orderBy: { createdAt: "asc" } },
+      },
     }),
   ]);
 
@@ -97,7 +100,16 @@ export default async function DeliveryWeeklyCpiPage({ params }: { params: { proj
       ? s.frozenActualValue ?? 0
       : wbsActualValue(s.tasks.flatMap((t) => t.entries.map((e) => ({ actualManDays: e.actualManDays, competencyMultiplier: e.competencyMultiplier }))));
 
-    return { id: s.id, name: s.name, startDate: s.startDate, endDate: s.endDate, closedAt: s.closedAt, pv, ev, av, tasks: taskDrillDowns };
+    const allocations = s.allocations.map((a) => ({
+      id: a.id,
+      personId: a.personId,
+      personName: a.person.name,
+      competencyLevel: a.person.competency?.level ?? null,
+      allocationPct: a.allocationPct,
+      jiraHours: a.jiraHours,
+    }));
+
+    return { id: s.id, name: s.name, startDate: s.startDate, endDate: s.endDate, closedAt: s.closedAt, pv, ev, av, tasks: taskDrillDowns, allocations };
   });
 
   const rows = weeks.map((w) => {
@@ -144,7 +156,7 @@ export default async function DeliveryWeeklyCpiPage({ params }: { params: { proj
             freeze its numbers permanently once it ends.
           </p>
           {sprintSummaries.map((s) => (
-            <SprintSummaryRow key={s.id} projectId={params.projectId} sprint={s} canWrite={canWrite} />
+            <SprintSummaryRow key={s.id} projectId={params.projectId} sprint={s} roster={roster} canWrite={canWrite} />
           ))}
         </div>
       )}

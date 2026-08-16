@@ -519,3 +519,78 @@ export async function assignTaskToSprint(taskId: string, sprintId: string | null
   });
   revalidateDelivery(task.projectId);
 }
+
+// --- Sprint team allocation (reference-only capacity cross-check, never feeds PV/EV/AV) ---
+
+export async function addSprintAllocation(sprintId: string, personId: string, _projectId: string) {
+  const sprint = await prisma.sprint.findUniqueOrThrow({ where: { id: sprintId } });
+  const user = await requireModuleWrite(sprint.projectId, "DELIVERY");
+
+  if (sprint.closedAt) throw new Error("This sprint is closed and can no longer be edited.");
+
+  const person = await resolvePerson(sprint.projectId, personId);
+
+  const created = await prisma.sprintAllocation.create({
+    data: { sprintId, personId: person.id, allocationPct: 1 },
+  });
+
+  await writeAudit({
+    actor: user,
+    projectId: sprint.projectId,
+    action: "create",
+    entityType: "SprintAllocation",
+    entityId: created.id,
+    summary: `Added ${person.name} to sprint "${sprint.name}"'s team allocation`,
+  });
+  revalidateDelivery(sprint.projectId);
+}
+
+export async function updateSprintAllocation(
+  id: string,
+  _projectId: string,
+  data: Partial<{ allocationPct: number; jiraHours: number | null }>
+) {
+  const existing = await prisma.sprintAllocation.findUniqueOrThrow({ where: { id }, include: { sprint: true } });
+  const user = await requireModuleWrite(existing.sprint.projectId, "DELIVERY");
+
+  if (existing.sprint.closedAt) throw new Error("This sprint is closed and can no longer be edited.");
+
+  await prisma.sprintAllocation.update({
+    where: { id },
+    data: {
+      ...(data.allocationPct !== undefined ? { allocationPct: data.allocationPct } : {}),
+      ...(data.jiraHours !== undefined ? { jiraHours: data.jiraHours } : {}),
+    },
+  });
+
+  await writeAudit({
+    actor: user,
+    projectId: existing.sprint.projectId,
+    action: "update",
+    entityType: "SprintAllocation",
+    entityId: id,
+    summary: "Updated a sprint team allocation",
+    diff: { before: existing, changes: data },
+  });
+  revalidateDelivery(existing.sprint.projectId);
+}
+
+export async function deleteSprintAllocation(id: string, _projectId: string) {
+  const existing = await prisma.sprintAllocation.findUniqueOrThrow({ where: { id }, include: { sprint: true } });
+  const user = await requireModuleWrite(existing.sprint.projectId, "DELIVERY");
+
+  if (existing.sprint.closedAt) throw new Error("This sprint is closed and can no longer be edited.");
+
+  await prisma.sprintAllocation.delete({ where: { id } });
+
+  await writeAudit({
+    actor: user,
+    projectId: existing.sprint.projectId,
+    action: "delete",
+    entityType: "SprintAllocation",
+    entityId: id,
+    summary: "Removed a person from a sprint's team allocation",
+    diff: { before: existing },
+  });
+  revalidateDelivery(existing.sprint.projectId);
+}

@@ -389,4 +389,74 @@ describe("Delivery isolation boundary", () => {
     await prisma.wbsTask.deleteMany({ where: { id: { in: [taskDone.id, taskPartial.id] } } });
     await prisma.sprint.delete({ where: { id: sprint.id } });
   });
+
+  it("addSprintAllocation + updateSprintAllocation + deleteSprintAllocation: CRUD works, and an unengaged person is rejected", async () => {
+    const { createSprint, addSprintAllocation, updateSprintAllocation, deleteSprintAllocation } = await import(
+      "@/app/projects/[projectId]/delivery/delivery-actions"
+    );
+    const unengagedPerson = await prisma.person.create({ data: { name: "[TEST] Not engaged on A (allocation)" } });
+
+    try {
+      actAs(pmAUserId);
+      await createSprint(projectA.id, "[TEST] Sprint 5", "2026-08-01", "2026-08-14");
+      const sprint = await prisma.sprint.findFirstOrThrow({ where: { projectId: projectA.id }, orderBy: { createdAt: "desc" } });
+
+      await expect(addSprintAllocation(sprint.id, unengagedPerson.id, projectA.id)).rejects.toThrow();
+      expect(await prisma.sprintAllocation.count({ where: { sprintId: sprint.id } })).toBe(0);
+
+      await addSprintAllocation(sprint.id, engagedPerson.id, projectA.id);
+      const allocation = await prisma.sprintAllocation.findFirstOrThrow({ where: { sprintId: sprint.id } });
+      expect(allocation.allocationPct).toBe(1);
+      expect(allocation.jiraHours).toBeNull();
+
+      await updateSprintAllocation(allocation.id, projectA.id, { allocationPct: 0.5, jiraHours: 32 });
+      const updated = await prisma.sprintAllocation.findUniqueOrThrow({ where: { id: allocation.id } });
+      expect(updated.allocationPct).toBe(0.5);
+      expect(updated.jiraHours).toBe(32);
+
+      await deleteSprintAllocation(allocation.id, projectA.id);
+      expect(await prisma.sprintAllocation.findUnique({ where: { id: allocation.id } })).toBeNull();
+
+      await prisma.sprint.delete({ where: { id: sprint.id } });
+    } finally {
+      await prisma.person.delete({ where: { id: unengagedPerson.id } });
+    }
+  });
+
+  it("SprintAllocation mutations are rejected once the sprint is closed", async () => {
+    const { createSprint, closeSprint, addSprintAllocation } = await import("@/app/projects/[projectId]/delivery/delivery-actions");
+
+    actAs(pmAUserId);
+    await createSprint(projectA.id, "[TEST] Sprint 6", "2026-09-01", "2026-09-14");
+    const sprint = await prisma.sprint.findFirstOrThrow({ where: { projectId: projectA.id }, orderBy: { createdAt: "desc" } });
+    await closeSprint(sprint.id, projectA.id);
+
+    await expect(addSprintAllocation(sprint.id, engagedPerson.id, projectA.id)).rejects.toThrow(/closed/);
+    expect(await prisma.sprintAllocation.count({ where: { sprintId: sprint.id } })).toBe(0);
+
+    await prisma.sprint.delete({ where: { id: sprint.id } });
+  });
+
+  it("guessed-ID: PM-A cannot touch a SprintAllocation belonging to Project B", async () => {
+    const { updateSprintAllocation, deleteSprintAllocation } = await import("@/app/projects/[projectId]/delivery/delivery-actions");
+    const sprintB = await prisma.sprint.create({
+      data: { projectId: projectB.id, name: "[TEST] B Sprint 3", startDate: new Date("2026-10-01"), endDate: new Date("2026-10-14") },
+    });
+    const personB = await prisma.person.create({ data: { name: "[TEST] B Person for allocation" } });
+    await prisma.projectEngagement.create({ data: { personId: personB.id, projectId: projectB.id, roleOnProject: "Engineer" } });
+    const allocationB = await prisma.sprintAllocation.create({ data: { sprintId: sprintB.id, personId: personB.id, allocationPct: 1 } });
+
+    try {
+      actAs(pmAUserId);
+      await expect(updateSprintAllocation(allocationB.id, projectA.id, { allocationPct: 0.1 })).rejects.toThrow();
+      await expect(deleteSprintAllocation(allocationB.id, projectA.id)).rejects.toThrow();
+      const stillThere = await prisma.sprintAllocation.findUniqueOrThrow({ where: { id: allocationB.id } });
+      expect(stillThere.allocationPct).toBe(1);
+    } finally {
+      await prisma.sprintAllocation.delete({ where: { id: allocationB.id } });
+      await prisma.projectEngagement.deleteMany({ where: { personId: personB.id } });
+      await prisma.person.delete({ where: { id: personB.id } });
+      await prisma.sprint.delete({ where: { id: sprintB.id } });
+    }
+  });
 });

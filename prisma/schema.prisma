@@ -382,9 +382,30 @@ model Sprint {
   frozenEarnedManDays  Float?
   frozenActualValue    Float?
 
-  tasks WbsTask[]
+  tasks       WbsTask[]
+  allocations SprintAllocation[]
 
   @@index([projectId])
+}
+
+// Per-person capacity cross-check for a sprint, matching the original
+// Person/Allocation%/Jira-Hour layout this feature was modeled on.
+// jiraHours is manually typed in by the PM (no live Jira API integration)
+// and is deliberately reference-only — it never feeds PV/EV/AV, so there's
+// no risk of a second, unreconciled source of truth for the Sprint's
+// numbers. Locked once the sprint is closed, same as the rest of Sprint.
+model SprintAllocation {
+  id            String   @id @default(cuid())
+  sprintId      String
+  sprint        Sprint   @relation(fields: [sprintId], references: [id], onDelete: Cascade)
+  personId      String
+  person        Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+  allocationPct Float    @default(1)
+  jiraHours     Float?
+  createdAt     DateTime @default(now())
+
+  @@unique([sprintId, personId])
+  @@index([sprintId])
 }
 
 // One row per WBS task tracked in a given week — pctComplete/actualManDays
@@ -527,6 +548,7 @@ model Person {
   presalesChecklistOwner  PresalesChecklistItem[]
   wbsTasks                WbsTask[]
   wbsWeekEntries          WbsWeekEntry[]
+  sprintAllocations       SprintAllocation[]
 }
 
 enum PresalesOutcome {

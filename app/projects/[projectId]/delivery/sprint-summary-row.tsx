@@ -3,7 +3,9 @@
 import { useState, useTransition } from "react";
 import { formatDate } from "@/lib/format";
 import { INDEX_FAVORABLE_COLOR, INDEX_UNFAVORABLE_COLOR } from "@/lib/colors";
-import { closeSprint } from "./delivery-actions";
+import { InlinePercent, InlineNumber } from "@/components/ui/inline-edit";
+import { closeSprint, addSprintAllocation, updateSprintAllocation, deleteSprintAllocation } from "./delivery-actions";
+import type { RosterPerson } from "./delivery-tasks-table";
 
 function IndexValue({ value }: { value: number | null }) {
   if (value == null) return <span className="text-slate-300">—</span>;
@@ -28,6 +30,15 @@ export type SprintTaskDrillDown = {
   pctComplete: number; // this task's latest tracked % as of now (or at close time, if closed)
 };
 
+export type SprintAllocationData = {
+  id: string;
+  personId: string;
+  personName: string;
+  competencyLevel: string | null;
+  allocationPct: number;
+  jiraHours: number | null;
+};
+
 export type SprintSummaryData = {
   id: string;
   name: string;
@@ -38,7 +49,133 @@ export type SprintSummaryData = {
   ev: number;
   av: number;
   tasks: SprintTaskDrillDown[];
+  allocations: SprintAllocationData[];
 };
+
+/**
+ * Reference-only capacity cross-check ("did they really spend the hours we
+ * assumed") — Jira Hours is manually typed in by the PM (no live Jira API),
+ * and neither field here ever feeds PV/EV/AV.
+ */
+function TeamAllocationPanel({
+  projectId,
+  sprintId,
+  allocations,
+  roster,
+  closed,
+  canWrite,
+}: {
+  projectId: string;
+  sprintId: string;
+  allocations: SprintAllocationData[];
+  roster: RosterPerson[];
+  closed: boolean;
+  canWrite: boolean;
+}) {
+  const [selected, setSelected] = useState("");
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  const available = roster.filter((p) => !allocations.some((a) => a.personId === p.personId));
+  const editable = canWrite && !closed;
+
+  if (allocations.length === 0 && !editable) return null;
+
+  return (
+    <div className="mt-4">
+      <h4 className="text-xs font-semibold text-slate-600 mb-1">Team Allocation (reference only — not part of PV/EV/AV)</h4>
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="text-left text-slate-400">
+            <th className="font-medium py-1 pr-2">Person</th>
+            <th className="font-medium py-1 pr-2 w-24">Allocation</th>
+            <th className="font-medium py-1 pr-2 w-24">Jira Hours</th>
+            {editable && <th className="w-6" />}
+          </tr>
+        </thead>
+        <tbody>
+          {allocations.map((a) => (
+            <tr key={a.id} className="border-t border-slate-100">
+              <td className="py-1.5 pr-2 text-slate-600">
+                {a.personName}
+                {a.competencyLevel ? ` — ${a.competencyLevel}` : ""}
+              </td>
+              <td className="py-1.5 pr-2">
+                {editable ? (
+                  <InlinePercent value={a.allocationPct} onSave={(v) => updateSprintAllocation(a.id, projectId, { allocationPct: v })} />
+                ) : (
+                  <span className="text-slate-600">{Math.round(a.allocationPct * 100)}%</span>
+                )}
+              </td>
+              <td className="py-1.5 pr-2">
+                {editable ? (
+                  <InlineNumber value={a.jiraHours} step={0.5} onSave={(v) => updateSprintAllocation(a.id, projectId, { jiraHours: v })} />
+                ) : (
+                  <span className="text-slate-600">{a.jiraHours ?? "—"}</span>
+                )}
+              </td>
+              {editable && (
+                <td className="py-1.5">
+                  <button
+                    onClick={() => startTransition(() => deleteSprintAllocation(a.id, projectId))}
+                    disabled={pending}
+                    title="Remove from allocation"
+                    className="text-slate-300 hover:text-red-600 disabled:opacity-50"
+                  >
+                    ✕
+                  </button>
+                </td>
+              )}
+            </tr>
+          ))}
+          {allocations.length === 0 && (
+            <tr>
+              <td colSpan={editable ? 4 : 3} className="py-2 text-slate-400">
+                No one allocated to this sprint yet.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+
+      {editable && available.length > 0 && (
+        <div className="mt-2 flex items-center gap-2">
+          <select
+            className="rounded border border-slate-200 px-2 py-1 text-xs hover:border-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-400"
+            value={selected}
+            onChange={(e) => setSelected(e.target.value)}
+            disabled={pending}
+          >
+            <option value="">Add person…</option>
+            {available.map((p) => (
+              <option key={p.personId} value={p.personId}>
+                {p.personName}
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={() =>
+              startTransition(async () => {
+                setError(null);
+                try {
+                  await addSprintAllocation(sprintId, selected, projectId);
+                  setSelected("");
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : "Failed to add person.");
+                }
+              })
+            }
+            disabled={pending || !selected}
+            className="text-xs font-medium text-slate-500 hover:text-slate-800 disabled:opacity-50"
+          >
+            + Add
+          </button>
+          {error && <span className="text-xs text-red-600">{error}</span>}
+        </div>
+      )}
+    </div>
+  );
+}
 
 /**
  * PV/EV/AV are passed in pre-computed: for an open sprint the caller
@@ -46,7 +183,17 @@ export type SprintSummaryData = {
  * they're the permanent frozen* snapshot from the Sprint row — this
  * component never needs to know or care which.
  */
-export function SprintSummaryRow({ projectId, sprint, canWrite }: { projectId: string; sprint: SprintSummaryData; canWrite: boolean }) {
+export function SprintSummaryRow({
+  projectId,
+  sprint,
+  roster,
+  canWrite,
+}: {
+  projectId: string;
+  sprint: SprintSummaryData;
+  roster: RosterPerson[];
+  canWrite: boolean;
+}) {
   const [expanded, setExpanded] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -128,6 +275,15 @@ export function SprintSummaryRow({ projectId, sprint, canWrite }: { projectId: s
               </tr>
             </tbody>
           </table>
+
+          <TeamAllocationPanel
+            projectId={projectId}
+            sprintId={sprint.id}
+            allocations={sprint.allocations}
+            roster={roster}
+            closed={!!sprint.closedAt}
+            canWrite={canWrite}
+          />
 
           {canWrite && !sprint.closedAt && (
             <div className="mt-3 flex items-center gap-2">
