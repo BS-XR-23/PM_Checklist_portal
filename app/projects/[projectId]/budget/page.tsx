@@ -1,52 +1,50 @@
 import { prisma } from "@/lib/prisma";
-import { computeEvm, manDayRate } from "@/lib/calculations";
+import { computeEvm, manDayRate, budgetEntriesFromWbs, toWbsWeekForBudget } from "@/lib/calculations";
 import { formatMoney } from "@/lib/format";
 import { requireModuleAccess } from "@/lib/rbac";
 import { EvmLineChart } from "@/components/charts/evm-line-chart";
 import { SpiCpiChart } from "@/components/charts/spi-cpi-chart";
 import { ContractInputsForm } from "./contract-inputs-form";
-import { AddEntryButton } from "./add-entry-button";
-import { BudgetRow } from "./budget-row";
+import { BudgetRow, type RoleBreakdownRow } from "./budget-row";
+
+export const dynamic = "force-dynamic";
 
 export default async function BudgetTrackerPage({ params }: { params: { projectId: string } }) {
   const access = await requireModuleAccess(params.projectId, "BUDGET_TRACKER", "READ_LIMITED");
-  const canWrite = access === "WRITE";
   const costHidden = access === "READ_LIMITED"; // strips AC / CV / SPI / CPI — cost-side detail
 
-  const [project, entries, engagements] = await Promise.all([
+  const [project, weeks] = await Promise.all([
     prisma.project.findUniqueOrThrow({ where: { id: params.projectId } }),
-    prisma.budgetEntry.findMany({
+    prisma.wbsWeek.findMany({
       where: { projectId: params.projectId },
       orderBy: { weekEnding: "asc" },
-      include: { roleCosts: { orderBy: { createdAt: "asc" } } },
-    }),
-    // The Actual Cost breakdown picker only offers people actually engaged
-    // on this project — not filtered to "currently active," since a
-    // BudgetEntry is inherently historical and someone who's since rolled
-    // off may still need cost logged for a week they were on the project.
-    prisma.projectEngagement.findMany({
-      where: { projectId: params.projectId },
-      include: { person: { include: { roleRate: true } } },
-      orderBy: { person: { name: "asc" } },
+      include: {
+        entries: {
+          orderBy: { createdAt: "asc" },
+          include: { wbsTask: true, person: { include: { roleRate: true } } },
+        },
+      },
     }),
   ]);
 
-  const roster = Array.from(new Map(engagements.map((e) => [e.personId, e])).values()).map((e) => ({
-    personId: e.person.id,
-    personName: e.person.name,
-    roleName: e.person.roleRate?.roleName ?? null,
-    manDayRate: e.person.roleRate?.manDayRate ?? null,
-  }));
-
-  const evm = computeEvm(entries, project.contractValue);
+  const evmSource = budgetEntriesFromWbs(toWbsWeekForBudget(weeks), project.plannedManDays);
+  const evm = computeEvm(evmSource, project.contractValue);
   const rate = manDayRate(project.contractValue, project.plannedManDays);
 
-  const chartData = evm.map((e) => ({
-    weekEnding: e.weekEnding.toISOString(),
-    pv: e.pv,
-    ev: e.ev,
-    ac: e.actualCost,
-  }));
+  const roleBreakdowns: RoleBreakdownRow[][] = weeks.map((w) => {
+    const groups = new Map<string, RoleBreakdownRow>();
+    for (const e of w.entries) {
+      const roleName = e.person?.roleRate?.roleName ?? "Unassigned / No Rate Role";
+      const rowRate = e.person?.roleRate?.manDayRate ?? 0;
+      const existing = groups.get(roleName) ?? { roleName, manDays: 0, manDayRate: rowRate, cost: 0 };
+      existing.manDays += e.actualManDays;
+      existing.cost += e.actualManDays * rowRate;
+      groups.set(roleName, existing);
+    }
+    return Array.from(groups.values()).filter((g) => g.manDays > 0);
+  });
+
+  const chartData = evm.map((e) => ({ weekEnding: e.weekEnding.toISOString(), pv: e.pv, ev: e.ev, ac: e.actualCost }));
   const spiCpiData = evm.map((e) => ({ weekEnding: e.weekEnding.toISOString(), spi: e.spi, cpi: e.cpi }));
 
   return (
@@ -54,21 +52,22 @@ export default async function BudgetTrackerPage({ params }: { params: { projectI
       <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
         <p className="text-sm font-medium text-amber-900">Testing purposes only — not the authoritative budget source.</p>
         <p className="text-xs text-amber-700 mt-0.5">
-          Real budget tracking now lives in a separate portal. This tab is Admin-only and kept for testing.
+          Real budget tracking now lives in a separate portal. Read-only here — every figure is derived live from the
+          Delivery tab&apos;s WBS tracking, nothing is entered directly on this page.
         </p>
       </div>
 
       <div>
         <h2 className="text-base font-semibold text-slate-900">Budget / CPI-SPI Tracker</h2>
         <p className="text-sm text-slate-500">
-          EV = %Actual Complete x Contract Value. PV = %Planned Complete x Contract Value. SPI = EV/PV. CPI = EV/AC.
-          &ge;1.0 favorable, &lt;1.0 unfavorable. %Actual Complete is synced from the checklist; AC is the sum of
-          actual man-days logged per role each week (click a row&apos;s AC to expand).
+          PV/EV = cumulative % of Total Planned Man-Days tracked/earned on the Delivery WBS, × Contract Value. AC =
+          that week&apos;s actual man-days × each assignee&apos;s Rate Role (Admin → People). SPI = EV/PV. CPI =
+          EV/AC. &ge;1.0 favorable, &lt;1.0 unfavorable.
         </p>
       </div>
 
       <div className="rounded-lg border border-slate-200 bg-white p-4">
-        {canWrite ? (
+        {access === "WRITE" ? (
           <>
             <ContractInputsForm projectId={project.id} contractValue={project.contractValue} plannedManDays={project.plannedManDays} />
             <p className="mt-2 text-xs text-slate-500">Man-Day Rate (auto): {formatMoney(rate)}</p>
@@ -100,10 +99,7 @@ export default async function BudgetTrackerPage({ params }: { params: { projectI
         </div>
       )}
 
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-slate-700">Weekly Entries</h3>
-        {canWrite && <AddEntryButton projectId={project.id} />}
-      </div>
+      <h3 className="text-sm font-semibold text-slate-700">Weekly (from Delivery)</h3>
 
       <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
         <div className="overflow-x-auto max-h-[32rem] overflow-y-auto">
@@ -115,30 +111,22 @@ export default async function BudgetTrackerPage({ params }: { params: { projectI
                 <th className="px-4 py-3 font-medium w-40">% Actual Complete (Cum.)</th>
                 <th className="px-4 py-3 font-medium w-28">PV</th>
                 <th className="px-4 py-3 font-medium w-28">EV</th>
-                {!costHidden && <th className="px-4 py-3 font-medium w-32">AC (by role)</th>}
+                {!costHidden && <th className="px-4 py-3 font-medium w-48">AC (by role)</th>}
                 {!costHidden && <th className="px-4 py-3 font-medium w-28">CV (EV-AC)</th>}
                 {!costHidden && <th className="px-4 py-3 font-medium w-24">SPI</th>}
                 {!costHidden && <th className="px-4 py-3 font-medium w-24">CPI</th>}
-                <th className="px-4 py-3 font-medium min-w-[160px]">Notes</th>
-                {canWrite && <th className="px-4 py-3 font-medium w-8" />}
               </tr>
             </thead>
             <tbody>
               {evm.map((e, i) => (
-                <BudgetRow
-                  key={entries[i].id}
-                  projectId={project.id}
-                  entry={entries[i]}
-                  evm={e}
-                  canWrite={canWrite}
-                  costHidden={costHidden}
-                  roster={roster}
-                />
+                <BudgetRow key={weeks[i].id} weekId={weeks[i].id} evm={e} roleBreakdown={roleBreakdowns[i]} costHidden={costHidden} />
               ))}
             </tbody>
           </table>
         </div>
-        {entries.length === 0 && <p className="text-sm text-slate-400 p-4">No weekly entries yet.</p>}
+        {weeks.length === 0 && (
+          <p className="text-sm text-slate-400 p-4">No tracking weeks yet — add one on the Delivery tab&apos;s Weekly CPI page.</p>
+        )}
       </div>
     </div>
   );

@@ -3,61 +3,51 @@
 import { revalidatePath } from "next/cache";
 import * as XLSX from "xlsx";
 import { prisma } from "@/lib/prisma";
+import { parseDateInput } from "@/lib/format";
 import { requireModuleWrite, writeAudit } from "@/lib/rbac";
 
 function revalidateDelivery(projectId: string) {
   revalidatePath(`/projects/${projectId}/delivery`);
   revalidatePath(`/projects/${projectId}/delivery/tasks`);
+  revalidatePath(`/projects/${projectId}/budget`);
+  revalidatePath(`/projects/${projectId}/dashboard`);
 }
 
-export async function createWbsWeek(projectId: string) {
+async function resolvePerson(projectId: string, personId: string) {
+  const person = await prisma.person.findUniqueOrThrow({ where: { id: personId }, include: { competency: true } });
+  const engaged = await prisma.projectEngagement.findFirst({ where: { personId: person.id, projectId } });
+  if (!engaged) throw new Error(`${person.name} isn't engaged on this project — assign them on the Team → Engagement tab first.`);
+  return person;
+}
+
+// --- Master WBS (Tasks tab) ---
+
+export async function createWbsTask(projectId: string) {
   const user = await requireModuleWrite(projectId, "DELIVERY");
 
-  const last = await prisma.wbsWeek.findFirst({ where: { projectId }, orderBy: { weekEnding: "desc" } });
-  const nextWeek = last ? new Date(last.weekEnding.getTime() + 7 * 24 * 60 * 60 * 1000) : new Date();
-
-  const created = await prisma.wbsWeek.create({ data: { projectId, weekEnding: nextWeek } });
-
-  await writeAudit({ actor: user, projectId, action: "create", entityType: "WbsWeek", entityId: created.id, summary: "Added a weekly WBS entry" });
-  revalidateDelivery(projectId);
-}
-
-export async function addWbsTask(wbsWeekId: string, _projectId: string) {
-  const week = await prisma.wbsWeek.findUniqueOrThrow({ where: { id: wbsWeekId } });
-  const user = await requireModuleWrite(week.projectId, "DELIVERY");
-
   const created = await prisma.wbsTask.create({
-    data: { wbsWeekId, wbsNumber: "", title: "New task", manDays: 0, pctComplete: 0, actualManDays: 0 },
+    data: { projectId, wbsNumber: "", title: "New task", manDays: 0 },
   });
 
-  await writeAudit({ actor: user, projectId: week.projectId, action: "create", entityType: "WbsTask", entityId: created.id, summary: "Added a WBS task" });
-  revalidateDelivery(week.projectId);
+  await writeAudit({ actor: user, projectId, action: "create", entityType: "WbsTask", entityId: created.id, summary: "Added a WBS task" });
+  revalidateDelivery(projectId);
 }
 
 export async function updateWbsTask(
   id: string,
   _projectId: string,
-  data: Partial<{ wbsNumber: string; title: string; manDays: number; pctComplete: number; actualManDays: number; personId: string | null }>
+  data: Partial<{ wbsNumber: string; title: string; manDays: number; personId: string | null }>
 ) {
-  // Guessed-ID fix: authorize against the task's real project via its week.
-  const existing = await prisma.wbsTask.findUniqueOrThrow({ where: { id }, include: { wbsWeek: true } });
-  const user = await requireModuleWrite(existing.wbsWeek.projectId, "DELIVERY");
+  const existing = await prisma.wbsTask.findUniqueOrThrow({ where: { id } });
+  const user = await requireModuleWrite(existing.projectId, "DELIVERY");
 
-  // Choosing a person re-snapshots personName/competencyMultiplier from
-  // their current Competency — a later Competency edit must never rewrite
-  // this task's already-recorded Actual Value. Must actually be engaged on
-  // this project (never trust the client-side roster filter as the real
-  // boundary). No Competency set means baseline (1.0), not an error — not
-  // every assignee needs to be rated to be assigned.
-  let personFields: { personId?: string | null; personName?: string | null; competencyMultiplier?: number } = {};
+  let personFields: { personId?: string | null; personName?: string | null } = {};
   if (data.personId !== undefined) {
     if (data.personId === null) {
-      personFields = { personId: null, personName: null, competencyMultiplier: 1 };
+      personFields = { personId: null, personName: null };
     } else {
-      const person = await prisma.person.findUniqueOrThrow({ where: { id: data.personId }, include: { competency: true } });
-      const engaged = await prisma.projectEngagement.findFirst({ where: { personId: person.id, projectId: existing.wbsWeek.projectId } });
-      if (!engaged) throw new Error(`${person.name} isn't engaged on this project — assign them on the Team → Engagement tab first.`);
-      personFields = { personId: person.id, personName: person.name, competencyMultiplier: person.competency?.multiplier ?? 1 };
+      const person = await resolvePerson(existing.projectId, data.personId);
+      personFields = { personId: person.id, personName: person.name };
     }
   }
 
@@ -67,15 +57,13 @@ export async function updateWbsTask(
       ...(data.wbsNumber !== undefined ? { wbsNumber: data.wbsNumber } : {}),
       ...(data.title !== undefined ? { title: data.title } : {}),
       ...(data.manDays !== undefined ? { manDays: data.manDays } : {}),
-      ...(data.pctComplete !== undefined ? { pctComplete: data.pctComplete } : {}),
-      ...(data.actualManDays !== undefined ? { actualManDays: data.actualManDays } : {}),
       ...personFields,
     },
   });
 
   await writeAudit({
     actor: user,
-    projectId: existing.wbsWeek.projectId,
+    projectId: existing.projectId,
     action: "update",
     entityType: "WbsTask",
     entityId: id,
@@ -83,18 +71,23 @@ export async function updateWbsTask(
     diff: { before: existing, changes: data },
   });
 
-  revalidateDelivery(existing.wbsWeek.projectId);
+  revalidateDelivery(existing.projectId);
 }
 
 export async function deleteWbsTask(id: string, _projectId: string) {
-  const existing = await prisma.wbsTask.findUniqueOrThrow({ where: { id }, include: { wbsWeek: true } });
-  const user = await requireModuleWrite(existing.wbsWeek.projectId, "DELIVERY");
+  const existing = await prisma.wbsTask.findUniqueOrThrow({ where: { id } });
+  const user = await requireModuleWrite(existing.projectId, "DELIVERY");
+
+  const entryCount = await prisma.wbsWeekEntry.count({ where: { wbsTaskId: id } });
+  if (entryCount > 0) {
+    throw new Error(`This task has logged progress in ${entryCount} week${entryCount === 1 ? "" : "s"} — remove those entries first.`);
+  }
 
   await prisma.wbsTask.delete({ where: { id } });
 
   await writeAudit({
     actor: user,
-    projectId: existing.wbsWeek.projectId,
+    projectId: existing.projectId,
     action: "delete",
     entityType: "WbsTask",
     entityId: id,
@@ -102,13 +95,12 @@ export async function deleteWbsTask(id: string, _projectId: string) {
     diff: { before: existing },
   });
 
-  revalidateDelivery(existing.wbsWeek.projectId);
+  revalidateDelivery(existing.projectId);
 }
 
-type UploadRow = { wbsNumber: string; title: string; manDays: number; pctComplete: number; actualManDays: number; assignee: string | null };
+type UploadRow = { wbsNumber: string; title: string; manDays: number; assignee: string | null };
 
-/** Header aliases so a PM's existing spreadsheet columns (matching the
- * VUMI-style sheet reviewed earlier) work without renaming anything first. */
+/** Header aliases so a PM's existing spreadsheet columns work without renaming anything first. */
 const HEADER_ALIASES: Record<string, keyof UploadRow> = {
   "wbs#": "wbsNumber",
   wbs: "wbsNumber",
@@ -118,12 +110,6 @@ const HEADER_ALIASES: Record<string, keyof UploadRow> = {
   "man days": "manDays",
   "man-days": "manDays",
   mandays: "manDays",
-  "%": "pctComplete",
-  pct: "pctComplete",
-  "% complete": "pctComplete",
-  "actual man days": "actualManDays",
-  "actual man-days": "actualManDays",
-  "actual mandays": "actualManDays",
   assignee: "assignee",
   person: "assignee",
 };
@@ -143,73 +129,182 @@ function parseUploadRows(buffer: ArrayBuffer): UploadRow[] {
           const s = String(value).trim();
           (row as Record<string, unknown>)[field] = s || (field === "assignee" ? null : "");
         } else {
-          // "%" columns may arrive as "70%" (string) or 70 (already a whole percent) — normalize to a 0..1 fraction.
-          const n = typeof value === "number" ? value : Number(String(value).replace("%", "").trim());
-          const normalized = field === "pctComplete" && !Number.isNaN(n) && n > 1 ? n / 100 : n;
-          (row as Record<string, unknown>)[field] = Number.isNaN(normalized) ? 0 : normalized;
+          const n = typeof value === "number" ? value : Number(String(value).trim());
+          (row as Record<string, unknown>)[field] = Number.isNaN(n) ? 0 : n;
         }
       }
       return {
         wbsNumber: row.wbsNumber ?? "",
         title: row.title ?? "",
         manDays: row.manDays ?? 0,
-        pctComplete: row.pctComplete ?? 0,
-        actualManDays: row.actualManDays ?? 0,
         assignee: row.assignee ?? null,
       };
     })
     .filter((r) => r.title !== ""); // skip fully-blank trailing rows
 }
 
-export async function uploadWbsTasks(wbsWeekId: string, _projectId: string, formData: FormData) {
-  const week = await prisma.wbsWeek.findUniqueOrThrow({ where: { id: wbsWeekId } });
-  const user = await requireModuleWrite(week.projectId, "DELIVERY");
+export async function uploadWbsTasks(projectId: string, formData: FormData) {
+  const user = await requireModuleWrite(projectId, "DELIVERY");
 
-  // `instanceof Blob`, not `File` — Node has no global File constructor,
-  // and a plain Blob (as constructed in tests) is all `.arrayBuffer()`
-  // actually needs; `.name` is read defensively below since only File has it.
   const file = formData.get("file");
   if (!(file instanceof Blob)) throw new Error("No file uploaded.");
   const fileName = "name" in file && typeof file.name === "string" ? file.name : "upload";
 
   const buffer = await file.arrayBuffer();
   const rows = parseUploadRows(buffer);
-  if (rows.length === 0) throw new Error("No rows found in the uploaded file — check it has WBS#/Title/Man-days/% columns.");
+  if (rows.length === 0) throw new Error("No rows found in the uploaded file — check it has WBS#/Title/Man-days columns.");
 
   // Assignee matches by exact Person.name (case-insensitive) among people
   // actually engaged on this project. No match leaves the row unassigned
   // rather than failing the whole upload — a name typo shouldn't block
   // everyone else's rows from importing.
-  const engagements = await prisma.projectEngagement.findMany({
-    where: { projectId: week.projectId },
-    include: { person: { include: { competency: true } } },
-  });
+  const engagements = await prisma.projectEngagement.findMany({ where: { projectId }, include: { person: true } });
   const byName = new Map(engagements.map((e) => [e.person.name.trim().toLowerCase(), e.person]));
 
   await prisma.wbsTask.createMany({
     data: rows.map((r) => {
       const person = r.assignee ? byName.get(r.assignee.trim().toLowerCase()) : undefined;
       return {
-        wbsWeekId,
+        projectId,
         wbsNumber: r.wbsNumber,
         title: r.title,
         manDays: r.manDays,
-        pctComplete: r.pctComplete,
-        actualManDays: r.actualManDays,
         personId: person?.id ?? null,
         personName: person?.name ?? null,
-        competencyMultiplier: person?.competency?.multiplier ?? 1,
       };
     }),
   });
 
   await writeAudit({
     actor: user,
-    projectId: week.projectId,
+    projectId,
     action: "create",
     entityType: "WbsTask",
     summary: `Uploaded ${rows.length} WBS task${rows.length === 1 ? "" : "s"} from ${fileName}`,
   });
 
+  revalidateDelivery(projectId);
+}
+
+// --- Weekly tracking (Weekly CPI tab) ---
+
+export async function createWbsWeek(projectId: string, weekEnding: string | null) {
+  const user = await requireModuleWrite(projectId, "DELIVERY");
+
+  const parsed = weekEnding ? parseDateInput(weekEnding) : null;
+  const resolvedDate =
+    parsed ??
+    (await (async () => {
+      const last = await prisma.wbsWeek.findFirst({ where: { projectId }, orderBy: { weekEnding: "desc" } });
+      return last ? new Date(last.weekEnding.getTime() + 7 * 24 * 60 * 60 * 1000) : new Date();
+    })());
+
+  const created = await prisma.wbsWeek.create({ data: { projectId, weekEnding: resolvedDate } });
+
+  await writeAudit({ actor: user, projectId, action: "create", entityType: "WbsWeek", entityId: created.id, summary: "Added a tracking week" });
+  revalidateDelivery(projectId);
+}
+
+/**
+ * Two independent parent chains (week→project, task→project) must both be
+ * verified — the first two-parent guessed-ID case in this codebase. Never
+ * trust the caller's projectId; derive it from the week/task themselves and
+ * require they agree before authorizing anything.
+ */
+export async function addWbsWeekEntry(wbsWeekId: string, wbsTaskId: string, _projectId: string) {
+  const [week, task] = await Promise.all([
+    prisma.wbsWeek.findUniqueOrThrow({ where: { id: wbsWeekId } }),
+    prisma.wbsTask.findUniqueOrThrow({ where: { id: wbsTaskId } }),
+  ]);
+  if (week.projectId !== task.projectId) {
+    throw new Error("This task and week belong to different projects.");
+  }
+  const user = await requireModuleWrite(week.projectId, "DELIVERY");
+
+  let competencyMultiplier = 1;
+  if (task.personId) {
+    const person = await prisma.person.findUnique({ where: { id: task.personId }, include: { competency: true } });
+    competencyMultiplier = person?.competency?.multiplier ?? 1;
+  }
+
+  const created = await prisma.wbsWeekEntry.create({
+    data: {
+      wbsWeekId,
+      wbsTaskId,
+      pctComplete: 0,
+      actualManDays: 0,
+      personId: task.personId,
+      personName: task.personName,
+      competencyMultiplier,
+    },
+  });
+
+  await writeAudit({
+    actor: user,
+    projectId: week.projectId,
+    action: "create",
+    entityType: "WbsWeekEntry",
+    entityId: created.id,
+    summary: `Added "${task.title}" to a tracking week`,
+  });
   revalidateDelivery(week.projectId);
+}
+
+export async function updateWbsWeekEntry(
+  id: string,
+  _projectId: string,
+  data: Partial<{ pctComplete: number; actualManDays: number; personId: string | null }>
+) {
+  const existing = await prisma.wbsWeekEntry.findUniqueOrThrow({ where: { id }, include: { wbsWeek: true } });
+  const user = await requireModuleWrite(existing.wbsWeek.projectId, "DELIVERY");
+
+  let personFields: { personId?: string | null; personName?: string | null; competencyMultiplier?: number } = {};
+  if (data.personId !== undefined) {
+    if (data.personId === null) {
+      personFields = { personId: null, personName: null, competencyMultiplier: 1 };
+    } else {
+      const person = await resolvePerson(existing.wbsWeek.projectId, data.personId);
+      personFields = { personId: person.id, personName: person.name, competencyMultiplier: person.competency?.multiplier ?? 1 };
+    }
+  }
+
+  await prisma.wbsWeekEntry.update({
+    where: { id },
+    data: {
+      ...(data.pctComplete !== undefined ? { pctComplete: data.pctComplete } : {}),
+      ...(data.actualManDays !== undefined ? { actualManDays: data.actualManDays } : {}),
+      ...personFields,
+    },
+  });
+
+  await writeAudit({
+    actor: user,
+    projectId: existing.wbsWeek.projectId,
+    action: "update",
+    entityType: "WbsWeekEntry",
+    entityId: id,
+    summary: "Updated a week's tracked progress on a WBS task",
+    diff: { before: existing, changes: data },
+  });
+
+  revalidateDelivery(existing.wbsWeek.projectId);
+}
+
+export async function deleteWbsWeekEntry(id: string, _projectId: string) {
+  const existing = await prisma.wbsWeekEntry.findUniqueOrThrow({ where: { id }, include: { wbsWeek: true } });
+  const user = await requireModuleWrite(existing.wbsWeek.projectId, "DELIVERY");
+
+  await prisma.wbsWeekEntry.delete({ where: { id } });
+
+  await writeAudit({
+    actor: user,
+    projectId: existing.wbsWeek.projectId,
+    action: "delete",
+    entityType: "WbsWeekEntry",
+    entityId: id,
+    summary: "Removed a WBS task from a tracking week",
+    diff: { before: existing },
+  });
+
+  revalidateDelivery(existing.wbsWeek.projectId);
 }

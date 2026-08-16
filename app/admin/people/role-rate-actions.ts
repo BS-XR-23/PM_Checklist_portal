@@ -43,10 +43,11 @@ export async function deleteRoleRate(roleRateId: string) {
   const admin = await requirePersonAdmin();
   const existing = await prisma.roleRate.findUniqueOrThrow({ where: { id: roleRateId } });
 
-  // Deleting doesn't touch any BudgetEntryRoleCost that already used this
-  // rate — those rows snapshotted roleName/manDayRate at the time, so
-  // historical actual-cost figures are unaffected (roleRateId just goes
-  // null via onDelete: SetNull).
+  // Budget Tracker resolves each person's Rate Role live (not snapshotted —
+  // it's a "testing purposes only" derived view, not the authoritative cost
+  // record), so deleting a RoleRate in use here means anyone still on it
+  // drops to $0 in Budget Tracker's AC going forward, including for weeks
+  // already logged (roleRateId just goes null via onDelete: SetNull).
   await prisma.roleRate.delete({ where: { id: roleRateId } });
 
   await writeAudit({ actor: admin, action: "delete", entityType: "RoleRate", entityId: roleRateId, summary: `Deleted Role Rate "${existing.roleName}"` });

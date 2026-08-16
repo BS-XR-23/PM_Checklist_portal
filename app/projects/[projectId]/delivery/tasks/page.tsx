@@ -1,8 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { requireModuleAccess } from "@/lib/rbac";
 import { SubNav } from "@/components/ui/sub-nav";
-import { AddWeekButton } from "../add-week-button";
-import { DeliveryWeekRow } from "../delivery-week-row";
+import { WbsTasksTable } from "../delivery-tasks-table";
+import { UploadWbsTasksForm } from "../upload-wbs-tasks-form";
 
 export const dynamic = "force-dynamic";
 
@@ -10,12 +10,8 @@ export default async function DeliveryTasksPage({ params }: { params: { projectI
   const access = await requireModuleAccess(params.projectId, "DELIVERY", "READ_LIMITED");
   const canWrite = access === "WRITE";
 
-  const [weeks, engagements] = await Promise.all([
-    prisma.wbsWeek.findMany({
-      where: { projectId: params.projectId },
-      orderBy: { weekEnding: "asc" },
-      include: { tasks: { orderBy: { createdAt: "asc" } } },
-    }),
+  const [tasks, engagements] = await Promise.all([
+    prisma.wbsTask.findMany({ where: { projectId: params.projectId }, orderBy: { createdAt: "asc" } }),
     prisma.projectEngagement.findMany({
       where: { projectId: params.projectId },
       include: { person: { include: { competency: true } } },
@@ -38,27 +34,16 @@ export default async function DeliveryTasksPage({ params }: { params: { projectI
           { href: "/delivery/tasks", label: "Tasks" },
         ]}
       />
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-base font-semibold text-slate-900">Delivery — Tasks</h2>
-          <p className="text-sm text-slate-500">
-            The WBS task list, per week — Man-days and % are the estimate, Actual Man-days is real days spent. Feeds
-            Weekly CPI directly; nothing here needs to be entered twice.
-          </p>
-        </div>
-        {canWrite && <AddWeekButton projectId={params.projectId} />}
+      <div>
+        <h2 className="text-base font-semibold text-slate-900">Delivery — Tasks</h2>
+        <p className="text-sm text-slate-500">
+          The project-wide WBS — defined once here, tracked week by week on the Weekly CPI tab. Man-days is the
+          estimate; the default assignee here is just a starting point, overridable per week.
+        </p>
       </div>
 
-      <div className="space-y-3">
-        {weeks.map((w) => (
-          <DeliveryWeekRow key={w.id} projectId={params.projectId} week={w} roster={roster} canWrite={canWrite} />
-        ))}
-        {weeks.length === 0 && (
-          <div className="rounded-lg border border-slate-200 bg-white p-4">
-            <p className="text-sm text-slate-400">No WBS weeks yet.</p>
-          </div>
-        )}
-      </div>
+      <WbsTasksTable projectId={params.projectId} tasks={tasks} roster={roster} canWrite={canWrite} />
+      {canWrite && <UploadWbsTasksForm projectId={params.projectId} />}
     </div>
   );
 }

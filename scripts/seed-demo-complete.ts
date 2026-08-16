@@ -1,7 +1,8 @@
 // Marks the "[DEMO]" project's full lifecycle as complete: every PM +
 // DevOps checklist item COMPLETED with demo owner/dates/notes, every
-// milestone paid & signed off, the demo risk closed, and a budget history
-// that ends at 100% complete, on schedule, slightly under cost — so the
+// milestone paid & signed off, the demo risk closed, and a WBS tracking
+// history (Delivery tab) that ends at 100% complete, on schedule, slightly
+// under cost — Budget Tracker derives SPI/CPI from this live, so the
 // Dashboard/Portfolio show a clean, finished, "Green" project for a demo
 // walkthrough. Only touches rows already created by `npm run seed-demo`.
 import { PrismaClient } from "@prisma/client";
@@ -78,20 +79,52 @@ async function main() {
   }
   console.log(`Closed ${demoRisks.length} open risk(s).`);
 
-  // Weekly budget history climbing to 100% complete, on schedule, ~5% under cost.
-  const weeks = [0.25, 0.5, 0.75, 1.0];
-  await prisma.budgetEntry.deleteMany({ where: { projectId: demoProject.id } });
-  await prisma.budgetEntry.createMany({
-    data: weeks.map((pct, i) => ({
-      projectId: demoProject.id,
-      weekEnding: daysAgo((weeks.length - 1 - i) * 21),
-      pctPlannedComplete: pct,
-      pctActualComplete: pct,
-      actualCost: demoProject.contractValue * pct * 0.95,
-      notes: i === weeks.length - 1 ? "Project complete — demo walkthrough data." : undefined,
-    })),
+  // WBS tracking history (Delivery tab) climbing to 100% complete, on
+  // schedule, ~5% under cost — Budget Tracker derives SPI/CPI from this
+  // live, so seeding it here (not a separate BudgetEntry) is what makes
+  // the Dashboard/Portfolio show Green.
+  const demoRoleRate = await prisma.roleRate.upsert({
+    where: { roleName: "[DEMO] Developer" },
+    update: {},
+    create: { roleName: "[DEMO] Developer", manDayRate: (demoProject.contractValue / demoProject.plannedManDays) * 0.95 },
   });
-  console.log(`Wrote ${weeks.length} budget entries ending at 100% complete, SPI 1.0 / CPI ~1.05.`);
+  await prisma.person.updateMany({ where: { id: { in: demoPeople.map((p) => p.id) } }, data: { roleRateId: demoRoleRate.id } });
+
+  await prisma.wbsWeek.deleteMany({ where: { projectId: demoProject.id } }); // cascades tasks' week-entries
+  await prisma.wbsTask.deleteMany({ where: { projectId: demoProject.id } });
+
+  const taskManDays = [25, 25, 20, 20]; // sums to plannedManDays (90)
+  const tasks = await Promise.all(
+    taskManDays.map((manDays, i) =>
+      prisma.wbsTask.create({
+        data: {
+          projectId: demoProject.id,
+          wbsNumber: String(i + 1),
+          title: `Demo workstream ${i + 1}`,
+          manDays,
+          personId: demoPeople[i % demoPeople.length].id,
+          personName: demoPeople[i % demoPeople.length].name,
+        },
+      })
+    )
+  );
+
+  const weeks = [0.25, 0.5, 0.75, 1.0];
+  for (let i = 0; i < weeks.length; i++) {
+    const pct = weeks[i];
+    const week = await prisma.wbsWeek.create({ data: { projectId: demoProject.id, weekEnding: daysAgo((weeks.length - 1 - i) * 21) } });
+    await prisma.wbsWeekEntry.createMany({
+      data: tasks.map((t) => ({
+        wbsWeekId: week.id,
+        wbsTaskId: t.id,
+        pctComplete: pct,
+        actualManDays: t.manDays * pct,
+        personId: t.personId,
+        personName: t.personName,
+      })),
+    });
+  }
+  console.log(`Wrote ${weeks.length} WBS tracking weeks ending at 100% complete, SPI 1.0 / CPI ~1.05.`);
 
   console.log(`\nDone. Dashboard: /projects/${demoProject.id}/dashboard — should now show Green on /portfolio.`);
 }

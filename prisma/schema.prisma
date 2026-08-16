@@ -74,7 +74,6 @@ model Project {
   checklistItems  ChecklistItem[]
   risks           RiskItem[]
   changeRequests  ChangeRequest[]
-  budgetEntries   BudgetEntry[]
   pmPlan          PMPlan?
   memberships     ProjectMembership[]
   auditLogs       AuditLog[]
@@ -84,6 +83,7 @@ model Project {
   actionItems     ActionItem[]
   wonFromPresales PresalesProject?
   wbsWeeks        WbsWeek[]
+  wbsTasks        WbsTask[]
 }
 
 /// A user's access to one specific project. Only meaningful for PM/CLIENT/LIMITED
@@ -282,32 +282,19 @@ model ChangeRequest {
   @@unique([projectId, crCode])
 }
 
-model BudgetEntry {
-  id                 String   @id @default(cuid())
-  projectId          String
-  project            Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  weekEnding         DateTime
-  pctPlannedComplete Float
-  pctActualComplete  Float // set via "Sync from Checklist", not hand-typed — see checklistCompletionPct()
-  actualCost         Float // cached sum of roleCosts — see recomputeActualCost()
-  notes              String?
-
-  roleCosts BudgetEntryRoleCost[]
-
-  @@unique([projectId, weekEnding])
-}
-
 // Admin-managed rate card, by role — not by named person, so no
-// salary-like data is stored against an individual. Used to auto-compute
-// BudgetEntry.actualCost from actual man-days logged per role each week.
+// salary-like data is stored against an individual. Budget Tracker resolves
+// each WbsWeekEntry's assignee to their RoleRate live, at read time (not
+// snapshotted — Budget Tracker is a "testing purposes only" derived view,
+// not the authoritative cost record, so drift on rename/rate-change is an
+// acceptable trade against duplicating Competency's snapshot machinery).
 model RoleRate {
   id         String   @id @default(cuid())
   roleName   String   @unique
   manDayRate Float
   createdAt  DateTime @default(now())
 
-  budgetEntryRoleCosts BudgetEntryRoleCost[]
-  people               Person[]
+  people Person[]
 }
 
 // Velocity/capacity multiplier — separate axis from RoleRate. RoleRate
@@ -324,54 +311,53 @@ model Competency {
   people Person[]
 }
 
-// One row per role logged against a week's BudgetEntry. roleName/manDayRate
-// are snapshotted from RoleRate at add/edit time — a later rename or
-// deletion of the RoleRate must never rewrite historical cost data.
-// personId/personName tie the row to who actually did the work (resolved
-// via their People-registry Rate Role) — nullable because rows created
-// before this existed are pure role-only history, left untouched.
-model BudgetEntryRoleCost {
-  id            String      @id @default(cuid())
-  budgetEntryId String
-  budgetEntry   BudgetEntry @relation(fields: [budgetEntryId], references: [id], onDelete: Cascade)
-  personId      String?
-  person        Person?     @relation(fields: [personId], references: [id], onDelete: SetNull)
-  personName    String?
-  roleRateId    String?
-  roleRate      RoleRate?   @relation(fields: [roleRateId], references: [id], onDelete: SetNull)
-  roleName      String
-  manDayRate    Float
-  manDays       Float       @default(0)
-  createdAt     DateTime    @default(now())
-
-  @@index([budgetEntryId])
-}
-
 model WbsWeek {
-  id         String    @id @default(cuid())
+  id         String         @id @default(cuid())
   projectId  String
-  project    Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project    Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   weekEnding DateTime
-  createdAt  DateTime  @default(now())
-  tasks      WbsTask[]
+  createdAt  DateTime       @default(now())
+  entries    WbsWeekEntry[]
 
   @@unique([projectId, weekEnding])
   @@index([projectId])
 }
 
-// manDays/pctComplete are the estimate side (drives Weekly CPI's Planned
-// Value / Earned Value). actualManDays is the real days spent, entered per
-// task ("Jira entry value"). competencyMultiplier is snapshotted from the
-// assignee's Competency at assignment time — same snapshot-not-live-join
-// reasoning as BudgetEntryRoleCost.roleName/manDayRate: a later Competency
-// edit must never rewrite a task's already-recorded Actual Value.
+// The project-wide WBS master list — defined once (Tasks tab), tracked
+// week by week via WbsWeekEntry (Weekly CPI tab). manDays is the estimate;
+// personId is the default/suggested assignee a new week's entry starts
+// from (a given week can still assign someone else for just that week).
 model WbsTask {
+  id         String         @id @default(cuid())
+  projectId  String
+  project    Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  wbsNumber  String
+  title      String
+  manDays    Float          @default(0)
+  personId   String?
+  person     Person?        @relation(fields: [personId], references: [id], onDelete: SetNull)
+  personName String?
+  createdAt  DateTime       @default(now())
+  entries    WbsWeekEntry[]
+
+  @@index([projectId])
+}
+
+// One row per WBS task tracked in a given week — pctComplete/actualManDays
+// are this week's numbers (drives Weekly CPI's EV/AV). personId may differ
+// from the WbsTask's default assignee, since a different person can pick up
+// a task in a later week. competencyMultiplier is snapshotted from the
+// assignee's Competency at assignment time (same snapshot-not-live-join
+// reasoning as historical cost records elsewhere) — a later Competency edit
+// must never rewrite a week's already-recorded Actual Value. Deleting the
+// parent WbsTask is restricted (not cascaded) once it has entries — see
+// deleteWbsTask in delivery-actions.ts.
+model WbsWeekEntry {
   id                   String   @id @default(cuid())
   wbsWeekId            String
   wbsWeek              WbsWeek  @relation(fields: [wbsWeekId], references: [id], onDelete: Cascade)
-  wbsNumber            String
-  title                String
-  manDays              Float    @default(0)
+  wbsTaskId            String
+  wbsTask              WbsTask  @relation(fields: [wbsTaskId], references: [id], onDelete: Restrict)
   pctComplete          Float    @default(0)
   actualManDays        Float    @default(0)
   personId             String?
@@ -380,7 +366,9 @@ model WbsTask {
   competencyMultiplier Float    @default(1)
   createdAt            DateTime @default(now())
 
+  @@unique([wbsWeekId, wbsTaskId])
   @@index([wbsWeekId])
+  @@index([wbsTaskId])
 }
 
 model PMPlan {
@@ -493,8 +481,8 @@ model Person {
   presalesDecisionsMade   PresalesDecisionItem[]
   presalesActionItemOwner PresalesActionItem[]
   presalesChecklistOwner  PresalesChecklistItem[]
-  budgetEntryRoleCosts    BudgetEntryRoleCost[]
   wbsTasks                WbsTask[]
+  wbsWeekEntries          WbsWeekEntry[]
 }
 
 enum PresalesOutcome {

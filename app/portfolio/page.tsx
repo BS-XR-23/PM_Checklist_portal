@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/rbac";
 import { canViewPortfolioOverload } from "@/lib/resourcing-rbac";
 import { computeProjectRag, RAG_COLORS } from "@/lib/rag";
+import { budgetEntriesFromWbs, toWbsWeekForBudget } from "@/lib/calculations";
 import { computePersonLoad, findOverlapConflicts, intensityForMonth, type EngagementLike } from "@/lib/overload";
 import { formatMoney, formatDate, startOfMonthUTC } from "@/lib/format";
 import { AppShell } from "@/components/layout/app-shell";
@@ -28,7 +29,13 @@ export default async function PortfolioPage() {
     prisma.project.findMany({
       where: { deletedAt: null },
       orderBy: { name: "asc" },
-      include: { budgetEntries: { orderBy: { weekEnding: "asc" } }, risks: true },
+      include: {
+        wbsWeeks: {
+          orderBy: { weekEnding: "asc" },
+          include: { entries: { include: { wbsTask: true, person: { include: { roleRate: true } } } } },
+        },
+        risks: true,
+      },
     }),
     showOverload
       ? prisma.person.findMany({
@@ -37,13 +44,16 @@ export default async function PortfolioPage() {
       : Promise.resolve([]),
   ]);
 
-  const rows = projects.map((p) => ({
-    id: p.id,
-    name: p.name,
-    client: p.client,
-    contractValue: p.contractValue,
-    ...computeProjectRag({ contractValue: p.contractValue, budgetEntries: p.budgetEntries, risks: p.risks }),
-  }));
+  const rows = projects.map((p) => {
+    const budgetEntries = budgetEntriesFromWbs(toWbsWeekForBudget(p.wbsWeeks), p.plannedManDays);
+    return {
+      id: p.id,
+      name: p.name,
+      client: p.client,
+      contractValue: p.contractValue,
+      ...computeProjectRag({ contractValue: p.contractValue, budgetEntries, risks: p.risks }),
+    };
+  });
 
   const exceptions = rows.filter((r) => r.rag === "RED");
   const totalContractValue = rows.reduce((sum, r) => sum + r.contractValue, 0);

@@ -4,11 +4,11 @@ import {
   isSlipped,
   reminderBand,
   checklistCompletionPct,
-  sumRoleCosts,
   wbsPlannedValue,
   wbsEarnedValue,
   wbsActualValue,
   competencyCpi,
+  budgetEntriesFromWbs,
 } from "./calculations";
 
 describe("currentStage", () => {
@@ -119,20 +119,6 @@ describe("checklistCompletionPct", () => {
   });
 });
 
-describe("sumRoleCosts", () => {
-  it("sums man-days x rate across rows", () => {
-    const rows = [
-      { manDays: 3.5, manDayRate: 200 },
-      { manDays: 2, manDayRate: 350 },
-    ];
-    expect(sumRoleCosts(rows)).toBe(3.5 * 200 + 2 * 350);
-  });
-
-  it("returns 0 for an empty breakdown", () => {
-    expect(sumRoleCosts([])).toBe(0);
-  });
-});
-
 describe("wbsPlannedValue", () => {
   it("sums estimated man-days across tasks", () => {
     expect(wbsPlannedValue([{ manDays: 7 }, { manDays: 3.5 }])).toBe(10.5);
@@ -182,5 +168,50 @@ describe("competencyCpi", () => {
 
   it("returns null when nothing has been logged yet (AV = 0), not Infinity", () => {
     expect(competencyCpi(10, 0)).toBeNull();
+  });
+});
+
+describe("budgetEntriesFromWbs", () => {
+  it("a task tracked across multiple weeks isn't double-counted in cumulative PV/EV", () => {
+    const weeks = [
+      { weekEnding: new Date("2026-01-01"), entries: [{ wbsTaskId: "t1", manDays: 10, pctComplete: 0.3, actualManDays: 3, manDayRate: 100 }] },
+      { weekEnding: new Date("2026-01-08"), entries: [{ wbsTaskId: "t1", manDays: 10, pctComplete: 0.6, actualManDays: 3, manDayRate: 100 }] },
+    ];
+    const result = budgetEntriesFromWbs(weeks, 10);
+    // If t1 were summed once per week instead of deduped, week 2's cumulative
+    // manDays would be 20, not 10 — pctPlannedComplete would wrongly exceed 1.
+    expect(result[1].pctPlannedComplete).toBe(1); // 10 manDays / 10 plannedManDays, not 20/10
+    expect(result[1].pctActualComplete).toBeCloseTo(0.6); // 10 x 0.6 / 10
+  });
+
+  it("a task untouched in a given week carries forward its last-recorded state", () => {
+    const weeks = [
+      { weekEnding: new Date("2026-01-01"), entries: [{ wbsTaskId: "t1", manDays: 10, pctComplete: 0.5, actualManDays: 5, manDayRate: 100 }] },
+      { weekEnding: new Date("2026-01-08"), entries: [] }, // t1 not touched this week
+    ];
+    const result = budgetEntriesFromWbs(weeks, 10);
+    expect(result[1].pctPlannedComplete).toBe(1); // t1's manDays still counted
+    expect(result[1].pctActualComplete).toBeCloseTo(0.5); // t1's last-known % carried forward
+  });
+
+  it("actualCost is this week's spend only, not cumulative", () => {
+    const weeks = [
+      { weekEnding: new Date("2026-01-01"), entries: [{ wbsTaskId: "t1", manDays: 10, pctComplete: 0.3, actualManDays: 3, manDayRate: 100 }] },
+      { weekEnding: new Date("2026-01-08"), entries: [{ wbsTaskId: "t1", manDays: 10, pctComplete: 0.6, actualManDays: 2, manDayRate: 100 }] },
+    ];
+    const result = budgetEntriesFromWbs(weeks, 10);
+    expect(result[0].actualCost).toBe(3 * 100);
+    expect(result[1].actualCost).toBe(2 * 100); // not 5 x 100 — week 2 only logged 2 more man-days
+  });
+
+  it("plannedManDays = 0 doesn't divide by zero", () => {
+    const weeks = [{ weekEnding: new Date("2026-01-01"), entries: [{ wbsTaskId: "t1", manDays: 10, pctComplete: 0.5, actualManDays: 5, manDayRate: 100 }] }];
+    const result = budgetEntriesFromWbs(weeks, 0);
+    expect(result[0].pctPlannedComplete).toBe(0);
+    expect(result[0].pctActualComplete).toBe(0);
+  });
+
+  it("returns an empty array for no weeks", () => {
+    expect(budgetEntriesFromWbs([], 10)).toEqual([]);
   });
 });

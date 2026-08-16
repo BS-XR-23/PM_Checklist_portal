@@ -1,17 +1,21 @@
 import { prisma } from "@/lib/prisma";
 import { PM_STAGES, DEVOPS_CATEGORIES } from "@/lib/seed-data";
 import { ITEM_STATUSES, type ItemStatus } from "@/lib/constants";
-import { riskScore, computeEvm, trancheAmount, currentStage, reminderBand, checklistCompletionPct } from "@/lib/calculations";
+import { riskScore, computeEvm, trancheAmount, currentStage, reminderBand, checklistCompletionPct, budgetEntriesFromWbs, toWbsWeekForBudget } from "@/lib/calculations";
 
 export async function getDashboardData(projectId: string) {
-  const [project, allItems, risks, crs, budgetEntries, milestones, actionItems, recentDecisionsRaw] = await Promise.all([
+  const [project, allItems, risks, crs, wbsWeeks, milestones, actionItems, recentDecisionsRaw] = await Promise.all([
     prisma.project.findUniqueOrThrow({ where: { id: projectId } }),
     // One query for both checklists (differ only by `type`) instead of two —
     // filtering below preserves the orderBy order within each subset.
     prisma.checklistItem.findMany({ where: { projectId }, orderBy: { order: "asc" } }),
     prisma.riskItem.findMany({ where: { projectId } }),
     prisma.changeRequest.findMany({ where: { projectId } }),
-    prisma.budgetEntry.findMany({ where: { projectId }, orderBy: { weekEnding: "asc" } }),
+    prisma.wbsWeek.findMany({
+      where: { projectId },
+      orderBy: { weekEnding: "asc" },
+      include: { entries: { include: { wbsTask: true, person: { include: { roleRate: true } } } } },
+    }),
     prisma.milestonePayment.findMany({ where: { checklistItem: { projectId } }, include: { checklistItem: true } }),
     prisma.actionItem.findMany({ where: { projectId, dueDate: { not: null } }, include: { ownerPerson: { select: { name: true } } } }),
     prisma.decisionLogItem.findMany({ where: { projectId }, orderBy: { order: "desc" }, take: 5, include: { decidedByPerson: { select: { name: true } } } }),
@@ -134,7 +138,7 @@ export async function getDashboardData(projectId: string) {
     }))
     .sort((a, b) => (a.type === b.type ? a.order - b.order : a.type === "PM" ? -1 : 1));
 
-  const evm = computeEvm(budgetEntries, project.contractValue);
+  const evm = computeEvm(budgetEntriesFromWbs(toWbsWeekForBudget(wbsWeeks), project.plannedManDays), project.contractValue);
   const latestEvm = [...evm].reverse().find((e) => e.spi != null || e.cpi != null) ?? null;
 
   const openHighRisks = risks.filter(

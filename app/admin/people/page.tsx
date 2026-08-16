@@ -94,16 +94,16 @@ export default async function AdminPeoplePage() {
         </div>
         <p className="text-xs text-slate-400">
           Assigning a Person to a specific project (role, intensity, dates) happens on that project&apos;s
-          Resourcing tab — Admin or that project&apos;s PM. A person&apos;s Rate Role is what lets a PM log Actual
-          Cost against them on the (testing-only) Budget Tracker. Their Competency is what converts real days
-          worked into effort units for the Delivery tab&apos;s Weekly CPI.
+          Resourcing tab — Admin or that project&apos;s PM. A person&apos;s Rate Role is what the (testing-only)
+          Budget Tracker resolves live to price their actual man-days from the Delivery tab. Their Competency is
+          what converts real days worked into effort units for the Delivery tab&apos;s Weekly CPI.
         </p>
 
         <div className="pt-4 border-t border-slate-100">
           <h2 className="text-base font-semibold text-slate-900 mb-1">Role Rates</h2>
           <p className="text-sm text-slate-500 mb-4">
-            Used to auto-compute Actual Cost on each project&apos;s Budget Tracker from man-days logged per role
-            each week — rates are set by role, not by named person.
+            Used by the (testing-only) Budget Tracker to price actual man-days logged on the Delivery tab, by role
+            — rates are set by role, not by named person.
           </p>
           <CreateRoleRateForm />
           <div className="mt-4 rounded-lg border border-slate-200 bg-white overflow-x-auto">

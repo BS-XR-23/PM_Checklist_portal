@@ -92,11 +92,6 @@ export function checklistCompletionPct(items: { status: string }[]): number {
   return applicable.filter((i) => i.status === "COMPLETED").length / applicable.length;
 }
 
-/** Budget Tracker: BudgetEntry.actualCost = sum of its role-cost breakdown rows. */
-export function sumRoleCosts(rows: { manDays: number; manDayRate: number }[]): number {
-  return rows.reduce((sum, r) => sum + r.manDays * r.manDayRate, 0);
-}
-
 /** Delivery / Weekly CPI: Planned Value = sum of a week's estimated man-days. */
 export function wbsPlannedValue(tasks: { manDays: number }[]): number {
   return tasks.reduce((sum, t) => sum + t.manDays, 0);
@@ -115,6 +110,79 @@ export function wbsActualValue(tasks: { actualManDays: number; competencyMultipl
 /** EV/AV > 1 = over-estimated (took less effort than planned); < 1 = under-estimated. Null when AV is 0 — nothing logged yet. */
 export function competencyCpi(ev: number, av: number): number | null {
   return av ? ev / av : null;
+}
+
+export type WbsWeekForBudget = {
+  weekEnding: Date;
+  entries: { wbsTaskId: string; manDays: number; pctComplete: number; actualManDays: number; manDayRate: number }[];
+};
+
+/**
+ * Shapes a Prisma `WbsWeek.findMany({ include: { entries: { include: {
+ * wbsTask, person: { include: { roleRate } } } } } })` result into
+ * `budgetEntriesFromWbs`'s expected input — factored out so the four call
+ * sites (Budget Tracker, Dashboard, Projects list, Portfolio) can't drift
+ * out of sync with each other on how a rate gets resolved.
+ */
+export function toWbsWeekForBudget(
+  weeks: {
+    weekEnding: Date;
+    entries: {
+      wbsTaskId: string;
+      pctComplete: number;
+      actualManDays: number;
+      wbsTask: { manDays: number };
+      person: { roleRate: { manDayRate: number } | null } | null;
+    }[];
+  }[]
+): WbsWeekForBudget[] {
+  return weeks.map((w) => ({
+    weekEnding: w.weekEnding,
+    entries: w.entries.map((e) => ({
+      wbsTaskId: e.wbsTaskId,
+      manDays: e.wbsTask.manDays,
+      pctComplete: e.pctComplete,
+      actualManDays: e.actualManDays,
+      manDayRate: e.person?.roleRate?.manDayRate ?? 0,
+    })),
+  }));
+}
+
+/**
+ * Budget Tracker: derives the exact shape computeEvm() already expects, live
+ * from Delivery's WBS tracking — no separate BudgetEntry data entry. `weeks`
+ * must be pre-sorted ascending by weekEnding (this walks a running
+ * cumulative total, so order matters).
+ *
+ * pctPlanned/pctActualComplete are cumulative fractions of plannedManDays —
+ * built from "latest known state per task," not summed per WbsWeekEntry row,
+ * so a task tracked across 3 weeks counts once, not 3x; a task untouched in
+ * a given week keeps its last-recorded manDays/%, same as real cumulative
+ * EVM tracking. actualCost is this week's spend only (not cumulative),
+ * matching the original BudgetEntry.actualCost semantics.
+ */
+export function budgetEntriesFromWbs(
+  weeks: WbsWeekForBudget[],
+  plannedManDays: number
+): { weekEnding: Date; pctPlannedComplete: number; pctActualComplete: number; actualCost: number }[] {
+  const latestByTask = new Map<string, { manDays: number; pctComplete: number }>();
+
+  return weeks.map((week) => {
+    for (const e of week.entries) {
+      latestByTask.set(e.wbsTaskId, { manDays: e.manDays, pctComplete: e.pctComplete });
+    }
+    const tracked = Array.from(latestByTask.values());
+    const cumulativePlanned = tracked.reduce((sum, t) => sum + t.manDays, 0);
+    const cumulativeEarned = tracked.reduce((sum, t) => sum + t.manDays * t.pctComplete, 0);
+    const actualCost = week.entries.reduce((sum, e) => sum + e.actualManDays * e.manDayRate, 0);
+
+    return {
+      weekEnding: week.weekEnding,
+      pctPlannedComplete: plannedManDays ? cumulativePlanned / plannedManDays : 0,
+      pctActualComplete: plannedManDays ? cumulativeEarned / plannedManDays : 0,
+      actualCost,
+    };
+  });
 }
 
 /** Actual Date slipped past Planned Date on an incomplete item (non-blocking flag). */

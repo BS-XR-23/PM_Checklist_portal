@@ -3,7 +3,7 @@
 import { useRef, useState, useTransition } from "react";
 import { uploadWbsTasks } from "./delivery-actions";
 
-export function UploadWbsTasksForm({ projectId, wbsWeekId }: { projectId: string; wbsWeekId: string }) {
+export function UploadWbsTasksForm({ projectId }: { projectId: string }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -23,7 +23,7 @@ export function UploadWbsTasksForm({ projectId, wbsWeekId }: { projectId: string
           formData.set("file", file);
           startTransition(async () => {
             try {
-              await uploadWbsTasks(wbsWeekId, projectId, formData);
+              await uploadWbsTasks(projectId, formData);
             } catch (err) {
               setError(err instanceof Error ? err.message : "Failed to upload tasks.");
             } finally {
