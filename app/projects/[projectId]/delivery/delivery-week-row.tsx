@@ -88,6 +88,7 @@ export function DeliveryWeekRow({
             wbsWeekId={week.id}
             entries={week.entries}
             availableTasks={availableTasks}
+            hasMasterTasks={masterTasks.length > 0}
             roster={roster}
             canWrite={canWrite}
           />

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { InlineNumber, InlinePercent } from "@/components/ui/inline-edit";
 import { addWbsWeekEntry, updateWbsWeekEntry, deleteWbsWeekEntry } from "./delivery-actions";
 import type { RosterPerson } from "./delivery-tasks-table";
@@ -56,15 +57,28 @@ function AddTaskFromWbs({
   projectId,
   wbsWeekId,
   available,
+  hasMasterTasks,
 }: {
   projectId: string;
   wbsWeekId: string;
   available: MasterTaskOption[];
+  hasMasterTasks: boolean;
 }) {
   const [selected, setSelected] = useState("");
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
+  if (!hasMasterTasks) {
+    return (
+      <p className="text-xs text-slate-400 mt-2">
+        No WBS tasks defined yet —{" "}
+        <Link href={`/projects/${projectId}/delivery/tasks`} className="text-indigo-600 hover:underline">
+          add some on the Tasks tab
+        </Link>{" "}
+        first.
+      </p>
+    );
+  }
   if (available.length === 0) {
     return <p className="text-xs text-slate-400 mt-2">Every WBS task is already tracked this week.</p>;
   }
@@ -112,6 +126,7 @@ export function WeekEntriesTable({
   wbsWeekId,
   entries,
   availableTasks,
+  hasMasterTasks,
   roster,
   canWrite,
 }: {
@@ -119,6 +134,7 @@ export function WeekEntriesTable({
   wbsWeekId: string;
   entries: WeekEntryData[];
   availableTasks: MasterTaskOption[];
+  hasMasterTasks: boolean;
   roster: RosterPerson[];
   canWrite: boolean;
 }) {
@@ -188,7 +204,9 @@ export function WeekEntriesTable({
         </tbody>
       </table>
 
-      {canWrite && <AddTaskFromWbs projectId={projectId} wbsWeekId={wbsWeekId} available={availableTasks} />}
+      {canWrite && (
+        <AddTaskFromWbs projectId={projectId} wbsWeekId={wbsWeekId} available={availableTasks} hasMasterTasks={hasMasterTasks} />
+      )}
     </div>
   );
 }
