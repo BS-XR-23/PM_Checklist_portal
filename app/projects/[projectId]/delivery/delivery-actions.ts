@@ -205,6 +205,38 @@ export async function createWbsWeek(projectId: string, weekEnding: string | null
   revalidateDelivery(projectId);
 }
 
+/** Fixes a mistyped week-ending date after the fact — the week's rows and
+ * everything derived from it (Weekly CPI, Budget Tracker) stay attached,
+ * only the date moves. */
+export async function updateWbsWeek(id: string, _projectId: string, weekEnding: string) {
+  const existing = await prisma.wbsWeek.findUniqueOrThrow({ where: { id } });
+  const user = await requireModuleWrite(existing.projectId, "DELIVERY");
+
+  const parsed = parseDateInput(weekEnding);
+  if (!parsed) throw new Error("A valid date is required.");
+
+  try {
+    await prisma.wbsWeek.update({ where: { id }, data: { weekEnding: parsed } });
+  } catch (err) {
+    if (err instanceof Error && "code" in err && err.code === "P2002") {
+      throw new Error("This project already has a tracking week ending on that date.");
+    }
+    throw err;
+  }
+
+  await writeAudit({
+    actor: user,
+    projectId: existing.projectId,
+    action: "update",
+    entityType: "WbsWeek",
+    entityId: id,
+    summary: "Corrected a tracking week's date",
+    diff: { before: { weekEnding: existing.weekEnding }, changes: { weekEnding: parsed } },
+  });
+
+  revalidateDelivery(existing.projectId);
+}
+
 /**
  * Two independent parent chains (week→project, task→project) must both be
  * verified — the first two-parent guessed-ID case in this codebase. Never

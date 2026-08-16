@@ -142,6 +142,40 @@ describe("Delivery isolation boundary", () => {
     }
   });
 
+  it("updateWbsWeek corrects a mistyped date, and rejects colliding with another week's date", async () => {
+    const { createWbsWeek, updateWbsWeek } = await import("@/app/projects/[projectId]/delivery/delivery-actions");
+    const { parseDateInput } = await import("@/lib/format");
+
+    actAs(pmAUserId);
+    await createWbsWeek(projectA.id, "2026-10-01");
+    const weekOct1 = await prisma.wbsWeek.findFirstOrThrow({ where: { projectId: projectA.id }, orderBy: { weekEnding: "desc" } });
+    await createWbsWeek(projectA.id, "2026-10-08");
+    const weekOct8 = await prisma.wbsWeek.findFirstOrThrow({ where: { projectId: projectA.id }, orderBy: { weekEnding: "desc" } });
+
+    try {
+      await updateWbsWeek(weekOct1.id, projectA.id, "2026-10-02");
+      expect((await prisma.wbsWeek.findUniqueOrThrow({ where: { id: weekOct1.id } })).weekEnding).toEqual(parseDateInput("2026-10-02"));
+
+      await expect(updateWbsWeek(weekOct1.id, projectA.id, "2026-10-08")).rejects.toThrow(/already has a tracking week/);
+    } finally {
+      await prisma.wbsWeek.delete({ where: { id: weekOct1.id } });
+      await prisma.wbsWeek.delete({ where: { id: weekOct8.id } });
+    }
+  });
+
+  it("guessed-ID: PM-A cannot update a WBS week belonging to Project B", async () => {
+    const { updateWbsWeek } = await import("@/app/projects/[projectId]/delivery/delivery-actions");
+    const weekB = await prisma.wbsWeek.create({ data: { projectId: projectB.id, weekEnding: new Date("2026-10-15") } });
+
+    try {
+      actAs(pmAUserId);
+      await expect(updateWbsWeek(weekB.id, projectA.id, "2026-11-01")).rejects.toThrow();
+      expect((await prisma.wbsWeek.findUniqueOrThrow({ where: { id: weekB.id } })).weekEnding).toEqual(new Date("2026-10-15"));
+    } finally {
+      await prisma.wbsWeek.delete({ where: { id: weekB.id } });
+    }
+  });
+
   it("guessed-ID: PM-A cannot create a WBS task or week on Project B", async () => {
     const { createWbsTask, createWbsWeek } = await import("@/app/projects/[projectId]/delivery/delivery-actions");
     actAs(pmAUserId);
