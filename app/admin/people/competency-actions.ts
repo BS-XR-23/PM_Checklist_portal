@@ -43,10 +43,10 @@ export async function deleteCompetency(competencyId: string) {
   const admin = await requirePersonAdmin();
   const existing = await prisma.competency.findUniqueOrThrow({ where: { id: competencyId } });
 
-  // Deleting doesn't touch any WbsWeekEntry that already used this
-  // Competency — those rows snapshotted competencyMultiplier at assignment
-  // time, so historical Actual Value figures are unaffected (competencyId
-  // just goes null via onDelete: SetNull).
+  // Deleting doesn't touch any WbsTask that already used this Competency —
+  // its competencyMultiplier was snapshotted at assignment time, so
+  // historical Actual Value figures are unaffected (competencyId just goes
+  // null via onDelete: SetNull).
   await prisma.competency.delete({ where: { id: competencyId } });
 
   await writeAudit({ actor: admin, action: "delete", entityType: "Competency", entityId: competencyId, summary: `Deleted Competency "${existing.level}"` });

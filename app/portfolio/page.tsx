@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/rbac";
 import { canViewPortfolioOverload } from "@/lib/resourcing-rbac";
 import { computeProjectRag, RAG_COLORS } from "@/lib/rag";
-import { budgetEntriesFromWbs, toWbsWeekForBudget } from "@/lib/calculations";
+import { budgetEntriesFromSprints, toSprintsForBudget } from "@/lib/calculations";
 import { computePersonLoad, findOverlapConflicts, intensityForMonth, type EngagementLike } from "@/lib/overload";
 import { formatMoney, formatDate, startOfMonthUTC } from "@/lib/format";
 import { AppShell } from "@/components/layout/app-shell";
@@ -30,9 +30,9 @@ export default async function PortfolioPage() {
       where: { deletedAt: null },
       orderBy: { name: "asc" },
       include: {
-        wbsWeeks: {
-          orderBy: { weekEnding: "asc" },
-          include: { entries: { include: { wbsTask: true, person: { include: { roleRate: true } } } } },
+        sprints: {
+          orderBy: { startDate: "asc" },
+          include: { tasks: { include: { person: { include: { roleRate: true } } } } },
         },
         risks: true,
       },
@@ -45,7 +45,7 @@ export default async function PortfolioPage() {
   ]);
 
   const rows = projects.map((p) => {
-    const budgetEntries = budgetEntriesFromWbs(toWbsWeekForBudget(p.wbsWeeks), p.plannedManDays);
+    const budgetEntries = budgetEntriesFromSprints(toSprintsForBudget(p.sprints), p.plannedStoryPoints);
     return {
       id: p.id,
       name: p.name,

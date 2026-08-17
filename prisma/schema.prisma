@@ -60,16 +60,20 @@ model User {
 }
 
 model Project {
-  id             String        @id @default(cuid())
-  name           String
-  client         String?
-  contractValue  Float         @default(0)
-  plannedManDays Float         @default(0)
-  crRate         Float         @default(0)
-  status         ProjectStatus @default(ACTIVE)
-  deletedAt      DateTime?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  id                 String        @id @default(cuid())
+  name               String
+  client             String?
+  contractValue      Float         @default(0)
+  // Feeds only manDayRate()'s "Man-Day Rate (auto)" display line on Budget
+  // Tracker — a reference rate input, not a sizing baseline. plannedStoryPoints
+  // below is what Sprint/Budget Tracker's PV/EV percentages actually divide by.
+  plannedManDays     Float         @default(0)
+  plannedStoryPoints Float         @default(0)
+  crRate             Float         @default(0)
+  status             ProjectStatus @default(ACTIVE)
+  deletedAt          DateTime?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
 
   checklistItems  ChecklistItem[]
   risks           RiskItem[]
@@ -82,7 +86,6 @@ model Project {
   decisions       DecisionLogItem[]
   actionItems     ActionItem[]
   wonFromPresales PresalesProject?
-  wbsWeeks        WbsWeek[]
   wbsTasks        WbsTask[]
   sprints         Sprint[]
 }
@@ -285,10 +288,11 @@ model ChangeRequest {
 
 // Admin-managed rate card, by role — not by named person, so no
 // salary-like data is stored against an individual. Budget Tracker resolves
-// each WbsWeekEntry's assignee to their RoleRate live, at read time (not
-// snapshotted — Budget Tracker is a "testing purposes only" derived view,
-// not the authoritative cost record, so drift on rename/rate-change is an
-// acceptable trade against duplicating Competency's snapshot machinery).
+// each sprint-committed WbsTask's assignee to their RoleRate live, at read
+// time (not snapshotted — Budget Tracker is a "testing purposes only"
+// derived view, not the authoritative cost record, so drift on
+// rename/rate-change is an acceptable trade against duplicating
+// Competency's snapshot machinery).
 model RoleRate {
   id         String   @id @default(cuid())
   roleName   String   @unique
@@ -312,62 +316,56 @@ model Competency {
   people Person[]
 }
 
-model WbsWeek {
-  id         String         @id @default(cuid())
-  projectId  String
-  project    Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  weekEnding DateTime
-  createdAt  DateTime       @default(now())
-  entries    WbsWeekEntry[]
-
-  @@unique([projectId, weekEnding])
-  @@index([projectId])
-}
-
-// The project-wide WBS master list — defined once (Tasks tab), tracked
-// week by week via WbsWeekEntry (Weekly CPI tab). manDays is the estimate;
-// personId is the default/suggested assignee a new week's entry starts
-// from (a given week can still assign someone else for just that week).
-// sprintId optionally commits this task to a Sprint's backlog at planning
-// time (independent of week-by-week tracking); storyPoints is a
-// display/velocity figure only — man-days remains the sole unit driving
-// PV/EV/AV/CPI everywhere, including Sprint Summary, so CPI stays
-// dimensionally consistent across sprint and non-sprint tasks alike.
+// The project-wide WBS master list — defined once (Tasks tab). storyPoints
+// is the sole estimate unit (drives Sprint's PV and 0/100 EV rule).
+// personId is the default/suggested assignee. sprintId optionally commits
+// this task to a Sprint's backlog at planning time, giving an explicit
+// Planned Value baseline. Once committed, pctComplete/actualHours track
+// its progress directly (no more weekly checkpoint rows) — pctComplete is
+// a human judgment of real progress, always set independently of hours;
+// actualHours is manually typed in (e.g. read off Jira) and converted to a
+// man-days-equivalent (see manDaysFromHours in lib/calculations.ts) to
+// feed Actual Value, alongside competencyMultiplier, snapshotted from the
+// assignee's Competency when they're assigned (a later Competency edit
+// must never rewrite an already-tracked Actual Value). These fields carry
+// over naturally if a task's sprintId changes (normal Scrum carry-over) —
+// deliberately not reset by moving sprints, since real progress doesn't
+// reset just because the sprint changed.
 model WbsTask {
-  id           String         @id @default(cuid())
-  projectId    String
-  project      Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  wbsNumber    String
-  title        String
-  manDays      Float          @default(0)
-  storyPoints  Float?
-  personId     String?
-  person       Person?        @relation(fields: [personId], references: [id], onDelete: SetNull)
-  personName   String?
-  sprintId     String?
-  sprint       Sprint?        @relation(fields: [sprintId], references: [id], onDelete: SetNull)
-  createdAt    DateTime       @default(now())
-  entries      WbsWeekEntry[]
+  id                   String   @id @default(cuid())
+  projectId            String
+  project              Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  wbsNumber            String
+  title                String
+  storyPoints          Float    @default(0)
+  personId             String?
+  person               Person?  @relation(fields: [personId], references: [id], onDelete: SetNull)
+  personName           String?
+  sprintId             String?
+  sprint               Sprint?  @relation(fields: [sprintId], references: [id], onDelete: SetNull)
+  pctComplete          Float    @default(0)
+  actualHours          Float    @default(0)
+  competencyMultiplier Float    @default(1)
+  createdAt            DateTime @default(now())
 
   @@index([projectId])
   @@index([sprintId])
 }
 
-// A Scrum sprint, layered onto the WBS as an optional grouping — a WbsTask
-// may be committed to one at planning time (sprintId), giving an explicit
-// Planned Value baseline before any week is tracked. Earned Value follows
-// the 0/100 rule (a committed task earns its full manDays once its latest
-// tracked % reaches 100%, else 0) — deliberately NOT the same weighted
-// %-complete rule the Weekly CPI tab uses, since that rule must keep
-// meaning exactly what it means today wherever it's already shown.
+// A Scrum sprint — a WbsTask committed to one (sprintId) gets an explicit
+// Planned Value baseline at commit time. Earned Value follows the 0/100
+// rule (a committed task earns its full storyPoints once its latest
+// tracked % reaches 100%, else 0).
 //
 // closedAt is the whole point: while null, PV/EV/AV are computed live from
-// current WbsTask/WbsWeekEntry state (see sprintEarnedValue in
-// calculations.ts). Once closeSprint() sets it, the three frozen* fields
-// are a permanent snapshot the UI reads directly instead of recomputing —
-// so a task carrying over into a later sprint (completely normal Scrum
-// behavior) can never silently rewrite this sprint's already-reported
-// numbers. There is no "reopen" — closing is one-way.
+// current WbsTask state (see sprintEarnedValue in calculations.ts). Once
+// closeSprint() sets it, the frozen* fields (including frozenTaskSnapshot,
+// the drill-down list at close time) are a permanent record the UI reads
+// directly instead of recomputing — so a task carrying over into a later
+// sprint, or being edited afterward, can never silently rewrite this
+// sprint's already-reported numbers or which tasks earned them. There is
+// no "reopen" — closing is one-way, and once closed, a task can no longer
+// be committed into or removed from this sprint (see delivery-actions.ts).
 model Sprint {
   id        String    @id @default(cuid())
   projectId String
@@ -378,9 +376,10 @@ model Sprint {
   createdAt DateTime  @default(now())
 
   closedAt             DateTime?
-  frozenPlannedManDays Float?
-  frozenEarnedManDays  Float?
+  frozenPlannedPoints  Float?
+  frozenEarnedPoints   Float?
   frozenActualValue    Float?
+  frozenTaskSnapshot   Json?
 
   tasks       WbsTask[]
   allocations SprintAllocation[]
@@ -406,34 +405,6 @@ model SprintAllocation {
 
   @@unique([sprintId, personId])
   @@index([sprintId])
-}
-
-// One row per WBS task tracked in a given week — pctComplete/actualManDays
-// are this week's numbers (drives Weekly CPI's EV/AV). personId may differ
-// from the WbsTask's default assignee, since a different person can pick up
-// a task in a later week. competencyMultiplier is snapshotted from the
-// assignee's Competency at assignment time (same snapshot-not-live-join
-// reasoning as historical cost records elsewhere) — a later Competency edit
-// must never rewrite a week's already-recorded Actual Value. Deleting the
-// parent WbsTask is restricted (not cascaded) once it has entries — see
-// deleteWbsTask in delivery-actions.ts.
-model WbsWeekEntry {
-  id                   String   @id @default(cuid())
-  wbsWeekId            String
-  wbsWeek              WbsWeek  @relation(fields: [wbsWeekId], references: [id], onDelete: Cascade)
-  wbsTaskId            String
-  wbsTask              WbsTask  @relation(fields: [wbsTaskId], references: [id], onDelete: Restrict)
-  pctComplete          Float    @default(0)
-  actualManDays        Float    @default(0)
-  personId             String?
-  person               Person?  @relation(fields: [personId], references: [id], onDelete: SetNull)
-  personName           String?
-  competencyMultiplier Float    @default(1)
-  createdAt            DateTime @default(now())
-
-  @@unique([wbsWeekId, wbsTaskId])
-  @@index([wbsWeekId])
-  @@index([wbsTaskId])
 }
 
 model PMPlan {
@@ -547,7 +518,6 @@ model Person {
   presalesActionItemOwner PresalesActionItem[]
   presalesChecklistOwner  PresalesChecklistItem[]
   wbsTasks                WbsTask[]
-  wbsWeekEntries          WbsWeekEntry[]
   sprintAllocations       SprintAllocation[]
 }
 

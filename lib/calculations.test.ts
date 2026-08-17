@@ -7,8 +7,9 @@ import {
   wbsPlannedValue,
   wbsActualValue,
   competencyCpi,
-  budgetEntriesFromWbs,
+  budgetEntriesFromSprints,
   sprintEarnedValue,
+  manDaysFromHours,
 } from "./calculations";
 
 describe("currentStage", () => {
@@ -120,8 +121,8 @@ describe("checklistCompletionPct", () => {
 });
 
 describe("wbsPlannedValue", () => {
-  it("sums estimated man-days across tasks", () => {
-    expect(wbsPlannedValue([{ manDays: 7 }, { manDays: 3.5 }])).toBe(10.5);
+  it("sums estimated story points across tasks", () => {
+    expect(wbsPlannedValue([{ points: 7 }, { points: 3.5 }])).toBe(10.5);
   });
 
   it("returns 0 for no tasks", () => {
@@ -158,19 +159,19 @@ describe("competencyCpi", () => {
 });
 
 describe("sprintEarnedValue", () => {
-  it("a task at exactly 100% earns its full man-days", () => {
-    expect(sprintEarnedValue([{ manDays: 10, pctComplete: 1 }])).toBe(10);
+  it("a task at exactly 100% earns its full story points", () => {
+    expect(sprintEarnedValue([{ points: 10, pctComplete: 1 }])).toBe(10);
   });
 
   it("a task at 60% earns nothing — 0/100 rule, no partial credit", () => {
-    expect(sprintEarnedValue([{ manDays: 10, pctComplete: 0.6 }])).toBe(0);
+    expect(sprintEarnedValue([{ points: 10, pctComplete: 0.6 }])).toBe(0);
   });
 
   it("mixes done and not-done tasks correctly", () => {
     const tasks = [
-      { manDays: 10, pctComplete: 1 },
-      { manDays: 5, pctComplete: 0.99 },
-      { manDays: 8, pctComplete: 1 },
+      { points: 10, pctComplete: 1 },
+      { points: 5, pctComplete: 0.99 },
+      { points: 8, pctComplete: 1 },
     ];
     expect(sprintEarnedValue(tasks)).toBe(18);
   });
@@ -180,47 +181,119 @@ describe("sprintEarnedValue", () => {
   });
 });
 
-describe("budgetEntriesFromWbs", () => {
-  it("a task tracked across multiple weeks isn't double-counted in cumulative PV/EV", () => {
-    const weeks = [
-      { weekEnding: new Date("2026-01-01"), entries: [{ wbsTaskId: "t1", manDays: 10, pctComplete: 0.3, actualManDays: 3, manDayRate: 100 }] },
-      { weekEnding: new Date("2026-01-08"), entries: [{ wbsTaskId: "t1", manDays: 10, pctComplete: 0.6, actualManDays: 3, manDayRate: 100 }] },
-    ];
-    const result = budgetEntriesFromWbs(weeks, 10);
-    // If t1 were summed once per week instead of deduped, week 2's cumulative
-    // manDays would be 20, not 10 — pctPlannedComplete would wrongly exceed 1.
-    expect(result[1].pctPlannedComplete).toBe(1); // 10 manDays / 10 plannedManDays, not 20/10
-    expect(result[1].pctActualComplete).toBeCloseTo(0.6); // 10 x 0.6 / 10
+describe("manDaysFromHours", () => {
+  it("converts hours to man-days using an 8-hour day", () => {
+    expect(manDaysFromHours(16)).toBe(2);
+    expect(manDaysFromHours(4)).toBe(0.5);
   });
 
-  it("a task untouched in a given week carries forward its last-recorded state", () => {
-    const weeks = [
-      { weekEnding: new Date("2026-01-01"), entries: [{ wbsTaskId: "t1", manDays: 10, pctComplete: 0.5, actualManDays: 5, manDayRate: 100 }] },
-      { weekEnding: new Date("2026-01-08"), entries: [] }, // t1 not touched this week
+  it("returns 0 for 0 hours", () => {
+    expect(manDaysFromHours(0)).toBe(0);
+  });
+});
+
+describe("budgetEntriesFromSprints", () => {
+  it("an open sprint computes PV/EV live from its tasks (0/100 rule)", () => {
+    const sprints = [
+      {
+        endDate: new Date("2026-01-14"),
+        closedAt: null,
+        frozenPlannedPoints: null,
+        frozenEarnedPoints: null,
+        frozenActualValue: null,
+        tasks: [
+          { storyPoints: 10, pctComplete: 1, actualHours: 40, competencyMultiplier: 1, manDayRate: 100 },
+          { storyPoints: 5, pctComplete: 0.5, actualHours: 10, competencyMultiplier: 1, manDayRate: 100 },
+        ],
+      },
     ];
-    const result = budgetEntriesFromWbs(weeks, 10);
-    expect(result[1].pctPlannedComplete).toBe(1); // t1's manDays still counted
-    expect(result[1].pctActualComplete).toBeCloseTo(0.5); // t1's last-known % carried forward
+    const result = budgetEntriesFromSprints(sprints, 15);
+    expect(result[0].pctPlannedComplete).toBeCloseTo(1); // (10+5) / 15
+    expect(result[0].pctActualComplete).toBeCloseTo(10 / 15); // only the fully-done task earns
   });
 
-  it("actualCost is this week's spend only, not cumulative", () => {
-    const weeks = [
-      { weekEnding: new Date("2026-01-01"), entries: [{ wbsTaskId: "t1", manDays: 10, pctComplete: 0.3, actualManDays: 3, manDayRate: 100 }] },
-      { weekEnding: new Date("2026-01-08"), entries: [{ wbsTaskId: "t1", manDays: 10, pctComplete: 0.6, actualManDays: 2, manDayRate: 100 }] },
+  it("a closed sprint reads its frozen snapshot, ignoring the (possibly since-changed) live tasks", () => {
+    const sprints = [
+      {
+        endDate: new Date("2026-01-14"),
+        closedAt: new Date("2026-01-15"),
+        frozenPlannedPoints: 20,
+        frozenEarnedPoints: 20,
+        frozenActualValue: 18,
+        tasks: [{ storyPoints: 999, pctComplete: 0, actualHours: 0, competencyMultiplier: 1, manDayRate: 100 }], // since-changed — must be ignored
+      },
     ];
-    const result = budgetEntriesFromWbs(weeks, 10);
-    expect(result[0].actualCost).toBe(3 * 100);
-    expect(result[1].actualCost).toBe(2 * 100); // not 5 x 100 — week 2 only logged 2 more man-days
+    const result = budgetEntriesFromSprints(sprints, 20);
+    expect(result[0].pctPlannedComplete).toBe(1);
+    expect(result[0].pctActualComplete).toBe(1);
   });
 
-  it("plannedManDays = 0 doesn't divide by zero", () => {
-    const weeks = [{ weekEnding: new Date("2026-01-01"), entries: [{ wbsTaskId: "t1", manDays: 10, pctComplete: 0.5, actualManDays: 5, manDayRate: 100 }] }];
-    const result = budgetEntriesFromWbs(weeks, 0);
+  it("cumulative planned/earned accumulate across sprints — no dedup needed, a task belongs to one sprint at a time", () => {
+    const sprints = [
+      {
+        endDate: new Date("2026-01-14"),
+        closedAt: new Date("2026-01-15"),
+        frozenPlannedPoints: 10,
+        frozenEarnedPoints: 10,
+        frozenActualValue: 8,
+        tasks: [],
+      },
+      {
+        endDate: new Date("2026-01-28"),
+        closedAt: null,
+        frozenPlannedPoints: null,
+        frozenEarnedPoints: null,
+        frozenActualValue: null,
+        tasks: [{ storyPoints: 10, pctComplete: 1, actualHours: 80, competencyMultiplier: 1, manDayRate: 100 }],
+      },
+    ];
+    const result = budgetEntriesFromSprints(sprints, 20);
+    expect(result[0].pctPlannedComplete).toBeCloseTo(0.5); // 10 / 20
+    expect(result[1].pctPlannedComplete).toBeCloseTo(1); // (10 + 10) / 20 cumulative
+    expect(result[1].pctActualComplete).toBeCloseTo(1);
+  });
+
+  it("actualCost is that sprint's own spend only, not cumulative", () => {
+    const sprints = [
+      {
+        endDate: new Date("2026-01-14"),
+        closedAt: null,
+        frozenPlannedPoints: null,
+        frozenEarnedPoints: null,
+        frozenActualValue: null,
+        tasks: [{ storyPoints: 10, pctComplete: 1, actualHours: 40, competencyMultiplier: 1, manDayRate: 100 }], // 5 md x 100
+      },
+      {
+        endDate: new Date("2026-01-28"),
+        closedAt: null,
+        frozenPlannedPoints: null,
+        frozenEarnedPoints: null,
+        frozenActualValue: null,
+        tasks: [{ storyPoints: 5, pctComplete: 1, actualHours: 16, competencyMultiplier: 1, manDayRate: 100 }], // 2 md x 100
+      },
+    ];
+    const result = budgetEntriesFromSprints(sprints, 15);
+    expect(result[0].actualCost).toBe(500);
+    expect(result[1].actualCost).toBe(200); // not 700 — sprint 2 only spent 200 of its own
+  });
+
+  it("plannedStoryPoints = 0 doesn't divide by zero", () => {
+    const sprints = [
+      {
+        endDate: new Date("2026-01-14"),
+        closedAt: null,
+        frozenPlannedPoints: null,
+        frozenEarnedPoints: null,
+        frozenActualValue: null,
+        tasks: [{ storyPoints: 10, pctComplete: 1, actualHours: 40, competencyMultiplier: 1, manDayRate: 100 }],
+      },
+    ];
+    const result = budgetEntriesFromSprints(sprints, 0);
     expect(result[0].pctPlannedComplete).toBe(0);
     expect(result[0].pctActualComplete).toBe(0);
   });
 
-  it("returns an empty array for no weeks", () => {
-    expect(budgetEntriesFromWbs([], 10)).toEqual([]);
+  it("returns an empty array for no sprints", () => {
+    expect(budgetEntriesFromSprints([], 10)).toEqual([]);
   });
 });

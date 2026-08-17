@@ -6,10 +6,12 @@ import { updateProjectFinancials } from "../project-actions";
 export function ContractInputsForm({
   projectId,
   contractValue,
+  plannedStoryPoints,
   plannedManDays,
 }: {
   projectId: string;
   contractValue: number;
+  plannedStoryPoints: number;
   plannedManDays: number;
 }) {
   return (
@@ -23,7 +25,17 @@ export function ContractInputsForm({
         />
       </div>
       <div>
-        <label className="block text-xs font-medium text-slate-600 mb-1">Total Planned Man-Days</label>
+        <label className="block text-xs font-medium text-slate-600 mb-1">Total Planned Story Points</label>
+        <InlineNumber
+          value={plannedStoryPoints}
+          step={1}
+          onSave={(v) => updateProjectFinancials(projectId, { plannedStoryPoints: v ?? 0 })}
+        />
+      </div>
+      <div className="sm:col-span-2">
+        <label className="block text-xs font-medium text-slate-600 mb-1">
+          Total Planned Man-Days <span className="font-normal text-slate-400">(reference rate input only — not used in PV/EV)</span>
+        </label>
         <InlineNumber
           value={plannedManDays}
           step={0.5}

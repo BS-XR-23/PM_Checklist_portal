@@ -6,7 +6,7 @@ import { requireModuleWrite, writeAudit } from "@/lib/rbac";
 
 export async function updateProjectFinancials(
   projectId: string,
-  data: Partial<{ contractValue: number; plannedManDays: number; crRate: number }>
+  data: Partial<{ contractValue: number; plannedManDays: number; plannedStoryPoints: number; crRate: number }>
 ) {
   // This one control feeds both Milestones (tranche amounts) and Budget
   // Tracker (EVM) — require write access to both rather than picking one.
@@ -22,7 +22,7 @@ export async function updateProjectFinancials(
     action: "update",
     entityType: "Project",
     entityId: projectId,
-    summary: "Updated project financials (contract value / planned man-days / CR rate)",
+    summary: "Updated project financials (contract value / planned story points / man-day rate input / CR rate)",
     diff: { before, changes: data },
   });
 

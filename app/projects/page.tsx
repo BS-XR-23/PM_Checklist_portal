@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { formatMoney, formatPct } from "@/lib/format";
 import { requireUser } from "@/lib/rbac";
-import { currentStage, budgetEntriesFromWbs, toWbsWeekForBudget } from "@/lib/calculations";
+import { currentStage, budgetEntriesFromSprints, toSprintsForBudget } from "@/lib/calculations";
 import { computeProjectRag } from "@/lib/rag";
 import { getReminderItems } from "@/lib/notifications";
 import { PM_STAGES } from "@/lib/seed-data";
@@ -24,9 +24,9 @@ export default async function ProjectsPage() {
     orderBy: { createdAt: "desc" },
     include: {
       checklistItems: { select: { type: true, stage: true, status: true, actualDate: true } },
-      wbsWeeks: {
-        orderBy: { weekEnding: "asc" },
-        include: { entries: { include: { wbsTask: true, person: { include: { roleRate: true } } } } },
+      sprints: {
+        orderBy: { startDate: "asc" },
+        include: { tasks: { include: { person: { include: { roleRate: true } } } } },
       },
       risks: true,
     },
@@ -59,7 +59,7 @@ export default async function ProjectsPage() {
     // Same RAG definition as the Portfolio rollup (lib/rag.ts) — SPI/CPI +
     // open high risks — so a project's health reads the same everywhere,
     // not just as a raw completion percentage.
-    const budgetEntries = budgetEntriesFromWbs(toWbsWeekForBudget(p.wbsWeeks), p.plannedManDays);
+    const budgetEntries = budgetEntriesFromSprints(toSprintsForBudget(p.sprints), p.plannedStoryPoints);
     const { rag } = computeProjectRag({ contractValue: p.contractValue, budgetEntries, risks: p.risks });
     const overdueCount = overdueCounts.get(p.id) ?? 0;
     return { ...p, total, completed, pct, pmStage, endDate, rag, overdueCount };

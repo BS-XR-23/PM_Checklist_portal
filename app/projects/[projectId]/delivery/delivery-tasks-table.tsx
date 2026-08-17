@@ -8,8 +8,7 @@ export type WbsTaskData = {
   id: string;
   wbsNumber: string;
   title: string;
-  manDays: number;
-  storyPoints: number | null;
+  storyPoints: number;
   personId: string | null;
   personName: string | null;
   sprintId: string | null;
@@ -85,12 +84,11 @@ function SprintSelect({ taskId, projectId, value, sprints }: { taskId: string; p
   );
 }
 
-/** The project-wide WBS master list (Tasks tab) — no week grouping. Man-days
- * is the estimate; assignee here is just the default a new week's entry
- * starts from, editable independently per week on the Weekly Tracking tab.
- * Story Points is a display/velocity figure only — man-days is what drives
- * PV/EV/AV/CPI everywhere, including Sprint Summary. Closed sprints still
- * appear in the dropdown (disabled) so a task already committed to one
+/** The project-wide WBS master list (Tasks tab) — no week grouping. Story
+ * Points is the estimate, driving Sprint's PV and 0/100 EV rule directly;
+ * assignee here is the default a task starts with, overridable once it's
+ * committed to a sprint and being tracked. Closed sprints still appear in
+ * the Sprint dropdown (disabled) so a task already committed to one
  * displays correctly — assignTaskToSprint rejects committing into a closed
  * sprint, since its numbers are already frozen, but a task can still be
  * moved out of one to None or another open sprint. */
@@ -122,7 +120,6 @@ export function WbsTasksTable({
             <tr className="text-left text-xs font-medium text-slate-500 border-b border-slate-200 bg-slate-50">
               <th className="px-4 py-3 font-medium w-24">WBS#</th>
               <th className="px-4 py-3 font-medium">Title</th>
-              <th className="px-4 py-3 font-medium w-28">Man-days</th>
               <th className="px-4 py-3 font-medium w-24">Story Pts</th>
               <th className="px-4 py-3 font-medium w-52">Default Assignee</th>
               <th className="px-4 py-3 font-medium w-40">Sprint</th>
@@ -148,20 +145,9 @@ export function WbsTasksTable({
                 </td>
                 <td className="px-4 py-2">
                   {canWrite ? (
-                    <InlineNumber value={t.manDays} step={0.5} onSave={(v) => updateWbsTask(t.id, projectId, { manDays: v ?? 0 })} />
+                    <InlineNumber value={t.storyPoints} step={1} onSave={(v) => updateWbsTask(t.id, projectId, { storyPoints: v ?? 0 })} />
                   ) : (
-                    <span className="text-slate-600">{t.manDays}</span>
-                  )}
-                </td>
-                <td className="px-4 py-2">
-                  {canWrite ? (
-                    <InlineNumber
-                      value={t.storyPoints}
-                      step={1}
-                      onSave={(v) => updateWbsTask(t.id, projectId, { storyPoints: v })}
-                    />
-                  ) : (
-                    <span className="text-slate-600">{t.storyPoints ?? "—"}</span>
+                    <span className="text-slate-600">{t.storyPoints}</span>
                   )}
                 </td>
                 <td className="px-4 py-2">

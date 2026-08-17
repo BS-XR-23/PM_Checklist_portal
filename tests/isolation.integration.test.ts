@@ -888,41 +888,51 @@ describe("isolation boundary", () => {
   // Budget Tracker has no actions of its own anymore (fully derived,
   // read-only — see app/projects/[projectId]/budget/page.tsx) so there's no
   // guessed-ID surface left to test here. That coverage now lives in
-  // tests/delivery.integration.test.ts against the real WbsWeekEntry
+  // tests/delivery.integration.test.ts against the real Sprint/WbsTask
   // actions Budget Tracker's numbers are derived from. This test instead
   // sanity-checks the derivation itself against real Prisma-shaped rows
   // (not hand-typed fixtures — lib/calculations.test.ts covers those),
   // since a mismatch between the query's `include` shape and what
-  // toWbsWeekForBudget()/budgetEntriesFromWbs() expect wouldn't be caught
-  // by pure unit tests alone.
-  it("Budget Tracker's derived PV/EV/AC resolves correctly from real WbsWeek/WbsTask/WbsWeekEntry/RoleRate rows", async () => {
-    const { budgetEntriesFromWbs, toWbsWeekForBudget, computeEvm } = await import("@/lib/calculations");
+  // toSprintsForBudget()/budgetEntriesFromSprints() expect wouldn't be
+  // caught by pure unit tests alone.
+  it("Budget Tracker's derived PV/EV/AC resolves correctly from real Sprint/WbsTask/RoleRate rows", async () => {
+    const { budgetEntriesFromSprints, toSprintsForBudget, computeEvm } = await import("@/lib/calculations");
 
     const seniorRate = await prisma.roleRate.create({ data: { roleName: "[TEST] Senior for budget derivation", manDayRate: 300 } });
     const seniorPerson = await prisma.person.create({ data: { name: "[TEST] Senior for budget derivation", roleRateId: seniorRate.id } });
     await prisma.projectEngagement.create({ data: { personId: seniorPerson.id, projectId: projectA.id, roleOnProject: "Senior" } });
-    const task = await prisma.wbsTask.create({ data: { projectId: projectA.id, wbsNumber: "1", title: "[TEST] Budget derivation task", manDays: 10 } });
-    const week = await prisma.wbsWeek.create({ data: { projectId: projectA.id, weekEnding: new Date("2026-09-01") } });
-    await prisma.wbsWeekEntry.create({
-      data: { wbsWeekId: week.id, wbsTaskId: task.id, pctComplete: 0.4, actualManDays: 4, personId: seniorPerson.id, personName: seniorPerson.name },
+    const sprint = await prisma.sprint.create({
+      data: { projectId: projectA.id, name: "[TEST] Budget derivation sprint", startDate: new Date("2026-08-25"), endDate: new Date("2026-09-01") },
+    });
+    const task = await prisma.wbsTask.create({
+      data: {
+        projectId: projectA.id,
+        wbsNumber: "1",
+        title: "[TEST] Budget derivation task",
+        storyPoints: 10,
+        sprintId: sprint.id,
+        pctComplete: 1,
+        actualHours: 32, // 4 man-days
+        personId: seniorPerson.id,
+        personName: seniorPerson.name,
+      },
     });
 
     try {
-      const weeks = await prisma.wbsWeek.findMany({
+      const sprints = await prisma.sprint.findMany({
         where: { projectId: projectA.id },
-        orderBy: { weekEnding: "asc" },
-        include: { entries: { include: { wbsTask: true, person: { include: { roleRate: true } } } } },
+        orderBy: { startDate: "asc" },
+        include: { tasks: { include: { person: { include: { roleRate: true } } } } },
       });
-      const evm = computeEvm(budgetEntriesFromWbs(toWbsWeekForBudget(weeks), 20 /* plannedManDays */), 10000 /* contractValue */);
-      const point = evm.find((e) => e.weekEnding.getTime() === week.weekEnding.getTime())!;
+      const evm = computeEvm(budgetEntriesFromSprints(toSprintsForBudget(sprints), 20 /* plannedStoryPoints */), 10000 /* contractValue */);
+      const point = evm.find((e) => e.weekEnding.getTime() === sprint.endDate.getTime())!;
 
-      expect(point.pctPlannedComplete).toBeCloseTo(10 / 20); // task manDays / plannedManDays
-      expect(point.pctActualComplete).toBeCloseTo((10 * 0.4) / 20); // manDays x pctComplete / plannedManDays
-      expect(point.actualCost).toBe(4 * 300); // actualManDays x resolved RoleRate
+      expect(point.pctPlannedComplete).toBeCloseTo(10 / 20); // task storyPoints / plannedStoryPoints
+      expect(point.pctActualComplete).toBeCloseTo(10 / 20); // fully done (0/100 rule) storyPoints / plannedStoryPoints
+      expect(point.actualCost).toBe(4 * 300); // (actualHours / 8) x resolved RoleRate
     } finally {
-      await prisma.wbsWeekEntry.deleteMany({ where: { wbsTaskId: task.id } });
-      await prisma.wbsWeek.delete({ where: { id: week.id } });
       await prisma.wbsTask.delete({ where: { id: task.id } });
+      await prisma.sprint.delete({ where: { id: sprint.id } });
       await prisma.projectEngagement.deleteMany({ where: { personId: seniorPerson.id } });
       await prisma.person.delete({ where: { id: seniorPerson.id } });
       await prisma.roleRate.delete({ where: { id: seniorRate.id } });

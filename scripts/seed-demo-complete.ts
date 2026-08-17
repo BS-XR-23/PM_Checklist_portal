@@ -79,10 +79,13 @@ async function main() {
   }
   console.log(`Closed ${demoRisks.length} open risk(s).`);
 
-  // WBS tracking history (Delivery tab) climbing to 100% complete, on
-  // schedule, ~5% under cost — Budget Tracker derives SPI/CPI from this
-  // live, so seeding it here (not a separate BudgetEntry) is what makes
-  // the Dashboard/Portfolio show Green.
+  // Sprint tracking (Delivery tab) — one closed sprint, fully done, ~5%
+  // under cost — Budget Tracker derives SPI/CPI from this live, so seeding
+  // it here is what makes the Dashboard/Portfolio show Green. Coarser than
+  // the old per-week narrative (Budget Tracker's chart is now one point
+  // per sprint, not per week) — a single representative closed sprint
+  // rather than faking a multi-point trend across sprints that would
+  // otherwise need each task to be committed then abandoned partway.
   const demoRoleRate = await prisma.roleRate.upsert({
     where: { roleName: "[DEMO] Developer" },
     update: {},
@@ -90,41 +93,60 @@ async function main() {
   });
   await prisma.person.updateMany({ where: { id: { in: demoPeople.map((p) => p.id) } }, data: { roleRateId: demoRoleRate.id } });
 
-  await prisma.wbsWeek.deleteMany({ where: { projectId: demoProject.id } }); // cascades tasks' week-entries
   await prisma.wbsTask.deleteMany({ where: { projectId: demoProject.id } });
+  await prisma.sprint.deleteMany({ where: { projectId: demoProject.id } });
 
-  const taskManDays = [25, 25, 20, 20]; // sums to plannedManDays (90)
+  const taskStoryPoints = [25, 25, 20, 20]; // sums to plannedStoryPoints (90)
+  await prisma.project.update({ where: { id: demoProject.id }, data: { plannedStoryPoints: taskStoryPoints.reduce((a, b) => a + b, 0) } });
+
+  const sprint = await prisma.sprint.create({
+    data: { projectId: demoProject.id, name: "[DEMO] Sprint 1", startDate: daysAgo(21), endDate: daysAgo(7) },
+  });
+
+  // 1 story point ~ 1 actual man-day (8 hours) for this demo — actualHours
+  // is what a PM would manually type in from checking Jira in real use.
   const tasks = await Promise.all(
-    taskManDays.map((manDays, i) =>
+    taskStoryPoints.map((storyPoints, i) =>
       prisma.wbsTask.create({
         data: {
           projectId: demoProject.id,
           wbsNumber: String(i + 1),
           title: `Demo workstream ${i + 1}`,
-          manDays,
+          storyPoints,
           personId: demoPeople[i % demoPeople.length].id,
           personName: demoPeople[i % demoPeople.length].name,
+          sprintId: sprint.id,
+          pctComplete: 1,
+          actualHours: storyPoints * 8,
+          competencyMultiplier: 1,
         },
       })
     )
   );
 
-  const weeks = [0.25, 0.5, 0.75, 1.0];
-  for (let i = 0; i < weeks.length; i++) {
-    const pct = weeks[i];
-    const week = await prisma.wbsWeek.create({ data: { projectId: demoProject.id, weekEnding: daysAgo((weeks.length - 1 - i) * 21) } });
-    await prisma.wbsWeekEntry.createMany({
-      data: tasks.map((t) => ({
-        wbsWeekId: week.id,
-        wbsTaskId: t.id,
-        pctComplete: pct,
-        actualManDays: t.manDays * pct,
-        personId: t.personId,
-        personName: t.personName,
-      })),
-    });
-  }
-  console.log(`Wrote ${weeks.length} WBS tracking weeks ending at 100% complete, SPI 1.0 / CPI ~1.05.`);
+  const plannedValue = tasks.reduce((sum, t) => sum + t.storyPoints, 0);
+  const earnedValue = tasks.reduce((sum, t) => sum + (t.pctComplete >= 1 ? t.storyPoints : 0), 0);
+  const actualValue = tasks.reduce((sum, t) => sum + (t.actualHours / 8) * t.competencyMultiplier, 0);
+  const frozenTaskSnapshot = tasks.map((t) => ({
+    taskId: t.id,
+    wbsNumber: t.wbsNumber,
+    title: t.title,
+    storyPoints: t.storyPoints,
+    pctComplete: t.pctComplete,
+  }));
+
+  await prisma.sprint.update({
+    where: { id: sprint.id },
+    data: {
+      closedAt: new Date(),
+      frozenPlannedPoints: plannedValue,
+      frozenEarnedPoints: earnedValue,
+      frozenActualValue: actualValue,
+      frozenTaskSnapshot,
+    },
+  });
+
+  console.log(`Wrote 1 closed demo sprint at 100% complete, SPI 1.0 / CPI ~1.05.`);
 
   console.log(`\nDone. Dashboard: /projects/${demoProject.id}/dashboard — should now show Green on /portfolio.`);
 }

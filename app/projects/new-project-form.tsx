@@ -48,7 +48,17 @@ export function NewProjectForm() {
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">Total Planned Man-Days</label>
+          <label className="block text-xs font-medium text-slate-600 mb-1">Total Planned Story Points</label>
+          <input
+            name="plannedStoryPoints"
+            type="number"
+            step="1"
+            min="0"
+            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-slate-600 mb-1">Total Planned Man-Days (reference rate only)</label>
           <input
             name="plannedManDays"
             type="number"

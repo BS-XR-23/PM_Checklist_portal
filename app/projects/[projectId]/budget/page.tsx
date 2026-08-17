@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { computeEvm, manDayRate, budgetEntriesFromWbs, toWbsWeekForBudget } from "@/lib/calculations";
+import { computeEvm, manDayRate, manDaysFromHours, budgetEntriesFromSprints, toSprintsForBudget } from "@/lib/calculations";
 import { formatMoney } from "@/lib/format";
 import { requireModuleAccess } from "@/lib/rbac";
 import { EvmLineChart } from "@/components/charts/evm-line-chart";
@@ -13,35 +13,33 @@ export default async function BudgetTrackerPage({ params }: { params: { projectI
   const access = await requireModuleAccess(params.projectId, "BUDGET_TRACKER", "READ_LIMITED");
   const costHidden = access === "READ_LIMITED"; // strips AC / CV / SPI / CPI — cost-side detail
 
-  const [project, weeks] = await Promise.all([
+  const [project, sprints] = await Promise.all([
     prisma.project.findUniqueOrThrow({ where: { id: params.projectId } }),
-    prisma.wbsWeek.findMany({
+    prisma.sprint.findMany({
       where: { projectId: params.projectId },
-      orderBy: { weekEnding: "asc" },
+      orderBy: { startDate: "asc" },
       include: {
-        entries: {
-          orderBy: { createdAt: "asc" },
-          include: { wbsTask: true, person: { include: { roleRate: true } } },
-        },
+        tasks: { include: { person: { include: { roleRate: true } } } },
       },
     }),
   ]);
 
-  const evmSource = budgetEntriesFromWbs(toWbsWeekForBudget(weeks), project.plannedManDays);
+  const evmSource = budgetEntriesFromSprints(toSprintsForBudget(sprints), project.plannedStoryPoints);
   const evm = computeEvm(evmSource, project.contractValue);
   const rate = manDayRate(project.contractValue, project.plannedManDays);
 
-  const roleBreakdowns: RoleBreakdownRow[][] = weeks.map((w) => {
+  const roleBreakdowns: RoleBreakdownRow[][] = sprints.map((s) => {
     const groups = new Map<string, RoleBreakdownRow>();
-    for (const e of w.entries) {
-      const roleName = e.person?.roleRate?.roleName ?? "Unassigned / No Rate Role";
-      const rowRate = e.person?.roleRate?.manDayRate ?? 0;
-      const existing = groups.get(roleName) ?? { roleName, manDays: 0, manDayRate: rowRate, cost: 0 };
-      existing.manDays += e.actualManDays;
-      existing.cost += e.actualManDays * rowRate;
+    for (const t of s.tasks) {
+      const roleName = t.person?.roleRate?.roleName ?? "Unassigned / No Rate Role";
+      const rowRate = t.person?.roleRate?.manDayRate ?? 0;
+      const manDaysEquivalent = manDaysFromHours(t.actualHours);
+      const existing = groups.get(roleName) ?? { roleName, manDaysEquivalent: 0, manDayRate: rowRate, cost: 0 };
+      existing.manDaysEquivalent += manDaysEquivalent;
+      existing.cost += manDaysEquivalent * rowRate;
       groups.set(roleName, existing);
     }
-    return Array.from(groups.values()).filter((g) => g.manDays > 0);
+    return Array.from(groups.values()).filter((g) => g.manDaysEquivalent > 0);
   });
 
   const chartData = evm.map((e) => ({ weekEnding: e.weekEnding.toISOString(), pv: e.pv, ev: e.ev, ac: e.actualCost }));
@@ -53,23 +51,29 @@ export default async function BudgetTrackerPage({ params }: { params: { projectI
         <p className="text-sm font-medium text-amber-900">Testing purposes only — not the authoritative budget source.</p>
         <p className="text-xs text-amber-700 mt-0.5">
           Real budget tracking now lives in a separate portal. Read-only here — every figure is derived live from the
-          Delivery tab&apos;s WBS tracking, nothing is entered directly on this page.
+          Delivery tab&apos;s Sprint tracking, nothing is entered directly on this page.
         </p>
       </div>
 
       <div>
         <h2 className="text-base font-semibold text-slate-900">Budget / CPI-SPI Tracker</h2>
         <p className="text-sm text-slate-500">
-          PV/EV = cumulative % of Total Planned Man-Days tracked/earned on the Delivery WBS, × Contract Value. AC =
-          that week&apos;s actual man-days × each assignee&apos;s Rate Role (Admin → People). SPI = EV/PV. CPI =
-          EV/AC. &ge;1.0 favorable, &lt;1.0 unfavorable.
+          PV/EV = cumulative % of Total Planned Story Points tracked/earned across Delivery&apos;s sprints (0/100
+          rule), × Contract Value. AC = that sprint&apos;s actual hours ÷ 8 × each assignee&apos;s Rate Role (Admin →
+          People). SPI = EV/PV. CPI = EV/AC. &ge;1.0 favorable, &lt;1.0 unfavorable. One data point per sprint
+          (closed sprints use their frozen numbers; the current sprint is live).
         </p>
       </div>
 
       <div className="rounded-lg border border-slate-200 bg-white p-4">
         {access === "WRITE" ? (
           <>
-            <ContractInputsForm projectId={project.id} contractValue={project.contractValue} plannedManDays={project.plannedManDays} />
+            <ContractInputsForm
+              projectId={project.id}
+              contractValue={project.contractValue}
+              plannedStoryPoints={project.plannedStoryPoints}
+              plannedManDays={project.plannedManDays}
+            />
             <p className="mt-2 text-xs text-slate-500">Man-Day Rate (auto): {formatMoney(rate)}</p>
           </>
         ) : (
@@ -79,8 +83,8 @@ export default async function BudgetTrackerPage({ params }: { params: { projectI
               <p className="text-slate-800">{formatMoney(project.contractValue)}</p>
             </div>
             <div>
-              <p className="text-xs font-medium text-slate-600">Total Planned Man-Days</p>
-              <p className="text-slate-800">{project.plannedManDays}</p>
+              <p className="text-xs font-medium text-slate-600">Total Planned Story Points</p>
+              <p className="text-slate-800">{project.plannedStoryPoints}</p>
             </div>
           </div>
         )}
@@ -99,14 +103,14 @@ export default async function BudgetTrackerPage({ params }: { params: { projectI
         </div>
       )}
 
-      <h3 className="text-sm font-semibold text-slate-700">Weekly (from Delivery)</h3>
+      <h3 className="text-sm font-semibold text-slate-700">By Sprint (from Delivery)</h3>
 
       <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
         <div className="overflow-x-auto max-h-[32rem] overflow-y-auto">
           <table className="w-full text-sm">
             <thead className="sticky top-0 z-10">
               <tr className="text-left text-xs font-medium text-slate-500 border-b border-slate-200 bg-slate-50">
-                <th className="px-4 py-3 font-medium w-36">Week Ending</th>
+                <th className="px-4 py-3 font-medium w-36">Sprint End</th>
                 <th className="px-4 py-3 font-medium w-40">% Planned Complete (Cum.)</th>
                 <th className="px-4 py-3 font-medium w-40">% Actual Complete (Cum.)</th>
                 <th className="px-4 py-3 font-medium w-28">PV</th>
@@ -119,13 +123,13 @@ export default async function BudgetTrackerPage({ params }: { params: { projectI
             </thead>
             <tbody>
               {evm.map((e, i) => (
-                <BudgetRow key={weeks[i].id} weekId={weeks[i].id} evm={e} roleBreakdown={roleBreakdowns[i]} costHidden={costHidden} />
+                <BudgetRow key={sprints[i].id} weekId={sprints[i].id} evm={e} roleBreakdown={roleBreakdowns[i]} costHidden={costHidden} />
               ))}
             </tbody>
           </table>
         </div>
-        {weeks.length === 0 && (
-          <p className="text-sm text-slate-400 p-4">No tracking weeks yet — add one on the Delivery tab&apos;s Weekly Tracking page.</p>
+        {sprints.length === 0 && (
+          <p className="text-sm text-slate-400 p-4">No sprints yet — create one on the Delivery tab&apos;s Tasks page.</p>
         )}
       </div>
     </div>

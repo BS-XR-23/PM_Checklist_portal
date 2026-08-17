@@ -92,9 +92,9 @@ export function checklistCompletionPct(items: { status: string }[]): number {
   return applicable.filter((i) => i.status === "COMPLETED").length / applicable.length;
 }
 
-/** Sprint Summary: Planned Value = sum of a sprint's committed tasks' estimated man-days. */
-export function wbsPlannedValue(tasks: { manDays: number }[]): number {
-  return tasks.reduce((sum, t) => sum + t.manDays, 0);
+/** Sprint Summary: Planned Value = sum of a sprint's committed tasks' estimated story points. */
+export function wbsPlannedValue(tasks: { points: number }[]): number {
+  return tasks.reduce((sum, t) => sum + t.points, 0);
 }
 
 /** Sprint Summary: Actual Value = real days spent, adjusted by each assignee's Competency multiplier. */
@@ -109,84 +109,108 @@ export function competencyCpi(ev: number, av: number): number | null {
 
 /**
  * Sprint Summary: 0/100 rule — a sprint-committed task earns its full
- * man-days once its latest tracked % complete reaches 100%, otherwise 0.
- * This is Delivery's only Earned Value calculation — there is no separate
- * weighted-%-complete model anymore; weekly tracking (WbsWeek/WbsWeekEntry)
- * is purely how progress gets recorded, feeding this function, not a
- * competing calculation of its own.
+ * story points once its latest tracked % complete reaches 100%, otherwise
+ * 0. This is Delivery's only Earned Value calculation — progress is
+ * tracked directly on each WbsTask (no weekly checkpoint rows), feeding
+ * this function, not a competing calculation of its own.
  */
-export function sprintEarnedValue(tasks: { manDays: number; pctComplete: number }[]): number {
-  return tasks.reduce((sum, t) => sum + (t.pctComplete >= 1 ? t.manDays : 0), 0);
+export function sprintEarnedValue(tasks: { points: number; pctComplete: number }[]): number {
+  return tasks.reduce((sum, t) => sum + (t.pctComplete >= 1 ? t.points : 0), 0);
 }
 
-export type WbsWeekForBudget = {
-  weekEnding: Date;
-  entries: { wbsTaskId: string; manDays: number; pctComplete: number; actualManDays: number; manDayRate: number }[];
+/**
+ * Actual effort is manually typed in as hours (e.g. read off Jira), not
+ * man-days directly — this is the single conversion point, shared by
+ * Sprint's live/frozen Actual Value and Budget Tracker's role-breakdown,
+ * so it can't drift between the two.
+ */
+export const HOURS_PER_MAN_DAY = 8;
+export function manDaysFromHours(hours: number): number {
+  return hours / HOURS_PER_MAN_DAY;
+}
+
+export type SprintForBudget = {
+  endDate: Date;
+  closedAt: Date | null;
+  frozenPlannedPoints: number | null;
+  frozenEarnedPoints: number | null;
+  frozenActualValue: number | null;
+  tasks: { storyPoints: number; pctComplete: number; actualHours: number; competencyMultiplier: number; manDayRate: number }[];
 };
 
 /**
- * Shapes a Prisma `WbsWeek.findMany({ include: { entries: { include: {
- * wbsTask, person: { include: { roleRate } } } } } })` result into
- * `budgetEntriesFromWbs`'s expected input — factored out so the four call
- * sites (Budget Tracker, Dashboard, Projects list, Portfolio) can't drift
- * out of sync with each other on how a rate gets resolved.
+ * Shapes a Prisma `Sprint.findMany({ include: { tasks: { include: {
+ * person: { include: { roleRate } } } } } })` result into
+ * `budgetEntriesFromSprints`'s expected input — factored out so the four
+ * call sites (Budget Tracker, Dashboard, Projects list, Portfolio) can't
+ * drift out of sync with each other on how a rate gets resolved.
  */
-export function toWbsWeekForBudget(
-  weeks: {
-    weekEnding: Date;
-    entries: {
-      wbsTaskId: string;
+export function toSprintsForBudget(
+  sprints: {
+    endDate: Date;
+    closedAt: Date | null;
+    frozenPlannedPoints: number | null;
+    frozenEarnedPoints: number | null;
+    frozenActualValue: number | null;
+    tasks: {
+      storyPoints: number;
       pctComplete: number;
-      actualManDays: number;
-      wbsTask: { manDays: number };
+      actualHours: number;
+      competencyMultiplier: number;
       person: { roleRate: { manDayRate: number } | null } | null;
     }[];
   }[]
-): WbsWeekForBudget[] {
-  return weeks.map((w) => ({
-    weekEnding: w.weekEnding,
-    entries: w.entries.map((e) => ({
-      wbsTaskId: e.wbsTaskId,
-      manDays: e.wbsTask.manDays,
-      pctComplete: e.pctComplete,
-      actualManDays: e.actualManDays,
-      manDayRate: e.person?.roleRate?.manDayRate ?? 0,
+): SprintForBudget[] {
+  return sprints.map((s) => ({
+    endDate: s.endDate,
+    closedAt: s.closedAt,
+    frozenPlannedPoints: s.frozenPlannedPoints,
+    frozenEarnedPoints: s.frozenEarnedPoints,
+    frozenActualValue: s.frozenActualValue,
+    tasks: s.tasks.map((t) => ({
+      storyPoints: t.storyPoints,
+      pctComplete: t.pctComplete,
+      actualHours: t.actualHours,
+      competencyMultiplier: t.competencyMultiplier,
+      manDayRate: t.person?.roleRate?.manDayRate ?? 0,
     })),
   }));
 }
 
 /**
  * Budget Tracker: derives the exact shape computeEvm() already expects, live
- * from Delivery's WBS tracking — no separate BudgetEntry data entry. `weeks`
- * must be pre-sorted ascending by weekEnding (this walks a running
- * cumulative total, so order matters).
- *
- * pctPlanned/pctActualComplete are cumulative fractions of plannedManDays —
- * built from "latest known state per task," not summed per WbsWeekEntry row,
- * so a task tracked across 3 weeks counts once, not 3x; a task untouched in
- * a given week keeps its last-recorded manDays/%, same as real cumulative
- * EVM tracking. actualCost is this week's spend only (not cumulative),
- * matching the original BudgetEntry.actualCost semantics.
+ * from Delivery's Sprint tracking — no separate BudgetEntry data entry.
+ * `sprints` must be pre-sorted ascending by startDate (this walks a running
+ * cumulative total, so order matters). One data point per sprint — closed
+ * sprints read their permanent frozen* snapshot directly; the current open
+ * sprint computes live via wbsPlannedValue/sprintEarnedValue, the same
+ * functions Sprint Summary's own page uses. No dedup step is needed here
+ * (unlike the old weekly version): a task belongs to at most one sprint at
+ * a time, so it's never double-counted across sprints the way it could be
+ * double-counted across weeks. actualCost is that sprint's own spend only
+ * (not cumulative), matching the original semantics.
  */
-export function budgetEntriesFromWbs(
-  weeks: WbsWeekForBudget[],
-  plannedManDays: number
+export function budgetEntriesFromSprints(
+  sprints: SprintForBudget[],
+  plannedStoryPoints: number
 ): { weekEnding: Date; pctPlannedComplete: number; pctActualComplete: number; actualCost: number }[] {
-  const latestByTask = new Map<string, { manDays: number; pctComplete: number }>();
+  let cumulativePlanned = 0;
+  let cumulativeEarned = 0;
 
-  return weeks.map((week) => {
-    for (const e of week.entries) {
-      latestByTask.set(e.wbsTaskId, { manDays: e.manDays, pctComplete: e.pctComplete });
-    }
-    const tracked = Array.from(latestByTask.values());
-    const cumulativePlanned = tracked.reduce((sum, t) => sum + t.manDays, 0);
-    const cumulativeEarned = tracked.reduce((sum, t) => sum + t.manDays * t.pctComplete, 0);
-    const actualCost = week.entries.reduce((sum, e) => sum + e.actualManDays * e.manDayRate, 0);
+  return sprints.map((s) => {
+    const pv = s.closedAt ? s.frozenPlannedPoints ?? 0 : wbsPlannedValue(s.tasks.map((t) => ({ points: t.storyPoints })));
+    const ev = s.closedAt
+      ? s.frozenEarnedPoints ?? 0
+      : sprintEarnedValue(s.tasks.map((t) => ({ points: t.storyPoints, pctComplete: t.pctComplete })));
+    const actualCost = s.tasks.reduce((sum, t) => sum + manDaysFromHours(t.actualHours) * t.manDayRate, 0);
+
+    cumulativePlanned += pv;
+    cumulativeEarned += ev;
 
     return {
-      weekEnding: week.weekEnding,
-      pctPlannedComplete: plannedManDays ? cumulativePlanned / plannedManDays : 0,
-      pctActualComplete: plannedManDays ? cumulativeEarned / plannedManDays : 0,
+      weekEnding: s.endDate,
+      pctPlannedComplete: plannedStoryPoints ? cumulativePlanned / plannedStoryPoints : 0,
+      pctActualComplete: plannedStoryPoints ? cumulativeEarned / plannedStoryPoints : 0,
       actualCost,
     };
   });

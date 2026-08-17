@@ -2,7 +2,7 @@ import { formatMoney, formatDate, formatPct } from "@/lib/format";
 import { INDEX_FAVORABLE_COLOR, INDEX_UNFAVORABLE_COLOR } from "@/lib/colors";
 import type { EvmPoint } from "@/lib/calculations";
 
-export type RoleBreakdownRow = { roleName: string; manDays: number; manDayRate: number; cost: number };
+export type RoleBreakdownRow = { roleName: string; manDaysEquivalent: number; manDayRate: number; cost: number };
 
 function IndexValue({ value }: { value: number | null }) {
   if (value == null) return <span className="text-slate-300">—</span>;
@@ -32,7 +32,7 @@ export function BudgetRow({
 }) {
   return (
     <tr key={weekId} className="border-b border-slate-100 last:border-0 align-top hover:bg-slate-50/60">
-      <td className="px-4 py-2.5 text-slate-600 whitespace-nowrap">{formatDate(evm.weekEnding)}</td>
+      <td className="px-4 py-2.5 text-slate-600 whitespace-nowrap">{formatDate(evm.weekEnding)} {/* sprint's endDate */}</td>
       <td className="px-4 py-2.5 text-slate-600">{formatPct(evm.pctPlannedComplete)}</td>
       <td className="px-4 py-2.5 text-slate-600">{formatPct(evm.pctActualComplete)}</td>
       <td className="px-4 py-2.5 text-slate-600 whitespace-nowrap">{formatMoney(evm.pv)}</td>
@@ -44,7 +44,7 @@ export function BudgetRow({
             <div className="mt-1 space-y-0.5">
               {roleBreakdown.map((r) => (
                 <div key={r.roleName} className="text-[11px] text-slate-400 whitespace-nowrap">
-                  {r.roleName}: {r.manDays.toFixed(1)}md × {formatMoney(r.manDayRate)} = {formatMoney(r.cost)}
+                  {r.roleName}: {r.manDaysEquivalent.toFixed(1)}md × {formatMoney(r.manDayRate)} = {formatMoney(r.cost)}
                 </div>
               ))}
             </div>

@@ -5,7 +5,7 @@ import { formatDate } from "@/lib/format";
 import { competencyCpi } from "@/lib/calculations";
 import { INDEX_FAVORABLE_COLOR, INDEX_UNFAVORABLE_COLOR } from "@/lib/colors";
 import { InlinePercent, InlineNumber } from "@/components/ui/inline-edit";
-import { closeSprint, addSprintAllocation, updateSprintAllocation, deleteSprintAllocation } from "./delivery-actions";
+import { closeSprint, updateTaskProgress, addSprintAllocation, updateSprintAllocation, deleteSprintAllocation } from "./delivery-actions";
 import type { RosterPerson } from "./delivery-tasks-table";
 
 function IndexValue({ value }: { value: number | null }) {
@@ -22,13 +22,28 @@ function IndexValue({ value }: { value: number | null }) {
   );
 }
 
+// A task committed to an OPEN sprint — tracked directly (no weekly rows),
+// editable inline below.
 export type SprintTaskDrillDown = {
   id: string;
   wbsNumber: string;
   title: string;
-  manDays: number;
-  storyPoints: number | null;
-  pctComplete: number; // this task's latest tracked % as of now (or at close time, if closed)
+  storyPoints: number;
+  pctComplete: number;
+  actualHours: number;
+  personId: string | null;
+  personName: string | null;
+};
+
+// One row of a CLOSED sprint's frozenTaskSnapshot — permanent record of
+// which tasks earned the frozen PV/EV/AV, immune to later edits on the
+// (mutable) WbsTask rows themselves.
+export type FrozenTaskSnapshotEntry = {
+  taskId: string;
+  wbsNumber: string;
+  title: string;
+  storyPoints: number;
+  pctComplete: number;
 };
 
 export type SprintAllocationData = {
@@ -49,9 +64,43 @@ export type SprintSummaryData = {
   pv: number;
   ev: number;
   av: number;
-  tasks: SprintTaskDrillDown[];
+  tasks: SprintTaskDrillDown[]; // live — only used while open
+  frozenTasks: FrozenTaskSnapshotEntry[]; // from frozenTaskSnapshot — only used once closed
   allocations: SprintAllocationData[];
 };
+
+function AssigneeSelect({ taskId, projectId, value, roster }: { taskId: string; projectId: string; value: string; roster: RosterPerson[] }) {
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  return (
+    <div className="min-w-[160px]">
+      <select
+        className="w-full rounded border border-slate-200 px-1.5 py-1 text-xs hover:border-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-400 disabled:opacity-50"
+        defaultValue={value}
+        disabled={pending}
+        onChange={(e) => {
+          setError(null);
+          startTransition(async () => {
+            try {
+              await updateTaskProgress(taskId, projectId, { personId: e.target.value || null });
+            } catch (err) {
+              setError(err instanceof Error ? err.message : "Failed to set assignee.");
+            }
+          });
+        }}
+      >
+        <option value="">— Unassigned —</option>
+        {roster.map((p) => (
+          <option key={p.personId} value={p.personId}>
+            {p.personName}
+          </option>
+        ))}
+      </select>
+      {error && <p className="text-xs text-red-600 mt-0.5">{error}</p>}
+    </div>
+  );
+}
 
 /**
  * Reference-only capacity cross-check ("did they really spend the hours we
@@ -182,7 +231,10 @@ function TeamAllocationPanel({
  * PV/EV/AV are passed in pre-computed: for an open sprint the caller
  * derives them live (0/100 rule, see sprintEarnedValue), for a closed one
  * they're the permanent frozen* snapshot from the Sprint row — this
- * component never needs to know or care which.
+ * component never needs to know or care which. Same split for the
+ * drill-down: open sprints show `tasks` (live, editable inline); closed
+ * sprints show `frozenTasks` (read-only, from frozenTaskSnapshot) so the
+ * "which tasks earned this" list can never drift from the frozen totals.
  */
 export function SprintSummaryRow({
   projectId,
@@ -201,6 +253,8 @@ export function SprintSummaryRow({
 
   const cpi = competencyCpi(sprint.ev, sprint.av);
   const spi = sprint.pv ? sprint.ev / sprint.pv : null;
+  const closed = !!sprint.closedAt;
+  const editable = canWrite && !closed;
 
   return (
     <div className="rounded-lg border border-slate-200 bg-white">
@@ -216,7 +270,7 @@ export function SprintSummaryRow({
           <span className="text-xs text-slate-400">
             {formatDate(sprint.startDate)} – {formatDate(sprint.endDate)}
           </span>
-          {sprint.closedAt ? (
+          {closed ? (
             <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">Closed</span>
           ) : (
             <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">Open</span>
@@ -243,36 +297,68 @@ export function SprintSummaryRow({
                 <th className="font-medium py-1 pr-2 w-20">WBS#</th>
                 <th className="font-medium py-1 pr-2">Title</th>
                 <th className="font-medium py-1 pr-2 w-20">Story Pts</th>
-                <th className="font-medium py-1 pr-2 w-20">Man-days</th>
+                <th className="font-medium py-1 pr-2 w-20">%</th>
+                {!closed && <th className="font-medium py-1 pr-2 w-24">Actual Hrs</th>}
+                {!closed && <th className="font-medium py-1 pr-2 w-40">Assignee</th>}
                 <th className="font-medium py-1 pr-2 w-16">Done</th>
               </tr>
             </thead>
             <tbody>
-              {sprint.tasks.map((t) => (
-                <tr key={t.id} className="border-t border-slate-100">
-                  <td className="py-1.5 pr-2 text-slate-600">{t.wbsNumber || "—"}</td>
-                  <td className="py-1.5 pr-2 text-slate-600">{t.title}</td>
-                  <td className="py-1.5 pr-2 text-slate-500">{t.storyPoints ?? "—"}</td>
-                  <td className="py-1.5 pr-2 text-slate-500">{t.manDays}</td>
-                  <td className="py-1.5 pr-2">
-                    {t.pctComplete >= 1 ? <span className="text-emerald-600 font-medium">✓</span> : <span className="text-slate-300">—</span>}
-                  </td>
-                </tr>
-              ))}
-              {sprint.tasks.length === 0 && (
+              {closed
+                ? sprint.frozenTasks.map((t) => (
+                    <tr key={t.taskId} className="border-t border-slate-100">
+                      <td className="py-1.5 pr-2 text-slate-600">{t.wbsNumber || "—"}</td>
+                      <td className="py-1.5 pr-2 text-slate-600">{t.title}</td>
+                      <td className="py-1.5 pr-2 text-slate-500">{t.storyPoints}</td>
+                      <td className="py-1.5 pr-2 text-slate-500">{Math.round(t.pctComplete * 100)}%</td>
+                      <td className="py-1.5 pr-2">
+                        {t.pctComplete >= 1 ? <span className="text-emerald-600 font-medium">✓</span> : <span className="text-slate-300">—</span>}
+                      </td>
+                    </tr>
+                  ))
+                : sprint.tasks.map((t) => (
+                    <tr key={t.id} className="border-t border-slate-100">
+                      <td className="py-1.5 pr-2 text-slate-600">{t.wbsNumber || "—"}</td>
+                      <td className="py-1.5 pr-2 text-slate-600">{t.title}</td>
+                      <td className="py-1.5 pr-2 text-slate-500">{t.storyPoints}</td>
+                      <td className="py-1.5 pr-2">
+                        {editable ? (
+                          <InlinePercent value={t.pctComplete} onSave={(v) => updateTaskProgress(t.id, projectId, { pctComplete: v })} />
+                        ) : (
+                          <span className="text-slate-600">{Math.round(t.pctComplete * 100)}%</span>
+                        )}
+                      </td>
+                      <td className="py-1.5 pr-2">
+                        {editable ? (
+                          <InlineNumber value={t.actualHours} step={0.5} onSave={(v) => updateTaskProgress(t.id, projectId, { actualHours: v ?? 0 })} />
+                        ) : (
+                          <span className="text-slate-600">{t.actualHours}</span>
+                        )}
+                      </td>
+                      <td className="py-1.5 pr-2">
+                        {editable ? (
+                          <AssigneeSelect taskId={t.id} projectId={projectId} value={t.personId ?? ""} roster={roster} />
+                        ) : (
+                          <span className="text-slate-600">{t.personName ?? "—"}</span>
+                        )}
+                      </td>
+                      <td className="py-1.5 pr-2">
+                        {t.pctComplete >= 1 ? <span className="text-emerald-600 font-medium">✓</span> : <span className="text-slate-300">—</span>}
+                      </td>
+                    </tr>
+                  ))}
+              {(closed ? sprint.frozenTasks.length : sprint.tasks.length) === 0 && (
                 <tr>
-                  <td colSpan={5} className="py-2 text-slate-400">
-                    No tasks committed to this sprint yet — commit some on the Tasks tab.
+                  <td colSpan={closed ? 5 : 7} className="py-2 text-slate-400">
+                    No tasks committed to this sprint {closed ? "when it closed" : "yet — commit some on the Tasks tab"}.
                   </td>
                 </tr>
               )}
               <tr className="border-t border-slate-200 font-medium text-slate-700">
-                <td className="py-1.5 pr-2" colSpan={3}>
+                <td className="py-1.5 pr-2" colSpan={closed ? 4 : 6}>
                   Grand Total (Earned Value)
                 </td>
-                <td className="py-1.5 pr-2" colSpan={2}>
-                  {sprint.ev.toFixed(1)}
-                </td>
+                <td className="py-1.5 pr-2">{sprint.ev.toFixed(1)}</td>
               </tr>
             </tbody>
           </table>
@@ -282,11 +368,11 @@ export function SprintSummaryRow({
             sprintId={sprint.id}
             allocations={sprint.allocations}
             roster={roster}
-            closed={!!sprint.closedAt}
+            closed={closed}
             canWrite={canWrite}
           />
 
-          {canWrite && !sprint.closedAt && (
+          {canWrite && !closed && (
             <div className="mt-3 flex items-center gap-2">
               <button
                 onClick={() =>

@@ -18,7 +18,14 @@ import { DEFAULT_STAKEHOLDER_ROWS, DEFAULT_COMMS_ROWS, DEFAULT_RACI_ROWS } from 
  * connection open across dozens of sequential round-trips is prone to being
  * recycled mid-transaction ("Transaction not found").
  */
-export async function createProject(input: { name: string; client?: string; contractValue?: number; plannedManDays?: number; crRate?: number }) {
+export async function createProject(input: {
+  name: string;
+  client?: string;
+  contractValue?: number;
+  plannedManDays?: number;
+  plannedStoryPoints?: number;
+  crRate?: number;
+}) {
   // Read-only reference data — fetched once, outside the transaction, so a
   // template edit can never hold up (or race inside) project creation.
   const templateItems = await prisma.checklistTemplateItem.findMany({ orderBy: [{ type: "asc" }, { order: "asc" }] });
@@ -31,6 +38,7 @@ export async function createProject(input: { name: string; client?: string; cont
           client: input.client || null,
           contractValue: input.contractValue ?? 0,
           plannedManDays: input.plannedManDays ?? 0,
+          plannedStoryPoints: input.plannedStoryPoints ?? 0,
           crRate: input.crRate ?? 0,
         },
       });

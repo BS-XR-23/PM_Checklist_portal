@@ -19,8 +19,9 @@ export async function createProjectAction(formData: FormData) {
   const client = String(formData.get("client") ?? "").trim();
   const contractValue = Number(formData.get("contractValue") ?? 0);
   const plannedManDays = Number(formData.get("plannedManDays") ?? 0);
+  const plannedStoryPoints = Number(formData.get("plannedStoryPoints") ?? 0);
 
-  const project = await createProject({ name, client, contractValue, plannedManDays });
+  const project = await createProject({ name, client, contractValue, plannedManDays, plannedStoryPoints });
 
   await writeAudit({
     actor: user,
