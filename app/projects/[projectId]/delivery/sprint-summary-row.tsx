@@ -335,7 +335,7 @@ export function SprintSummaryRow({
       </div>
       {open && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[88vh] overflow-y-auto p-6">
+          <div className="bg-white rounded-xl shadow-xl max-w-6xl w-full max-h-[88vh] overflow-y-auto p-6">
             <div className="flex items-start justify-between gap-4 mb-4">
               <div>
                 <div className="flex items-center gap-2">
