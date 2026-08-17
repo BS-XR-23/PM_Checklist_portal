@@ -1,15 +1,24 @@
 import { prisma } from "@/lib/prisma";
-import { requireModuleAccess } from "@/lib/rbac";
+import { requireModuleAccess, requireUser } from "@/lib/rbac";
 import { SubNav } from "@/components/ui/sub-nav";
 import { StatCard } from "@/components/ui/stat-card";
 import { WbsTasksTable } from "../delivery-tasks-table";
 import { UploadWbsTasksForm } from "../upload-wbs-tasks-form";
+import type { AuditLogRow } from "@/components/rbac/audit-log-table";
 
 export const dynamic = "force-dynamic";
 
 export default async function DeliveryTasksPage({ params }: { params: { projectId: string } }) {
-  const access = await requireModuleAccess(params.projectId, "DELIVERY", "READ_LIMITED");
+  const [access, user] = await Promise.all([
+    requireModuleAccess(params.projectId, "DELIVERY", "READ_LIMITED"),
+    requireUser(),
+  ]);
   const canWrite = access === "WRITE";
+  // Per-task History is audit-trail data — same PM/TPM/Admin-only policy as
+  // the project's own Activity page, regardless of a viewer's DELIVERY
+  // access (a CLIENT could have DELIVERY read access without qualifying to
+  // see who-changed-what internally).
+  const canViewHistory = user.role === "ADMIN" || user.role === "TPM" || user.role === "PM";
 
   const [tasks, engagements, sprints] = await Promise.all([
     prisma.wbsTask.findMany({ where: { projectId: params.projectId }, orderBy: { createdAt: "asc" } }),
@@ -28,6 +37,33 @@ export default async function DeliveryTasksPage({ params }: { params: { projectI
   }));
 
   const sprintOptions = sprints.map((s) => ({ id: s.id, name: s.name, closedAt: s.closedAt }));
+
+  // One query for every task's history, grouped client-side by entityId —
+  // avoids an on-demand fetch per row click, and keeps the read on the
+  // server-rendering side (this page), consistent with how the rest of the
+  // app reads data, instead of adding a new "read" server action.
+  const taskHistory: Record<string, AuditLogRow[]> = {};
+  if (canViewHistory && tasks.length > 0) {
+    const logs = await prisma.auditLog.findMany({
+      where: { projectId: params.projectId, entityType: "WbsTask", entityId: { in: tasks.map((t) => t.id) } },
+      include: { actor: true },
+      orderBy: { createdAt: "desc" },
+    });
+    for (const l of logs) {
+      if (!l.entityId) continue;
+      const row: AuditLogRow = {
+        id: l.id,
+        actorName: l.actor.name,
+        actorRole: l.actorRole,
+        action: l.action,
+        entityType: l.entityType,
+        summary: l.summary,
+        isOverride: l.isOverride,
+        createdAt: l.createdAt,
+      };
+      (taskHistory[l.entityId] ??= []).push(row);
+    }
+  }
 
   // Informational only, same as each row's Done/Remaining below — never
   // feeds PV/EV/AV, which stay governed by the 0/100 rule on the Sprints
@@ -60,7 +96,14 @@ export default async function DeliveryTasksPage({ params }: { params: { projectI
         <StatCard label="Remaining Pts">{remainingPts.toFixed(1)}</StatCard>
       </div>
 
-      <WbsTasksTable projectId={params.projectId} tasks={tasks} roster={roster} sprints={sprintOptions} canWrite={canWrite} />
+      <WbsTasksTable
+        projectId={params.projectId}
+        tasks={tasks}
+        roster={roster}
+        sprints={sprintOptions}
+        canWrite={canWrite}
+        taskHistory={canViewHistory ? taskHistory : undefined}
+      />
       {canWrite && <UploadWbsTasksForm projectId={params.projectId} />}
     </div>
   );
