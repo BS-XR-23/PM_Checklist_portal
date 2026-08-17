@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireModuleAccess } from "@/lib/rbac";
 import { SubNav } from "@/components/ui/sub-nav";
+import { StatCard } from "@/components/ui/stat-card";
 import { WbsTasksTable } from "../delivery-tasks-table";
 import { UploadWbsTasksForm } from "../upload-wbs-tasks-form";
 
@@ -28,6 +29,13 @@ export default async function DeliveryTasksPage({ params }: { params: { projectI
 
   const sprintOptions = sprints.map((s) => ({ id: s.id, name: s.name, closedAt: s.closedAt }));
 
+  // Informational only, same as each row's Done/Remaining below — never
+  // feeds PV/EV/AV, which stay governed by the 0/100 rule on the Sprints
+  // tab. This is just a whole-backlog burn-down at a glance.
+  const totalPts = tasks.reduce((sum, t) => sum + t.storyPoints, 0);
+  const donePts = tasks.reduce((sum, t) => sum + t.storyPoints * t.pctComplete, 0);
+  const remainingPts = totalPts - donePts;
+
   return (
     <div className="space-y-6">
       <SubNav
@@ -35,7 +43,6 @@ export default async function DeliveryTasksPage({ params }: { params: { projectI
         options={[
           { href: "/delivery", label: "Sprints" },
           { href: "/delivery/tasks", label: "Tasks" },
-          { href: "/delivery/roadmap", label: "Roadmap" },
         ]}
       />
       <div>
@@ -45,6 +52,12 @@ export default async function DeliveryTasksPage({ params }: { params: { projectI
           just a starting point, overridable once a task is committed and tracked. Commit a task to a sprint here,
           or import it into one directly from the Sprints tab, to track its progress there.
         </p>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        <StatCard label="Total Pts">{totalPts.toFixed(1)}</StatCard>
+        <StatCard label="Done Pts">{donePts.toFixed(1)}</StatCard>
+        <StatCard label="Remaining Pts">{remainingPts.toFixed(1)}</StatCard>
       </div>
 
       <WbsTasksTable projectId={params.projectId} tasks={tasks} roster={roster} sprints={sprintOptions} canWrite={canWrite} />

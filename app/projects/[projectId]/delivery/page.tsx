@@ -95,7 +95,6 @@ export default async function DeliverySprintsPage({ params }: { params: { projec
         options={[
           { href: "/delivery", label: "Sprints" },
           { href: "/delivery/tasks", label: "Tasks" },
-          { href: "/delivery/roadmap", label: "Roadmap" },
         ]}
       />
       <div className="flex items-start justify-between gap-3">

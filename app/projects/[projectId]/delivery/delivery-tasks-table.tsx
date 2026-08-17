@@ -9,6 +9,7 @@ export type WbsTaskData = {
   wbsNumber: string;
   title: string;
   storyPoints: number;
+  pctComplete: number;
   personId: string | null;
   personName: string | null;
   sprintId: string | null;
@@ -117,17 +118,26 @@ export function WbsTasksTable({
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-left text-xs font-medium text-slate-500 border-b border-slate-200 bg-slate-50">
-              <th className="px-4 py-3 font-medium w-24">WBS#</th>
-              <th className="px-4 py-3 font-medium">Title</th>
-              <th className="px-4 py-3 font-medium w-24">Story Pts</th>
-              <th className="px-4 py-3 font-medium w-52">Default Assignee</th>
-              <th className="px-4 py-3 font-medium w-40">Sprint</th>
-              {canWrite && <th className="px-4 py-3 font-medium w-10" />}
+            <tr className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50">
+              <th className="px-4 py-3 w-24">WBS#</th>
+              <th className="px-4 py-3">Title</th>
+              <th className="px-4 py-3 w-24">Story Pts</th>
+              <th className="px-4 py-3 w-24" title="Informational only — pctComplete × Story Pts. Actual PV/EV/AV always use the 0/100 rule (see Sprints tab).">
+                Done
+              </th>
+              <th className="px-4 py-3 w-28" title="Informational only — Story Pts minus Done. Actual PV/EV/AV always use the 0/100 rule (see Sprints tab).">
+                Remaining
+              </th>
+              <th className="px-4 py-3 w-52">Default Assignee</th>
+              <th className="px-4 py-3 w-40">Sprint</th>
+              {canWrite && <th className="px-4 py-3 w-10" />}
             </tr>
           </thead>
           <tbody>
-            {tasks.map((t) => (
+            {tasks.map((t) => {
+              const donePts = t.storyPoints * t.pctComplete;
+              const remainingPts = t.storyPoints - donePts;
+              return (
               <tr key={t.id} className="border-b border-slate-100 last:border-0">
                 <td className="px-4 py-2">
                   {canWrite ? (
@@ -150,6 +160,8 @@ export function WbsTasksTable({
                     <span className="text-slate-600">{t.storyPoints}</span>
                   )}
                 </td>
+                <td className="px-4 py-2 text-emerald-700">{donePts.toFixed(2)}</td>
+                <td className="px-4 py-2 text-slate-500">{remainingPts.toFixed(2)}</td>
                 <td className="px-4 py-2">
                   {canWrite ? (
                     <PersonSelect rowId={t.id} projectId={projectId} value={t.personId ?? ""} roster={roster} />
@@ -188,7 +200,8 @@ export function WbsTasksTable({
                   </td>
                 )}
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>

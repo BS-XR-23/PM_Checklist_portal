@@ -5,6 +5,7 @@ import { formatDate, toDateInputValue } from "@/lib/format";
 import { competencyCpi } from "@/lib/calculations";
 import { INDEX_FAVORABLE_COLOR, INDEX_UNFAVORABLE_COLOR } from "@/lib/colors";
 import { InlinePercent, InlineNumber, InlineText, InlineDate } from "@/components/ui/inline-edit";
+import { StatCard } from "@/components/ui/stat-card";
 import {
   closeSprint,
   updateSprint,
@@ -36,15 +37,6 @@ function IndexValue({ value, variant = "pill" }: { value: number | null; variant
     >
       {value.toFixed(2)}
     </span>
-  );
-}
-
-function StatCard({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3.5">
-      <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide">{label}</div>
-      <div className="mt-1.5 text-xl font-bold text-slate-900">{children}</div>
-    </div>
   );
 }
 
