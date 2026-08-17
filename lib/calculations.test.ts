@@ -5,7 +5,6 @@ import {
   reminderBand,
   checklistCompletionPct,
   wbsPlannedValue,
-  wbsEarnedValue,
   wbsActualValue,
   competencyCpi,
   budgetEntriesFromWbs,
@@ -127,20 +126,6 @@ describe("wbsPlannedValue", () => {
 
   it("returns 0 for no tasks", () => {
     expect(wbsPlannedValue([])).toBe(0);
-  });
-});
-
-describe("wbsEarnedValue", () => {
-  it("sums man-days weighted by % complete", () => {
-    const tasks = [
-      { manDays: 10, pctComplete: 0.7 },
-      { manDays: 4, pctComplete: 0.5 },
-    ];
-    expect(wbsEarnedValue(tasks)).toBe(10 * 0.7 + 4 * 0.5);
-  });
-
-  it("a 0% task contributes nothing", () => {
-    expect(wbsEarnedValue([{ manDays: 10, pctComplete: 0 }])).toBe(0);
   });
 });
 

@@ -125,7 +125,7 @@ export default async function BudgetTrackerPage({ params }: { params: { projectI
           </table>
         </div>
         {weeks.length === 0 && (
-          <p className="text-sm text-slate-400 p-4">No tracking weeks yet — add one on the Delivery tab&apos;s Weekly CPI page.</p>
+          <p className="text-sm text-slate-400 p-4">No tracking weeks yet — add one on the Delivery tab&apos;s Weekly Tracking page.</p>
         )}
       </div>
     </div>

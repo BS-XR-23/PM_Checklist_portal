@@ -34,7 +34,7 @@ export default async function DeliveryTasksPage({ params }: { params: { projectI
       <SubNav
         projectId={params.projectId}
         options={[
-          { href: "/delivery", label: "Weekly CPI" },
+          { href: "/delivery", label: "Weekly Tracking" },
           { href: "/delivery/tasks", label: "Tasks" },
         ]}
       />
@@ -42,10 +42,10 @@ export default async function DeliveryTasksPage({ params }: { params: { projectI
         <div>
           <h2 className="text-base font-semibold text-slate-900">Delivery — Tasks</h2>
           <p className="text-sm text-slate-500">
-            The project-wide WBS — defined once here, tracked week by week on the Weekly CPI tab. Man-days is the
-            estimate; the default assignee here is just a starting point, overridable per week. Story Points and
-            Sprint are optional — commit a task to a sprint here to include it in that sprint&apos;s Summary on the
-            Weekly CPI tab.
+            The project-wide WBS — defined once here, tracked week by week on the Weekly Tracking tab. Man-days is
+            the estimate; the default assignee here is just a starting point, overridable per week. Commit a task to
+            a sprint here (Story Points optional, for velocity reference) to include it in that sprint&apos;s
+            Summary on the Weekly Tracking tab.
           </p>
         </div>
         {canWrite && <AddSprintModal projectId={params.projectId} suggestedName={`Sprint ${sprints.length + 1}`} />}

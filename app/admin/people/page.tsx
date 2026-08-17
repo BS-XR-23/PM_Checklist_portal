@@ -96,7 +96,7 @@ export default async function AdminPeoplePage() {
           Assigning a Person to a specific project (role, intensity, dates) happens on that project&apos;s
           Resourcing tab — Admin or that project&apos;s PM. A person&apos;s Rate Role is what the (testing-only)
           Budget Tracker resolves live to price their actual man-days from the Delivery tab. Their Competency is
-          what converts real days worked into effort units for the Delivery tab&apos;s Weekly CPI.
+          what converts real days worked into effort units for the Delivery tab&apos;s Sprint Summary.
         </p>
 
         <div className="pt-4 border-t border-slate-100">
@@ -128,7 +128,7 @@ export default async function AdminPeoplePage() {
         <div className="pt-4 border-t border-slate-100">
           <h2 className="text-base font-semibold text-slate-900 mb-1">Competencies</h2>
           <p className="text-sm text-slate-500 mb-4">
-            Velocity/capacity multipliers used on the Delivery tab&apos;s Weekly CPI — 1.0 is baseline, 1.3 means
+            Velocity/capacity multipliers used on the Delivery tab&apos;s Sprint Summary — 1.0 is baseline, 1.3 means
             that level completes the same estimated work ~30% faster. Never touches currency.
           </p>
           <CreateCompetencyForm />

@@ -188,7 +188,7 @@ export async function uploadWbsTasks(projectId: string, formData: FormData) {
   revalidateDelivery(projectId);
 }
 
-// --- Weekly tracking (Weekly CPI tab) ---
+// --- Weekly tracking (Weekly Tracking tab) ---
 
 export async function createWbsWeek(projectId: string, weekEnding: string | null) {
   const user = await requireModuleWrite(projectId, "DELIVERY");
@@ -208,7 +208,7 @@ export async function createWbsWeek(projectId: string, weekEnding: string | null
 }
 
 /** Fixes a mistyped week-ending date after the fact — the week's rows and
- * everything derived from it (Weekly CPI, Budget Tracker) stay attached,
+ * everything derived from it (Sprint Summary, Budget Tracker) stay attached,
  * only the date moves. */
 export async function updateWbsWeek(id: string, _projectId: string, weekEnding: string) {
   const existing = await prisma.wbsWeek.findUniqueOrThrow({ where: { id } });

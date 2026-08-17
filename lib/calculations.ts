@@ -92,17 +92,12 @@ export function checklistCompletionPct(items: { status: string }[]): number {
   return applicable.filter((i) => i.status === "COMPLETED").length / applicable.length;
 }
 
-/** Delivery / Weekly CPI: Planned Value = sum of a week's estimated man-days. */
+/** Sprint Summary: Planned Value = sum of a sprint's committed tasks' estimated man-days. */
 export function wbsPlannedValue(tasks: { manDays: number }[]): number {
   return tasks.reduce((sum, t) => sum + t.manDays, 0);
 }
 
-/** Delivery / Weekly CPI: Earned Value = estimated man-days weighted by % complete. */
-export function wbsEarnedValue(tasks: { manDays: number; pctComplete: number }[]): number {
-  return tasks.reduce((sum, t) => sum + t.manDays * t.pctComplete, 0);
-}
-
-/** Delivery / Weekly CPI: Actual Value = real days spent, adjusted by each assignee's Competency multiplier. */
+/** Sprint Summary: Actual Value = real days spent, adjusted by each assignee's Competency multiplier. */
 export function wbsActualValue(tasks: { actualManDays: number; competencyMultiplier: number }[]): number {
   return tasks.reduce((sum, t) => sum + t.actualManDays * t.competencyMultiplier, 0);
 }
@@ -115,11 +110,10 @@ export function competencyCpi(ev: number, av: number): number | null {
 /**
  * Sprint Summary: 0/100 rule — a sprint-committed task earns its full
  * man-days once its latest tracked % complete reaches 100%, otherwise 0.
- * Deliberately a separate function, not a branch inside wbsEarnedValue()
- * above: that function's weighted-%-complete meaning must stay exactly what
- * it means everywhere it's already shown (the Weekly CPI tab), so a task
- * being committed to a sprint can never retroactively change an
- * already-reported weekly EV number.
+ * This is Delivery's only Earned Value calculation — there is no separate
+ * weighted-%-complete model anymore; weekly tracking (WbsWeek/WbsWeekEntry)
+ * is purely how progress gets recorded, feeding this function, not a
+ * competing calculation of its own.
  */
 export function sprintEarnedValue(tasks: { manDays: number; pctComplete: number }[]): number {
   return tasks.reduce((sum, t) => sum + (t.pctComplete >= 1 ? t.manDays : 0), 0);

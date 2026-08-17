@@ -87,7 +87,7 @@ function SprintSelect({ taskId, projectId, value, sprints }: { taskId: string; p
 
 /** The project-wide WBS master list (Tasks tab) — no week grouping. Man-days
  * is the estimate; assignee here is just the default a new week's entry
- * starts from, editable independently per week on the Weekly CPI tab.
+ * starts from, editable independently per week on the Weekly Tracking tab.
  * Story Points is a display/velocity figure only — man-days is what drives
  * PV/EV/AV/CPI everywhere, including Sprint Summary. Closed sprints still
  * appear in the dropdown (disabled) so a task already committed to one

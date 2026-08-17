@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { formatDate } from "@/lib/format";
+import { competencyCpi } from "@/lib/calculations";
 import { INDEX_FAVORABLE_COLOR, INDEX_UNFAVORABLE_COLOR } from "@/lib/colors";
 import { InlinePercent, InlineNumber } from "@/components/ui/inline-edit";
 import { closeSprint, addSprintAllocation, updateSprintAllocation, deleteSprintAllocation } from "./delivery-actions";
@@ -198,7 +199,7 @@ export function SprintSummaryRow({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  const cpi = sprint.av ? sprint.ev / sprint.av : null;
+  const cpi = competencyCpi(sprint.ev, sprint.av);
   const spi = sprint.pv ? sprint.ev / sprint.pv : null;
 
   return (
