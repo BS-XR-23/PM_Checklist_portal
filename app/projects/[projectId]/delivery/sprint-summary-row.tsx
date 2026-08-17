@@ -168,8 +168,8 @@ function TeamAllocationPanel({
           <thead className="bg-slate-50">
             <tr className="text-left text-xs font-medium text-slate-500">
               <th className="py-2.5 px-3">Person</th>
-              <th className="py-2.5 px-3 w-28">Allocation %</th>
-              <th className="py-2.5 px-3 w-28">Jira Hours</th>
+              <th className="py-2.5 px-3 w-36">Allocation %</th>
+              <th className="py-2.5 px-3 w-32">Jira Hours</th>
               {editable && <th className="py-2.5 px-3 w-8" />}
             </tr>
           </thead>
@@ -180,14 +180,14 @@ function TeamAllocationPanel({
                   {a.personName}
                   {a.competencyLevel ? ` — ${a.competencyLevel}` : ""}
                 </td>
-                <td className="py-2 px-3">
+                <td className="py-2 px-3 min-w-[100px]">
                   {editable ? (
                     <InlinePercent value={a.allocationPct} onSave={(v) => updateSprintAllocation(a.id, projectId, { allocationPct: v })} />
                   ) : (
                     <span className="text-slate-600">{Math.round(a.allocationPct * 100)}%</span>
                   )}
                 </td>
-                <td className="py-2 px-3">
+                <td className="py-2 px-3 min-w-[90px]">
                   {editable ? (
                     <InlineNumber value={a.jiraHours} step={0.5} onSave={(v) => updateSprintAllocation(a.id, projectId, { jiraHours: v })} />
                   ) : (
@@ -377,11 +377,11 @@ export function SprintSummaryRow({
                 <table className="w-full text-sm">
                   <thead className="bg-slate-50">
                     <tr className="text-left text-xs font-medium text-slate-500">
-                      <th className="py-2.5 px-3 w-20">WBS#</th>
+                      <th className="py-2.5 px-3 w-24">WBS#</th>
                       <th className="py-2.5 px-3">Title</th>
-                      <th className="py-2.5 px-3 w-24">Story Pts</th>
-                      <th className="py-2.5 px-3 w-20">%</th>
-                      {!closed && <th className="py-2.5 px-3 w-28">Actual Hrs</th>}
+                      <th className="py-2.5 px-3 w-28">Story Pts</th>
+                      <th className="py-2.5 px-3 w-28">%</th>
+                      {!closed && <th className="py-2.5 px-3 w-32">Actual Hrs</th>}
                       {!closed && <th className="py-2.5 px-3 w-44">Assignee</th>}
                       <th className="py-2.5 px-3 w-16">Done</th>
                       {editable && <th className="py-2.5 px-3 w-8" />}
@@ -416,21 +416,21 @@ export function SprintSummaryRow({
                                 <span className="text-slate-600">{t.title}</span>
                               )}
                             </td>
-                            <td className="py-2 px-3">
+                            <td className="py-2 px-3 min-w-[80px]">
                               {editable ? (
                                 <InlineNumber value={t.storyPoints} step={1} onSave={(v) => updateWbsTask(t.id, projectId, { storyPoints: v ?? 0 })} />
                               ) : (
                                 <span className="text-slate-500">{t.storyPoints}</span>
                               )}
                             </td>
-                            <td className="py-2 px-3">
+                            <td className="py-2 px-3 min-w-[100px]">
                               {editable ? (
                                 <InlinePercent value={t.pctComplete} onSave={(v) => updateTaskProgress(t.id, projectId, { pctComplete: v })} />
                               ) : (
                                 <span className="text-slate-600">{Math.round(t.pctComplete * 100)}%</span>
                               )}
                             </td>
-                            <td className="py-2 px-3">
+                            <td className="py-2 px-3 min-w-[90px]">
                               {editable ? (
                                 <InlineNumber value={t.actualHours} step={0.5} onSave={(v) => updateTaskProgress(t.id, projectId, { actualHours: v ?? 0 })} />
                               ) : (

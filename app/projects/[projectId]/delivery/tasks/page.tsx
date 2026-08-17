@@ -3,7 +3,6 @@ import { requireModuleAccess } from "@/lib/rbac";
 import { SubNav } from "@/components/ui/sub-nav";
 import { WbsTasksTable } from "../delivery-tasks-table";
 import { UploadWbsTasksForm } from "../upload-wbs-tasks-form";
-import { AddSprintModal } from "../add-sprint-modal";
 
 export const dynamic = "force-dynamic";
 
@@ -38,16 +37,13 @@ export default async function DeliveryTasksPage({ params }: { params: { projectI
           { href: "/delivery/tasks", label: "Tasks" },
         ]}
       />
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h2 className="text-base font-semibold text-slate-900">Delivery — Tasks</h2>
-          <p className="text-sm text-slate-500">
-            The project-wide WBS — defined once here. Story Points is the estimate; the default assignee here is
-            just a starting point, overridable once a task is committed and tracked. Commit a task to a sprint here
-            to track its progress on the Sprints tab.
-          </p>
-        </div>
-        {canWrite && <AddSprintModal projectId={params.projectId} suggestedName={`Sprint ${sprints.length + 1}`} />}
+      <div>
+        <h2 className="text-base font-semibold text-slate-900">Delivery — Tasks</h2>
+        <p className="text-sm text-slate-500">
+          The project-wide WBS — defined once here. Story Points is the estimate; the default assignee here is
+          just a starting point, overridable once a task is committed and tracked. Commit a task to a sprint here,
+          or import it into one directly from the Sprints tab, to track its progress there.
+        </p>
       </div>
 
       <WbsTasksTable projectId={params.projectId} tasks={tasks} roster={roster} sprints={sprintOptions} canWrite={canWrite} />

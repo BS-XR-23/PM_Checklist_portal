@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { requireModuleAccess, requireUser } from "@/lib/rbac";
 import { wbsPlannedValue, wbsActualValue, sprintEarnedValue, manDaysFromHours } from "@/lib/calculations";
 import { SubNav } from "@/components/ui/sub-nav";
+import { AddSprintModal } from "./add-sprint-modal";
 import { SprintSummaryRow, type SprintSummaryData, type FrozenTaskSnapshotEntry } from "./sprint-summary-row";
 
 export const dynamic = "force-dynamic";
@@ -96,13 +97,16 @@ export default async function DeliverySprintsPage({ params }: { params: { projec
           { href: "/delivery/tasks", label: "Tasks" },
         ]}
       />
-      <div>
-        <h2 className="text-base font-semibold text-slate-900">Delivery — Sprints</h2>
-        <p className="text-sm text-slate-500">
-          0/100 rule: a committed task earns its full story points only once it&apos;s fully done. Open a sprint to
-          import tasks from the backlog, update % complete, actual hours (e.g. read off Jira), and assignee. Close a
-          sprint to freeze its PV/EV/AV permanently once it ends. New tasks are defined on the Tasks tab.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-base font-semibold text-slate-900">Delivery — Sprints</h2>
+          <p className="text-sm text-slate-500">
+            0/100 rule: a committed task earns its full story points only once it&apos;s fully done. Open a sprint to
+            import tasks from the backlog, update % complete, actual hours (e.g. read off Jira), and assignee. Close
+            a sprint to freeze its PV/EV/AV permanently once it ends. New tasks are defined on the Tasks tab.
+          </p>
+        </div>
+        {canWrite && <AddSprintModal projectId={params.projectId} suggestedName={`Sprint ${sprints.length + 1}`} />}
       </div>
 
       <div className="space-y-3">
