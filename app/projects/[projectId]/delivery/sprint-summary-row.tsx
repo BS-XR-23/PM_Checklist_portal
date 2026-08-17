@@ -257,7 +257,7 @@ export function SprintSummaryRow({
   canWrite: boolean;
   isAdmin: boolean;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [deletePending, startDeleteTransition] = useTransition();
@@ -273,8 +273,8 @@ export function SprintSummaryRow({
       <div
         role="button"
         tabIndex={0}
-        onClick={() => setExpanded((e) => !e)}
-        onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && setExpanded((x) => !x)}
+        onClick={() => setOpen(true)}
+        onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && setOpen(true)}
         className="w-full flex flex-wrap items-center justify-between gap-2 px-4 py-3 cursor-pointer hover:bg-slate-50/60"
       >
         <div className="flex items-center gap-3">
@@ -298,24 +298,52 @@ export function SprintSummaryRow({
           <span className="flex items-center gap-1">
             CPI <IndexValue value={cpi} />
           </span>
-          <span className="text-slate-400">{expanded ? "▾" : "▸"}</span>
+          <span className="text-slate-400">›</span>
         </div>
       </div>
-      {expanded && (
-        <div className="border-t border-slate-100 px-4 pb-3">
-          <table className="w-full text-xs mt-2">
-            <thead>
-              <tr className="text-left text-slate-400">
-                <th className="font-medium py-1 pr-2 w-20">WBS#</th>
-                <th className="font-medium py-1 pr-2">Title</th>
-                <th className="font-medium py-1 pr-2 w-20">Story Pts</th>
-                <th className="font-medium py-1 pr-2 w-20">%</th>
-                {!closed && <th className="font-medium py-1 pr-2 w-24">Actual Hrs</th>}
-                {!closed && <th className="font-medium py-1 pr-2 w-40">Assignee</th>}
-                <th className="font-medium py-1 pr-2 w-16">Done</th>
-              </tr>
-            </thead>
-            <tbody>
+      {open && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-lg max-w-3xl w-full max-h-[85vh] overflow-y-auto p-5">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <div className="flex items-center gap-3">
+                <h3 className="text-sm font-semibold text-slate-900">{sprint.name}</h3>
+                <span className="text-xs text-slate-400">
+                  {formatDate(sprint.startDate)} – {formatDate(sprint.endDate)}
+                </span>
+                {closed ? (
+                  <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">Closed</span>
+                ) : (
+                  <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">Open</span>
+                )}
+              </div>
+              <button onClick={() => setOpen(false)} className="text-slate-400 hover:text-slate-700 text-lg leading-none px-1">
+                ✕
+              </button>
+            </div>
+            <div className="flex items-center gap-4 text-xs text-slate-500 mb-2">
+              <span>PV {sprint.pv.toFixed(1)}</span>
+              <span>EV {sprint.ev.toFixed(1)}</span>
+              <span>AV {sprint.av.toFixed(1)}</span>
+              <span className="flex items-center gap-1">
+                SPI <IndexValue value={spi} />
+              </span>
+              <span className="flex items-center gap-1">
+                CPI <IndexValue value={cpi} />
+              </span>
+            </div>
+            <table className="w-full text-xs mt-2">
+              <thead>
+                <tr className="text-left text-slate-400">
+                  <th className="font-medium py-1 pr-2 w-20">WBS#</th>
+                  <th className="font-medium py-1 pr-2">Title</th>
+                  <th className="font-medium py-1 pr-2 w-20">Story Pts</th>
+                  <th className="font-medium py-1 pr-2 w-20">%</th>
+                  {!closed && <th className="font-medium py-1 pr-2 w-24">Actual Hrs</th>}
+                  {!closed && <th className="font-medium py-1 pr-2 w-40">Assignee</th>}
+                  <th className="font-medium py-1 pr-2 w-16">Done</th>
+                </tr>
+              </thead>
+              <tbody>
               {closed
                 ? sprint.frozenTasks.map((t) => (
                     <tr key={t.taskId} className="border-t border-slate-100">
@@ -452,6 +480,7 @@ export function SprintSummaryRow({
               {deleteError && <p className="mt-1.5 text-xs text-red-600">{deleteError}</p>}
             </div>
           )}
+          </div>
         </div>
       )}
     </div>
