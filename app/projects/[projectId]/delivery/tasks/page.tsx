@@ -35,6 +35,7 @@ export default async function DeliveryTasksPage({ params }: { params: { projectI
         options={[
           { href: "/delivery", label: "Sprints" },
           { href: "/delivery/tasks", label: "Tasks" },
+          { href: "/delivery/roadmap", label: "Roadmap" },
         ]}
       />
       <div>
