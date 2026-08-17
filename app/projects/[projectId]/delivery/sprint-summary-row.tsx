@@ -9,6 +9,9 @@ import {
   closeSprint,
   updateSprint,
   deleteSprint,
+  updateWbsTask,
+  createWbsTaskInSprint,
+  assignTaskToSprint,
   updateTaskProgress,
   addSprintAllocation,
   updateSprintAllocation,
@@ -22,11 +25,20 @@ function IndexValue({ value }: { value: number | null }) {
   const color = favorable ? INDEX_FAVORABLE_COLOR : INDEX_UNFAVORABLE_COLOR;
   return (
     <span
-      className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold"
+      className="inline-flex items-center rounded-full px-2 py-0.5 text-sm font-semibold"
       style={{ backgroundColor: favorable ? "#E6F4EC" : "#FBE9E9", color }}
     >
       {value.toFixed(2)}
     </span>
+  );
+}
+
+function StatCard({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+      <div className="text-[11px] font-medium text-slate-400 uppercase tracking-wide">{label}</div>
+      <div className="mt-1 text-base font-semibold text-slate-800">{children}</div>
+    </div>
   );
 }
 
@@ -262,11 +274,17 @@ export function SprintSummaryRow({
   const [error, setError] = useState<string | null>(null);
   const [deletePending, startDeleteTransition] = useTransition();
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [addTaskPending, startAddTaskTransition] = useTransition();
+  const [addTaskError, setAddTaskError] = useState<string | null>(null);
+  const [removePendingId, setRemovePendingId] = useState<string | null>(null);
+  const [removeError, setRemoveError] = useState<string | null>(null);
+  const [, startRemoveTransition] = useTransition();
 
   const cpi = competencyCpi(sprint.ev, sprint.av);
   const spi = sprint.pv ? sprint.ev / sprint.pv : null;
   const closed = !!sprint.closedAt;
   const editable = canWrite && !closed;
+  const taskColCount = closed ? 5 : editable ? 8 : 7;
 
   return (
     <div className="rounded-lg border border-slate-200 bg-white">
@@ -302,184 +320,262 @@ export function SprintSummaryRow({
         </div>
       </div>
       {open && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-lg max-w-3xl w-full max-h-[85vh] overflow-y-auto p-5">
-            <div className="flex items-center justify-between gap-2 mb-2">
-              <div className="flex items-center gap-3">
-                <h3 className="text-sm font-semibold text-slate-900">{sprint.name}</h3>
-                <span className="text-xs text-slate-400">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[88vh] overflow-y-auto p-6">
+            <div className="flex items-start justify-between gap-4 mb-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-lg font-semibold text-slate-900">{sprint.name}</h3>
+                  {closed ? (
+                    <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">Closed</span>
+                  ) : (
+                    <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">Open</span>
+                  )}
+                </div>
+                <p className="text-sm text-slate-500 mt-0.5">
                   {formatDate(sprint.startDate)} – {formatDate(sprint.endDate)}
-                </span>
-                {closed ? (
-                  <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">Closed</span>
-                ) : (
-                  <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">Open</span>
-                )}
+                </p>
               </div>
-              <button onClick={() => setOpen(false)} className="text-slate-400 hover:text-slate-700 text-lg leading-none px-1">
+              <button
+                onClick={() => setOpen(false)}
+                className="rounded-full p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 text-xl leading-none"
+                aria-label="Close"
+              >
                 ✕
               </button>
             </div>
-            <div className="flex items-center gap-4 text-xs text-slate-500 mb-2">
-              <span>PV {sprint.pv.toFixed(1)}</span>
-              <span>EV {sprint.ev.toFixed(1)}</span>
-              <span>AV {sprint.av.toFixed(1)}</span>
-              <span className="flex items-center gap-1">
-                SPI <IndexValue value={spi} />
-              </span>
-              <span className="flex items-center gap-1">
-                CPI <IndexValue value={cpi} />
-              </span>
+
+            <div className="grid grid-cols-5 gap-2 mb-6">
+              <StatCard label="PV">{sprint.pv.toFixed(1)}</StatCard>
+              <StatCard label="EV">{sprint.ev.toFixed(1)}</StatCard>
+              <StatCard label="AV">{sprint.av.toFixed(1)}</StatCard>
+              <StatCard label="SPI">
+                <IndexValue value={spi} />
+              </StatCard>
+              <StatCard label="CPI">
+                <IndexValue value={cpi} />
+              </StatCard>
             </div>
-            <table className="w-full text-xs mt-2">
-              <thead>
-                <tr className="text-left text-slate-400">
-                  <th className="font-medium py-1 pr-2 w-20">WBS#</th>
-                  <th className="font-medium py-1 pr-2">Title</th>
-                  <th className="font-medium py-1 pr-2 w-20">Story Pts</th>
-                  <th className="font-medium py-1 pr-2 w-20">%</th>
-                  {!closed && <th className="font-medium py-1 pr-2 w-24">Actual Hrs</th>}
-                  {!closed && <th className="font-medium py-1 pr-2 w-40">Assignee</th>}
-                  <th className="font-medium py-1 pr-2 w-16">Done</th>
-                </tr>
-              </thead>
-              <tbody>
-              {closed
-                ? sprint.frozenTasks.map((t) => (
-                    <tr key={t.taskId} className="border-t border-slate-100">
-                      <td className="py-1.5 pr-2 text-slate-600">{t.wbsNumber || "—"}</td>
-                      <td className="py-1.5 pr-2 text-slate-600">{t.title}</td>
-                      <td className="py-1.5 pr-2 text-slate-500">{t.storyPoints}</td>
-                      <td className="py-1.5 pr-2 text-slate-500">{Math.round(t.pctComplete * 100)}%</td>
-                      <td className="py-1.5 pr-2">
-                        {t.pctComplete >= 1 ? <span className="text-emerald-600 font-medium">✓</span> : <span className="text-slate-300">—</span>}
-                      </td>
-                    </tr>
-                  ))
-                : sprint.tasks.map((t) => (
-                    <tr key={t.id} className="border-t border-slate-100">
-                      <td className="py-1.5 pr-2 text-slate-600">{t.wbsNumber || "—"}</td>
-                      <td className="py-1.5 pr-2 text-slate-600">{t.title}</td>
-                      <td className="py-1.5 pr-2 text-slate-500">{t.storyPoints}</td>
-                      <td className="py-1.5 pr-2">
-                        {editable ? (
-                          <InlinePercent value={t.pctComplete} onSave={(v) => updateTaskProgress(t.id, projectId, { pctComplete: v })} />
-                        ) : (
-                          <span className="text-slate-600">{Math.round(t.pctComplete * 100)}%</span>
-                        )}
-                      </td>
-                      <td className="py-1.5 pr-2">
-                        {editable ? (
-                          <InlineNumber value={t.actualHours} step={0.5} onSave={(v) => updateTaskProgress(t.id, projectId, { actualHours: v ?? 0 })} />
-                        ) : (
-                          <span className="text-slate-600">{t.actualHours}</span>
-                        )}
-                      </td>
-                      <td className="py-1.5 pr-2">
-                        {editable ? (
-                          <AssigneeSelect taskId={t.id} projectId={projectId} value={t.personId ?? ""} roster={roster} />
-                        ) : (
-                          <span className="text-slate-600">{t.personName ?? "—"}</span>
-                        )}
-                      </td>
-                      <td className="py-1.5 pr-2">
-                        {t.pctComplete >= 1 ? <span className="text-emerald-600 font-medium">✓</span> : <span className="text-slate-300">—</span>}
-                      </td>
-                    </tr>
-                  ))}
-              {(closed ? sprint.frozenTasks.length : sprint.tasks.length) === 0 && (
-                <tr>
-                  <td colSpan={closed ? 5 : 7} className="py-2 text-slate-400">
-                    No tasks committed to this sprint {closed ? "when it closed" : "yet — commit some on the Tasks tab"}.
-                  </td>
-                </tr>
-              )}
-              <tr className="border-t border-slate-200 font-medium text-slate-700">
-                <td className="py-1.5 pr-2" colSpan={closed ? 4 : 6}>
-                  Grand Total (Earned Value)
-                </td>
-                <td className="py-1.5 pr-2">{sprint.ev.toFixed(1)}</td>
-              </tr>
-            </tbody>
-          </table>
 
-          <TeamAllocationPanel
-            projectId={projectId}
-            sprintId={sprint.id}
-            allocations={sprint.allocations}
-            roster={roster}
-            closed={closed}
-            canWrite={canWrite}
-          />
-
-          {canWrite && !closed && (
-            <div className="mt-3 flex items-center gap-2">
-              <button
-                onClick={() =>
-                  startTransition(async () => {
-                    setError(null);
-                    if (!window.confirm(`Close "${sprint.name}"? This freezes its PV/EV/AV permanently and can't be undone.`)) return;
-                    try {
-                      await closeSprint(sprint.id, projectId);
-                    } catch (err) {
-                      setError(err instanceof Error ? err.message : "Failed to close sprint.");
+            <div className="mb-6">
+              <h4 className="text-sm font-semibold text-slate-700 mb-2">Tasks</h4>
+              <div className="rounded-lg border border-slate-200 overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50">
+                    <tr className="text-left text-xs font-medium text-slate-500">
+                      <th className="py-2.5 px-3 w-20">WBS#</th>
+                      <th className="py-2.5 px-3">Title</th>
+                      <th className="py-2.5 px-3 w-24">Story Pts</th>
+                      <th className="py-2.5 px-3 w-20">%</th>
+                      {!closed && <th className="py-2.5 px-3 w-28">Actual Hrs</th>}
+                      {!closed && <th className="py-2.5 px-3 w-44">Assignee</th>}
+                      <th className="py-2.5 px-3 w-16">Done</th>
+                      {editable && <th className="py-2.5 px-3 w-8" />}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {closed
+                      ? sprint.frozenTasks.map((t) => (
+                          <tr key={t.taskId} className="border-t border-slate-100">
+                            <td className="py-2 px-3 text-slate-600">{t.wbsNumber || "—"}</td>
+                            <td className="py-2 px-3 text-slate-600">{t.title}</td>
+                            <td className="py-2 px-3 text-slate-500">{t.storyPoints}</td>
+                            <td className="py-2 px-3 text-slate-500">{Math.round(t.pctComplete * 100)}%</td>
+                            <td className="py-2 px-3">
+                              {t.pctComplete >= 1 ? <span className="text-emerald-600 font-medium">✓</span> : <span className="text-slate-300">—</span>}
+                            </td>
+                          </tr>
+                        ))
+                      : sprint.tasks.map((t) => (
+                          <tr key={t.id} className="border-t border-slate-100">
+                            <td className="py-2 px-3">
+                              {editable ? (
+                                <InlineText value={t.wbsNumber} onSave={(v) => updateWbsTask(t.id, projectId, { wbsNumber: v })} />
+                              ) : (
+                                <span className="text-slate-600">{t.wbsNumber || "—"}</span>
+                              )}
+                            </td>
+                            <td className="py-2 px-3">
+                              {editable ? (
+                                <InlineText value={t.title} onSave={(v) => updateWbsTask(t.id, projectId, { title: v })} />
+                              ) : (
+                                <span className="text-slate-600">{t.title}</span>
+                              )}
+                            </td>
+                            <td className="py-2 px-3">
+                              {editable ? (
+                                <InlineNumber value={t.storyPoints} step={1} onSave={(v) => updateWbsTask(t.id, projectId, { storyPoints: v ?? 0 })} />
+                              ) : (
+                                <span className="text-slate-500">{t.storyPoints}</span>
+                              )}
+                            </td>
+                            <td className="py-2 px-3">
+                              {editable ? (
+                                <InlinePercent value={t.pctComplete} onSave={(v) => updateTaskProgress(t.id, projectId, { pctComplete: v })} />
+                              ) : (
+                                <span className="text-slate-600">{Math.round(t.pctComplete * 100)}%</span>
+                              )}
+                            </td>
+                            <td className="py-2 px-3">
+                              {editable ? (
+                                <InlineNumber value={t.actualHours} step={0.5} onSave={(v) => updateTaskProgress(t.id, projectId, { actualHours: v ?? 0 })} />
+                              ) : (
+                                <span className="text-slate-600">{t.actualHours}</span>
+                              )}
+                            </td>
+                            <td className="py-2 px-3">
+                              {editable ? (
+                                <AssigneeSelect taskId={t.id} projectId={projectId} value={t.personId ?? ""} roster={roster} />
+                              ) : (
+                                <span className="text-slate-600">{t.personName ?? "—"}</span>
+                              )}
+                            </td>
+                            <td className="py-2 px-3">
+                              {t.pctComplete >= 1 ? <span className="text-emerald-600 font-medium">✓</span> : <span className="text-slate-300">—</span>}
+                            </td>
+                            {editable && (
+                              <td className="py-2 px-3">
+                                <button
+                                  onClick={() => {
+                                    setRemoveError(null);
+                                    setRemovePendingId(t.id);
+                                    startRemoveTransition(async () => {
+                                      try {
+                                        await assignTaskToSprint(t.id, null, projectId);
+                                      } catch (err) {
+                                        setRemoveError(err instanceof Error ? err.message : "Failed to remove task from sprint.");
+                                      } finally {
+                                        setRemovePendingId(null);
+                                      }
+                                    });
+                                  }}
+                                  disabled={removePendingId === t.id}
+                                  title="Remove from sprint"
+                                  className="text-slate-300 hover:text-red-600 disabled:opacity-50"
+                                >
+                                  ✕
+                                </button>
+                              </td>
+                            )}
+                          </tr>
+                        ))}
+                    {(closed ? sprint.frozenTasks.length : sprint.tasks.length) === 0 && (
+                      <tr>
+                        <td colSpan={taskColCount} className="py-3 px-3 text-slate-400">
+                          No tasks committed to this sprint {closed ? "when it closed" : "yet — add one below"}.
+                        </td>
+                      </tr>
+                    )}
+                    <tr className="border-t border-slate-200 font-medium text-slate-700">
+                      <td className="py-2 px-3" colSpan={taskColCount - 1}>
+                        Grand Total (Earned Value)
+                      </td>
+                      <td className="py-2 px-3">{sprint.ev.toFixed(1)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              {removeError && <p className="mt-1.5 text-xs text-red-600">{removeError}</p>}
+              {editable && (
+                <div className="mt-2">
+                  <button
+                    onClick={() =>
+                      startAddTaskTransition(async () => {
+                        setAddTaskError(null);
+                        try {
+                          await createWbsTaskInSprint(sprint.id, projectId);
+                        } catch (err) {
+                          setAddTaskError(err instanceof Error ? err.message : "Failed to add task.");
+                        }
+                      })
                     }
-                  })
-                }
-                disabled={pending}
-                className="rounded-md border border-slate-300 text-slate-700 text-xs font-medium px-3 py-1.5 hover:bg-slate-50 disabled:opacity-50"
-              >
-                {pending ? "Closing..." : "Close Sprint"}
-              </button>
-              {error && <span className="text-xs text-red-600">{error}</span>}
+                    disabled={addTaskPending}
+                    className="text-sm font-medium text-slate-500 hover:text-slate-800 disabled:opacity-50"
+                  >
+                    {addTaskPending ? "Adding..." : "+ Add Task"}
+                  </button>
+                  {addTaskError && <span className="ml-2 text-xs text-red-600">{addTaskError}</span>}
+                </div>
+              )}
             </div>
-          )}
 
-          {isAdmin && (
-            <div className="mt-4 rounded-md border border-amber-200 bg-amber-50/60 p-3">
-              <h4 className="text-xs font-semibold text-amber-800 mb-2">
-                Admin — emergency edit / reorganize{closed ? " (overrides the closed lock)" : ""}
-              </h4>
-              <div className="flex flex-wrap items-end gap-3">
-                <div>
-                  <label className="block text-[11px] text-slate-500 mb-0.5">Name</label>
-                  <InlineText value={sprint.name} onSave={(v) => updateSprint(sprint.id, projectId, { name: v })} />
-                </div>
-                <div>
-                  <label className="block text-[11px] text-slate-500 mb-0.5">Start</label>
-                  <InlineDate
-                    value={toDateInputValue(sprint.startDate)}
-                    onSave={(v) => updateSprint(sprint.id, projectId, { startDate: v ?? undefined })}
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] text-slate-500 mb-0.5">End</label>
-                  <InlineDate
-                    value={toDateInputValue(sprint.endDate)}
-                    onSave={(v) => updateSprint(sprint.id, projectId, { endDate: v ?? undefined })}
-                  />
-                </div>
+            <TeamAllocationPanel
+              projectId={projectId}
+              sprintId={sprint.id}
+              allocations={sprint.allocations}
+              roster={roster}
+              closed={closed}
+              canWrite={canWrite}
+            />
+
+            {canWrite && !closed && (
+              <div className="mt-4 flex items-center gap-2">
                 <button
                   onClick={() =>
-                    startDeleteTransition(async () => {
-                      setDeleteError(null);
-                      if (!window.confirm(`Delete sprint "${sprint.name}"? This can't be undone, and the sprint must have no committed tasks.`)) return;
+                    startTransition(async () => {
+                      setError(null);
+                      if (!window.confirm(`Close "${sprint.name}"? This freezes its PV/EV/AV permanently and can't be undone.`)) return;
                       try {
-                        await deleteSprint(sprint.id, projectId);
+                        await closeSprint(sprint.id, projectId);
                       } catch (err) {
-                        setDeleteError(err instanceof Error ? err.message : "Failed to delete sprint.");
+                        setError(err instanceof Error ? err.message : "Failed to close sprint.");
                       }
                     })
                   }
-                  disabled={deletePending}
-                  className="rounded-md border border-red-300 text-red-700 text-xs font-medium px-3 py-1.5 hover:bg-red-50 disabled:opacity-50"
+                  disabled={pending}
+                  className="rounded-md border border-slate-300 text-slate-700 text-sm font-medium px-3 py-1.5 hover:bg-slate-50 disabled:opacity-50"
                 >
-                  {deletePending ? "Deleting..." : "Delete Sprint"}
+                  {pending ? "Closing..." : "Close Sprint"}
                 </button>
+                {error && <span className="text-xs text-red-600">{error}</span>}
               </div>
-              {deleteError && <p className="mt-1.5 text-xs text-red-600">{deleteError}</p>}
-            </div>
-          )}
+            )}
+
+            {isAdmin && (
+              <div className="mt-4 rounded-md border border-amber-200 bg-amber-50/60 p-3">
+                <h4 className="text-xs font-semibold text-amber-800 mb-2">
+                  Admin — emergency edit / reorganize{closed ? " (overrides the closed lock)" : ""}
+                </h4>
+                <div className="flex flex-wrap items-end gap-3">
+                  <div>
+                    <label className="block text-[11px] text-slate-500 mb-0.5">Name</label>
+                    <InlineText value={sprint.name} onSave={(v) => updateSprint(sprint.id, projectId, { name: v })} />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-slate-500 mb-0.5">Start</label>
+                    <InlineDate
+                      value={toDateInputValue(sprint.startDate)}
+                      onSave={(v) => updateSprint(sprint.id, projectId, { startDate: v ?? undefined })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-slate-500 mb-0.5">End</label>
+                    <InlineDate
+                      value={toDateInputValue(sprint.endDate)}
+                      onSave={(v) => updateSprint(sprint.id, projectId, { endDate: v ?? undefined })}
+                    />
+                  </div>
+                  <button
+                    onClick={() =>
+                      startDeleteTransition(async () => {
+                        setDeleteError(null);
+                        if (!window.confirm(`Delete sprint "${sprint.name}"? This can't be undone, and the sprint must have no committed tasks.`)) return;
+                        try {
+                          await deleteSprint(sprint.id, projectId);
+                        } catch (err) {
+                          setDeleteError(err instanceof Error ? err.message : "Failed to delete sprint.");
+                        }
+                      })
+                    }
+                    disabled={deletePending}
+                    className="rounded-md border border-red-300 text-red-700 text-xs font-medium px-3 py-1.5 hover:bg-red-50 disabled:opacity-50"
+                  >
+                    {deletePending ? "Deleting..." : "Delete Sprint"}
+                  </button>
+                </div>
+                {deleteError && <p className="mt-1.5 text-xs text-red-600">{deleteError}</p>}
+              </div>
+            )}
           </div>
         </div>
       )}

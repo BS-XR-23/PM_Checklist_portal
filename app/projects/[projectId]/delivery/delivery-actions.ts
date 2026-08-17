@@ -50,6 +50,34 @@ export async function createWbsTask(projectId: string) {
   revalidateDelivery(projectId);
 }
 
+/**
+ * Quick-add from the Sprint panel: creates a task already committed to this
+ * sprint, in one step, instead of the Tasks-tab flow of create-then-
+ * separately-commit. Real parent (sprint.projectId) is re-derived from the
+ * DB, never trusted from the caller — same guessed-ID protection as every
+ * other two-parent action in this file.
+ */
+export async function createWbsTaskInSprint(sprintId: string, _projectId: string) {
+  const sprint = await prisma.sprint.findUniqueOrThrow({ where: { id: sprintId } });
+  const user = await requireModuleWrite(sprint.projectId, "DELIVERY");
+
+  if (sprint.closedAt) throw new Error("This sprint is closed — new tasks can no longer be committed to it.");
+
+  const created = await prisma.wbsTask.create({
+    data: { projectId: sprint.projectId, sprintId: sprint.id, wbsNumber: "", title: "New task" },
+  });
+
+  await writeAudit({
+    actor: user,
+    projectId: sprint.projectId,
+    action: "create",
+    entityType: "WbsTask",
+    entityId: created.id,
+    summary: `Added a WBS task directly to sprint "${sprint.name}"`,
+  });
+  revalidateDelivery(sprint.projectId);
+}
+
 export async function updateWbsTask(
   id: string,
   _projectId: string,
