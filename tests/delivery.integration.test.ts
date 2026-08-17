@@ -36,6 +36,7 @@ describe("Delivery isolation boundary", () => {
   let projectB: { id: string };
   let pmAUserId: string;
   let clientBUserId: string;
+  let adminUserId: string;
   let seniorCompetency: { id: string; multiplier: number };
   let engagedPerson: { id: string };
 
@@ -48,8 +49,10 @@ describe("Delivery isolation boundary", () => {
     const clientB = await prisma.user.create({
       data: { email: `test-delivery-client-b-${Date.now()}@example.test`, name: "Test Client B", passwordHash, role: "CLIENT" },
     });
+    const admin = await prisma.user.create({ data: { email: `test-delivery-admin-${Date.now()}@example.test`, name: "Test Admin", passwordHash, role: "ADMIN" } });
     pmAUserId = pmA.id;
     clientBUserId = clientB.id;
+    adminUserId = admin.id;
 
     await prisma.projectMembership.create({ data: { userId: pmAUserId, projectId: projectA.id, role: "PM" } });
     await prisma.projectMembership.create({ data: { userId: clientBUserId, projectId: projectB.id, role: "CLIENT" } });
@@ -67,7 +70,7 @@ describe("Delivery isolation boundary", () => {
     await prisma.person.delete({ where: { id: engagedPerson.id } });
     await prisma.competency.delete({ where: { id: seniorCompetency.id } });
     await prisma.project.deleteMany({ where: { id: { in: [projectA.id, projectB.id] } } });
-    await prisma.user.deleteMany({ where: { id: { in: [pmAUserId, clientBUserId] } } });
+    await prisma.user.deleteMany({ where: { id: { in: [pmAUserId, clientBUserId, adminUserId] } } });
   });
 
   it("createWbsTask + assignTaskToSprint + updateTaskProgress: assigning an engaged person snapshots their Competency multiplier", async () => {
@@ -257,24 +260,42 @@ describe("Delivery isolation boundary", () => {
     expect(await prisma.wbsTask.count({ where: { projectId: projectB.id } })).toBe(0);
   });
 
-  it("createSprint + updateSprint: CRUD works, and editing a closed sprint is rejected", async () => {
-    const { createSprint, updateSprint, closeSprint, deleteSprint } = await import("@/app/projects/[projectId]/delivery/delivery-actions");
+  it("updateSprint/deleteSprint are Admin-only — a PM with normal Delivery WRITE access is rejected", async () => {
+    const { createSprint, updateSprint, deleteSprint } = await import("@/app/projects/[projectId]/delivery/delivery-actions");
 
     actAs(pmAUserId);
     await createSprint(projectA.id, "[TEST] Sprint 2", "2026-02-01", "2026-02-14");
     const sprint = await prisma.sprint.findFirstOrThrow({ where: { projectId: projectA.id }, orderBy: { createdAt: "desc" } });
 
-    await updateSprint(sprint.id, projectA.id, { name: "[TEST] Sprint 2 renamed" });
-    expect((await prisma.sprint.findUniqueOrThrow({ where: { id: sprint.id } })).name).toBe("[TEST] Sprint 2 renamed");
+    await expect(updateSprint(sprint.id, projectA.id, { name: "should fail" })).rejects.toThrow(/Admin/);
+    await expect(deleteSprint(sprint.id, projectA.id)).rejects.toThrow(/Admin/);
+    expect((await prisma.sprint.findUniqueOrThrow({ where: { id: sprint.id } })).name).toBe("[TEST] Sprint 2");
+
+    await prisma.sprint.delete({ where: { id: sprint.id } });
+  });
+
+  it("updateSprint/deleteSprint: Admin can edit and delete a sprint, including overriding the closed lock", async () => {
+    const { createSprint, updateSprint, closeSprint, deleteSprint } = await import("@/app/projects/[projectId]/delivery/delivery-actions");
+
+    actAs(pmAUserId);
+    await createSprint(projectA.id, "[TEST] Sprint 2b", "2026-02-01", "2026-02-14");
+    const sprint = await prisma.sprint.findFirstOrThrow({ where: { projectId: projectA.id }, orderBy: { createdAt: "desc" } });
+
+    actAs(adminUserId);
+    await updateSprint(sprint.id, projectA.id, { name: "[TEST] Sprint 2b renamed" });
+    expect((await prisma.sprint.findUniqueOrThrow({ where: { id: sprint.id } })).name).toBe("[TEST] Sprint 2b renamed");
 
     await closeSprint(sprint.id, projectA.id);
-    await expect(updateSprint(sprint.id, projectA.id, { name: "should fail" })).rejects.toThrow(/closed/);
+
+    // Admin escape hatch: still editable after close, unlike everyone else.
+    await updateSprint(sprint.id, projectA.id, { name: "[TEST] Sprint 2b renamed again" });
+    expect((await prisma.sprint.findUniqueOrThrow({ where: { id: sprint.id } })).name).toBe("[TEST] Sprint 2b renamed again");
 
     await deleteSprint(sprint.id, projectA.id);
     expect(await prisma.sprint.findUnique({ where: { id: sprint.id } })).toBeNull();
   });
 
-  it("deleteSprint is rejected once it has committed tasks", async () => {
+  it("deleteSprint is rejected once it has committed tasks, even for Admin", async () => {
     const { createSprint, createWbsTask, assignTaskToSprint, deleteSprint } = await import("@/app/projects/[projectId]/delivery/delivery-actions");
 
     actAs(pmAUserId);
@@ -284,6 +305,7 @@ describe("Delivery isolation boundary", () => {
     const task = await prisma.wbsTask.findFirstOrThrow({ where: { projectId: projectA.id }, orderBy: { createdAt: "desc" } });
     await assignTaskToSprint(task.id, sprint.id, projectA.id);
 
+    actAs(adminUserId);
     await expect(deleteSprint(sprint.id, projectA.id)).rejects.toThrow(/committed task/);
 
     await assignTaskToSprint(task.id, null, projectA.id);
@@ -328,7 +350,7 @@ describe("Delivery isolation boundary", () => {
     await prisma.sprint.delete({ where: { id: sprint.id } });
   });
 
-  it("assignTaskToSprint rejects removing a task from an already-closed sprint", async () => {
+  it("assignTaskToSprint rejects removing a task from an already-closed sprint for a PM, but allows it for Admin", async () => {
     const { createSprint, createWbsTask, assignTaskToSprint, closeSprint } = await import("@/app/projects/[projectId]/delivery/delivery-actions");
 
     actAs(pmAUserId);
@@ -341,6 +363,12 @@ describe("Delivery isolation boundary", () => {
 
     await expect(assignTaskToSprint(task.id, null, projectA.id)).rejects.toThrow(/closed/);
     expect((await prisma.wbsTask.findUniqueOrThrow({ where: { id: task.id } })).sprintId).toBe(sprint.id);
+
+    // Admin override — this is what makes deleteSprint's emergency escape
+    // hatch actually usable on a closed sprint that still has tasks.
+    actAs(adminUserId);
+    await assignTaskToSprint(task.id, null, projectA.id);
+    expect((await prisma.wbsTask.findUniqueOrThrow({ where: { id: task.id } })).sprintId).toBeNull();
 
     await prisma.wbsTask.delete({ where: { id: task.id } });
     await prisma.sprint.delete({ where: { id: sprint.id } });

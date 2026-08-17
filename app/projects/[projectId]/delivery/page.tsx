@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { requireModuleAccess } from "@/lib/rbac";
+import { requireModuleAccess, requireUser } from "@/lib/rbac";
 import { wbsPlannedValue, wbsActualValue, sprintEarnedValue, manDaysFromHours } from "@/lib/calculations";
 import { SubNav } from "@/components/ui/sub-nav";
 import { SprintSummaryRow, type SprintSummaryData, type FrozenTaskSnapshotEntry } from "./sprint-summary-row";
@@ -7,8 +7,15 @@ import { SprintSummaryRow, type SprintSummaryData, type FrozenTaskSnapshotEntry 
 export const dynamic = "force-dynamic";
 
 export default async function DeliverySprintsPage({ params }: { params: { projectId: string } }) {
-  const access = await requireModuleAccess(params.projectId, "DELIVERY", "READ_LIMITED");
+  const [access, user] = await Promise.all([
+    requireModuleAccess(params.projectId, "DELIVERY", "READ_LIMITED"),
+    requireUser(),
+  ]);
   const canWrite = access === "WRITE";
+  // Renaming/re-dating or deleting a sprint is an Admin-only emergency/
+  // reorganize tool (see requireSprintAdmin in delivery-actions.ts) — a
+  // stricter gate than the normal Delivery WRITE access PMs have.
+  const isAdmin = user.role === "ADMIN";
 
   const [sprints, engagements] = await Promise.all([
     prisma.sprint.findMany({
@@ -91,7 +98,9 @@ export default async function DeliverySprintsPage({ params }: { params: { projec
 
       <div className="space-y-3">
         {sprintSummaries.length > 0 ? (
-          sprintSummaries.map((s) => <SprintSummaryRow key={s.id} projectId={params.projectId} sprint={s} roster={roster} canWrite={canWrite} />)
+          sprintSummaries.map((s) => (
+            <SprintSummaryRow key={s.id} projectId={params.projectId} sprint={s} roster={roster} canWrite={canWrite} isAdmin={isAdmin} />
+          ))
         ) : (
           <p className="text-sm text-slate-400 rounded-xl border border-slate-200 bg-white p-4">
             No sprints yet — create one and commit tasks to it on the Tasks tab.

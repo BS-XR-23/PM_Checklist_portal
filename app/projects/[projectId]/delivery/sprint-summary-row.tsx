@@ -1,11 +1,19 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { formatDate } from "@/lib/format";
+import { formatDate, toDateInputValue } from "@/lib/format";
 import { competencyCpi } from "@/lib/calculations";
 import { INDEX_FAVORABLE_COLOR, INDEX_UNFAVORABLE_COLOR } from "@/lib/colors";
-import { InlinePercent, InlineNumber } from "@/components/ui/inline-edit";
-import { closeSprint, updateTaskProgress, addSprintAllocation, updateSprintAllocation, deleteSprintAllocation } from "./delivery-actions";
+import { InlinePercent, InlineNumber, InlineText, InlineDate } from "@/components/ui/inline-edit";
+import {
+  closeSprint,
+  updateSprint,
+  deleteSprint,
+  updateTaskProgress,
+  addSprintAllocation,
+  updateSprintAllocation,
+  deleteSprintAllocation,
+} from "./delivery-actions";
 import type { RosterPerson } from "./delivery-tasks-table";
 
 function IndexValue({ value }: { value: number | null }) {
@@ -241,15 +249,19 @@ export function SprintSummaryRow({
   sprint,
   roster,
   canWrite,
+  isAdmin,
 }: {
   projectId: string;
   sprint: SprintSummaryData;
   roster: RosterPerson[];
   canWrite: boolean;
+  isAdmin: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [deletePending, startDeleteTransition] = useTransition();
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const cpi = competencyCpi(sprint.ev, sprint.av);
   const spi = sprint.pv ? sprint.ev / sprint.pv : null;
@@ -392,6 +404,52 @@ export function SprintSummaryRow({
                 {pending ? "Closing..." : "Close Sprint"}
               </button>
               {error && <span className="text-xs text-red-600">{error}</span>}
+            </div>
+          )}
+
+          {isAdmin && (
+            <div className="mt-4 rounded-md border border-amber-200 bg-amber-50/60 p-3">
+              <h4 className="text-xs font-semibold text-amber-800 mb-2">
+                Admin — emergency edit / reorganize{closed ? " (overrides the closed lock)" : ""}
+              </h4>
+              <div className="flex flex-wrap items-end gap-3">
+                <div>
+                  <label className="block text-[11px] text-slate-500 mb-0.5">Name</label>
+                  <InlineText value={sprint.name} onSave={(v) => updateSprint(sprint.id, projectId, { name: v })} />
+                </div>
+                <div>
+                  <label className="block text-[11px] text-slate-500 mb-0.5">Start</label>
+                  <InlineDate
+                    value={toDateInputValue(sprint.startDate)}
+                    onSave={(v) => updateSprint(sprint.id, projectId, { startDate: v ?? undefined })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] text-slate-500 mb-0.5">End</label>
+                  <InlineDate
+                    value={toDateInputValue(sprint.endDate)}
+                    onSave={(v) => updateSprint(sprint.id, projectId, { endDate: v ?? undefined })}
+                  />
+                </div>
+                <button
+                  onClick={() =>
+                    startDeleteTransition(async () => {
+                      setDeleteError(null);
+                      if (!window.confirm(`Delete sprint "${sprint.name}"? This can't be undone, and the sprint must have no committed tasks.`)) return;
+                      try {
+                        await deleteSprint(sprint.id, projectId);
+                      } catch (err) {
+                        setDeleteError(err instanceof Error ? err.message : "Failed to delete sprint.");
+                      }
+                    })
+                  }
+                  disabled={deletePending}
+                  className="rounded-md border border-red-300 text-red-700 text-xs font-medium px-3 py-1.5 hover:bg-red-50 disabled:opacity-50"
+                >
+                  {deletePending ? "Deleting..." : "Delete Sprint"}
+                </button>
+              </div>
+              {deleteError && <p className="mt-1.5 text-xs text-red-600">{deleteError}</p>}
             </div>
           )}
         </div>
