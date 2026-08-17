@@ -18,10 +18,17 @@ import {
 } from "./delivery-actions";
 import type { RosterPerson } from "./delivery-tasks-table";
 
-function IndexValue({ value }: { value: number | null }) {
+// "pill" (default) is a compact badge for dense inline rows (the collapsed
+// summary bar); "plain" is bold colored text sized to match a StatCard's
+// big number, since a pill inside a stat card looks like a mismatched
+// afterthought next to PV/EV/AV's plain figures.
+function IndexValue({ value, variant = "pill" }: { value: number | null; variant?: "pill" | "plain" }) {
   if (value == null) return <span className="text-slate-300">—</span>;
   const favorable = value >= 1;
   const color = favorable ? INDEX_FAVORABLE_COLOR : INDEX_UNFAVORABLE_COLOR;
+  if (variant === "plain") {
+    return <span style={{ color }}>{value.toFixed(2)}</span>;
+  }
   return (
     <span
       className="inline-flex items-center rounded-full px-2 py-0.5 text-sm font-semibold"
@@ -34,9 +41,9 @@ function IndexValue({ value }: { value: number | null }) {
 
 function StatCard({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
-      <div className="text-[11px] font-medium text-slate-400 uppercase tracking-wide">{label}</div>
-      <div className="mt-1 text-base font-semibold text-slate-800">{children}</div>
+    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3.5">
+      <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide">{label}</div>
+      <div className="mt-1.5 text-xl font-bold text-slate-900">{children}</div>
     </div>
   );
 }
@@ -161,12 +168,14 @@ function TeamAllocationPanel({
   if (allocations.length === 0 && !editable) return null;
 
   return (
-    <div className="mb-6">
-      <h4 className="text-sm font-semibold text-slate-700 mb-2">Team Allocation (reference only — not part of PV/EV/AV)</h4>
-      <div className="rounded-lg border border-slate-200 overflow-x-auto">
+    <div className="mb-7">
+      <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
+        Team Allocation <span className="normal-case font-normal text-slate-400">(reference only — not part of PV/EV/AV)</span>
+      </h4>
+      <div className="rounded-xl border border-slate-200 overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-slate-50">
-            <tr className="text-left text-xs font-medium text-slate-500">
+            <tr className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">
               <th className="py-2.5 px-3">Person</th>
               <th className="py-2.5 px-3 w-36">Allocation %</th>
               <th className="py-2.5 px-3 w-32">Jira Hours</th>
@@ -220,9 +229,9 @@ function TeamAllocationPanel({
       </div>
 
       {editable && available.length > 0 && (
-        <div className="mt-2 flex items-center gap-2">
+        <div className="mt-3 flex items-center gap-2">
           <select
-            className="rounded border border-slate-200 px-2 py-1.5 text-sm hover:border-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-400"
+            className="rounded-md border border-slate-200 px-2.5 py-1.5 text-sm hover:border-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-400"
             value={selected}
             onChange={(e) => setSelected(e.target.value)}
             disabled={pending}
@@ -247,7 +256,7 @@ function TeamAllocationPanel({
               })
             }
             disabled={pending || !selected}
-            className="text-sm font-medium text-slate-500 hover:text-slate-800 disabled:opacity-50"
+            className="rounded-md bg-slate-900 text-white text-sm font-medium px-3.5 py-1.5 hover:bg-slate-800 disabled:opacity-50"
           >
             + Add
           </button>
@@ -301,16 +310,17 @@ export function SprintSummaryRow({
   const taskColCount = closed ? 5 : editable ? 8 : 7;
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white">
+    <div className="rounded-xl border border-slate-200 bg-white hover:border-slate-300 transition-colors">
       <div
         role="button"
         tabIndex={0}
         onClick={() => setOpen(true)}
         onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && setOpen(true)}
-        className="w-full flex flex-wrap items-center justify-between gap-2 px-4 py-3 cursor-pointer hover:bg-slate-50/60"
+        className="w-full flex flex-wrap items-center justify-between gap-2 px-4 py-3.5 cursor-pointer hover:bg-slate-50/60"
       >
         <div className="flex items-center gap-3">
-          <span className="text-sm font-medium text-slate-800">{sprint.name}</span>
+          <span className={`h-2 w-2 rounded-full ${closed ? "bg-slate-400" : "bg-emerald-500"}`} />
+          <span className="text-sm font-semibold text-slate-800">{sprint.name}</span>
           <span className="text-xs text-slate-400">
             {formatDate(sprint.startDate)} – {formatDate(sprint.endDate)}
           </span>
@@ -335,18 +345,19 @@ export function SprintSummaryRow({
       </div>
       {open && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-6xl w-full max-h-[88vh] overflow-y-auto p-6">
-            <div className="flex items-start justify-between gap-4 mb-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-6xl w-full max-h-[88vh] overflow-y-auto p-7">
+            <div className="flex items-start justify-between gap-4 mb-5">
               <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="text-lg font-semibold text-slate-900">{sprint.name}</h3>
+                <div className="flex items-center gap-2.5">
+                  <span className={`h-2.5 w-2.5 rounded-full ${closed ? "bg-slate-400" : "bg-emerald-500"}`} />
+                  <h3 className="text-xl font-bold text-slate-900">{sprint.name}</h3>
                   {closed ? (
                     <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">Closed</span>
                   ) : (
                     <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">Open</span>
                   )}
                 </div>
-                <p className="text-sm text-slate-500 mt-0.5">
+                <p className="text-sm text-slate-500 mt-1">
                   {formatDate(sprint.startDate)} – {formatDate(sprint.endDate)}
                 </p>
               </div>
@@ -359,24 +370,24 @@ export function SprintSummaryRow({
               </button>
             </div>
 
-            <div className="grid grid-cols-5 gap-2 mb-6">
+            <div className="grid grid-cols-5 gap-3 mb-7">
               <StatCard label="PV">{sprint.pv.toFixed(1)}</StatCard>
               <StatCard label="EV">{sprint.ev.toFixed(1)}</StatCard>
               <StatCard label="AV">{sprint.av.toFixed(1)}</StatCard>
               <StatCard label="SPI">
-                <IndexValue value={spi} />
+                <IndexValue value={spi} variant="plain" />
               </StatCard>
               <StatCard label="CPI">
-                <IndexValue value={cpi} />
+                <IndexValue value={cpi} variant="plain" />
               </StatCard>
             </div>
 
-            <div className="mb-6">
-              <h4 className="text-sm font-semibold text-slate-700 mb-2">Tasks</h4>
-              <div className="rounded-lg border border-slate-200 overflow-x-auto">
+            <div className="mb-7">
+              <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Tasks</h4>
+              <div className="rounded-xl border border-slate-200 overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-slate-50">
-                    <tr className="text-left text-xs font-medium text-slate-500">
+                    <tr className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">
                       <th className="py-2.5 px-3 w-24">WBS#</th>
                       <th className="py-2.5 px-3">Title</th>
                       <th className="py-2.5 px-3 w-28">Story Pts</th>
@@ -491,11 +502,11 @@ export function SprintSummaryRow({
               </div>
               {removeError && <p className="mt-1.5 text-xs text-red-600">{removeError}</p>}
               {editable && (
-                <div className="mt-2">
+                <div className="mt-3">
                   {backlogTasks.length > 0 ? (
                     <div className="flex items-center gap-2">
                       <select
-                        className="rounded border border-slate-200 px-2 py-1.5 text-sm hover:border-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-400"
+                        className="rounded-md border border-slate-200 px-2.5 py-1.5 text-sm hover:border-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-400"
                         value={selectedBacklogId}
                         onChange={(e) => setSelectedBacklogId(e.target.value)}
                         disabled={importPending}
@@ -521,7 +532,7 @@ export function SprintSummaryRow({
                           })
                         }
                         disabled={importPending || !selectedBacklogId}
-                        className="text-sm font-medium text-slate-500 hover:text-slate-800 disabled:opacity-50"
+                        className="rounded-md bg-slate-900 text-white text-sm font-medium px-3.5 py-1.5 hover:bg-slate-800 disabled:opacity-50"
                       >
                         {importPending ? "Adding..." : "+ Add"}
                       </button>
@@ -544,7 +555,7 @@ export function SprintSummaryRow({
             />
 
             {canWrite && !closed && (
-              <div className="mt-4 flex items-center gap-2">
+              <div className="mt-5 flex items-center gap-2">
                 <button
                   onClick={() =>
                     startTransition(async () => {
@@ -558,7 +569,7 @@ export function SprintSummaryRow({
                     })
                   }
                   disabled={pending}
-                  className="rounded-md border border-slate-300 text-slate-700 text-sm font-medium px-3 py-1.5 hover:bg-slate-50 disabled:opacity-50"
+                  className="rounded-md border border-slate-300 text-slate-700 text-sm font-medium px-4 py-2 hover:bg-slate-50 disabled:opacity-50"
                 >
                   {pending ? "Closing..." : "Close Sprint"}
                 </button>
@@ -567,8 +578,8 @@ export function SprintSummaryRow({
             )}
 
             {isAdmin && (
-              <div className="mt-4 rounded-md border border-amber-200 bg-amber-50/60 p-3">
-                <h4 className="text-xs font-semibold text-amber-800 mb-2">
+              <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50/60 p-4">
+                <h4 className="text-xs font-semibold text-amber-800 uppercase tracking-wide mb-3">
                   Admin — emergency edit / reorganize{closed ? " (overrides the closed lock)" : ""}
                 </h4>
                 <div className="flex flex-wrap items-end gap-3">
@@ -603,7 +614,7 @@ export function SprintSummaryRow({
                       })
                     }
                     disabled={deletePending}
-                    className="rounded-md border border-red-300 text-red-700 text-xs font-medium px-3 py-1.5 hover:bg-red-50 disabled:opacity-50"
+                    className="rounded-md border border-red-300 text-red-700 text-sm font-medium px-3.5 py-1.5 hover:bg-red-50 disabled:opacity-50"
                   >
                     {deletePending ? "Deleting..." : "Delete Sprint"}
                   </button>
