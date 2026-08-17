@@ -17,7 +17,7 @@ export default async function DeliverySprintsPage({ params }: { params: { projec
   // stricter gate than the normal Delivery WRITE access PMs have.
   const isAdmin = user.role === "ADMIN";
 
-  const [sprints, engagements] = await Promise.all([
+  const [sprints, engagements, backlog] = await Promise.all([
     prisma.sprint.findMany({
       where: { projectId: params.projectId },
       orderBy: { createdAt: "asc" },
@@ -31,7 +31,16 @@ export default async function DeliverySprintsPage({ params }: { params: { projec
       include: { person: { include: { competency: true } } },
       orderBy: { person: { name: "asc" } },
     }),
+    // Tasks not yet committed to any sprint — what the Sprint panel's
+    // "import from backlog" picker offers. The Tasks tab stays the only
+    // place a task is *defined*; committing it is what the Sprint panel does.
+    prisma.wbsTask.findMany({
+      where: { projectId: params.projectId, sprintId: null },
+      orderBy: { createdAt: "asc" },
+    }),
   ]);
+
+  const backlogTasks = backlog.map((t) => ({ id: t.id, wbsNumber: t.wbsNumber, title: t.title, storyPoints: t.storyPoints }));
 
   const roster = Array.from(new Map(engagements.map((e) => [e.personId, e])).values()).map((e) => ({
     personId: e.person.id,
@@ -90,16 +99,24 @@ export default async function DeliverySprintsPage({ params }: { params: { projec
       <div>
         <h2 className="text-base font-semibold text-slate-900">Delivery — Sprints</h2>
         <p className="text-sm text-slate-500">
-          0/100 rule: a committed task earns its full story points only once it&apos;s fully done. Update % complete,
-          actual hours (e.g. read off Jira), and assignee directly on each task below. Close a sprint to freeze its
-          PV/EV/AV permanently once it ends. Commit tasks to a sprint on the Tasks tab.
+          0/100 rule: a committed task earns its full story points only once it&apos;s fully done. Open a sprint to
+          import tasks from the backlog, update % complete, actual hours (e.g. read off Jira), and assignee. Close a
+          sprint to freeze its PV/EV/AV permanently once it ends. New tasks are defined on the Tasks tab.
         </p>
       </div>
 
       <div className="space-y-3">
         {sprintSummaries.length > 0 ? (
           sprintSummaries.map((s) => (
-            <SprintSummaryRow key={s.id} projectId={params.projectId} sprint={s} roster={roster} canWrite={canWrite} isAdmin={isAdmin} />
+            <SprintSummaryRow
+              key={s.id}
+              projectId={params.projectId}
+              sprint={s}
+              roster={roster}
+              backlogTasks={backlogTasks}
+              canWrite={canWrite}
+              isAdmin={isAdmin}
+            />
           ))
         ) : (
           <p className="text-sm text-slate-400 rounded-xl border border-slate-200 bg-white p-4">

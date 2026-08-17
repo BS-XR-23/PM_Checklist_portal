@@ -313,40 +313,6 @@ describe("Delivery isolation boundary", () => {
     await prisma.wbsTask.delete({ where: { id: task.id } });
   });
 
-  it("createWbsTaskInSprint: quick-add from the Sprint panel creates a task already committed to it", async () => {
-    const { createSprint, createWbsTaskInSprint, closeSprint } = await import("@/app/projects/[projectId]/delivery/delivery-actions");
-
-    actAs(pmAUserId);
-    await createSprint(projectA.id, "[TEST] Sprint 3b", "2026-03-01", "2026-03-14");
-    const sprint = await prisma.sprint.findFirstOrThrow({ where: { projectId: projectA.id }, orderBy: { createdAt: "desc" } });
-
-    await createWbsTaskInSprint(sprint.id, projectA.id);
-    const task = await prisma.wbsTask.findFirstOrThrow({ where: { sprintId: sprint.id } });
-    expect(task.projectId).toBe(projectA.id);
-    expect(task.sprintId).toBe(sprint.id);
-
-    await closeSprint(sprint.id, projectA.id);
-    await expect(createWbsTaskInSprint(sprint.id, projectA.id)).rejects.toThrow(/closed/);
-
-    await prisma.wbsTask.delete({ where: { id: task.id } });
-    await prisma.sprint.delete({ where: { id: sprint.id } });
-  });
-
-  it("guessed-ID: createWbsTaskInSprint rejects a sprint belonging to Project B even when called with Project A's id", async () => {
-    const { createWbsTaskInSprint } = await import("@/app/projects/[projectId]/delivery/delivery-actions");
-    const sprintB = await prisma.sprint.create({
-      data: { projectId: projectB.id, name: "[TEST] B Sprint quick-add", startDate: new Date("2026-03-01"), endDate: new Date("2026-03-14") },
-    });
-
-    try {
-      actAs(pmAUserId);
-      await expect(createWbsTaskInSprint(sprintB.id, projectA.id)).rejects.toThrow();
-      expect(await prisma.wbsTask.count({ where: { sprintId: sprintB.id } })).toBe(0);
-    } finally {
-      await prisma.sprint.delete({ where: { id: sprintB.id } });
-    }
-  });
-
   it("two-parent guessed-ID: assignTaskToSprint rejects a task from Project A paired with a sprint from Project B", async () => {
     const { createWbsTask, assignTaskToSprint } = await import("@/app/projects/[projectId]/delivery/delivery-actions");
     const sprintB = await prisma.sprint.create({

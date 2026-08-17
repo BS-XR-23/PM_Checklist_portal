@@ -10,7 +10,6 @@ import {
   updateSprint,
   deleteSprint,
   updateWbsTask,
-  createWbsTaskInSprint,
   assignTaskToSprint,
   updateTaskProgress,
   addSprintAllocation,
@@ -64,6 +63,16 @@ export type FrozenTaskSnapshotEntry = {
   title: string;
   storyPoints: number;
   pctComplete: number;
+};
+
+// A backlog task not yet committed to any sprint — offered by the "import
+// from backlog" picker below. Tasks are still defined on the Tasks tab;
+// this only commits an existing one.
+export type BacklogTaskOption = {
+  id: string;
+  wbsNumber: string;
+  title: string;
+  storyPoints: number;
 };
 
 export type SprintAllocationData = {
@@ -152,66 +161,68 @@ function TeamAllocationPanel({
   if (allocations.length === 0 && !editable) return null;
 
   return (
-    <div className="mt-4">
-      <h4 className="text-xs font-semibold text-slate-600 mb-1">Team Allocation (reference only — not part of PV/EV/AV)</h4>
-      <table className="w-full text-xs">
-        <thead>
-          <tr className="text-left text-slate-400">
-            <th className="font-medium py-1 pr-2">Person</th>
-            <th className="font-medium py-1 pr-2 w-24">Allocation</th>
-            <th className="font-medium py-1 pr-2 w-24">Jira Hours</th>
-            {editable && <th className="w-6" />}
-          </tr>
-        </thead>
-        <tbody>
-          {allocations.map((a) => (
-            <tr key={a.id} className="border-t border-slate-100">
-              <td className="py-1.5 pr-2 text-slate-600">
-                {a.personName}
-                {a.competencyLevel ? ` — ${a.competencyLevel}` : ""}
-              </td>
-              <td className="py-1.5 pr-2">
-                {editable ? (
-                  <InlinePercent value={a.allocationPct} onSave={(v) => updateSprintAllocation(a.id, projectId, { allocationPct: v })} />
-                ) : (
-                  <span className="text-slate-600">{Math.round(a.allocationPct * 100)}%</span>
-                )}
-              </td>
-              <td className="py-1.5 pr-2">
-                {editable ? (
-                  <InlineNumber value={a.jiraHours} step={0.5} onSave={(v) => updateSprintAllocation(a.id, projectId, { jiraHours: v })} />
-                ) : (
-                  <span className="text-slate-600">{a.jiraHours ?? "—"}</span>
-                )}
-              </td>
-              {editable && (
-                <td className="py-1.5">
-                  <button
-                    onClick={() => startTransition(() => deleteSprintAllocation(a.id, projectId))}
-                    disabled={pending}
-                    title="Remove from allocation"
-                    className="text-slate-300 hover:text-red-600 disabled:opacity-50"
-                  >
-                    ✕
-                  </button>
+    <div className="mb-6">
+      <h4 className="text-sm font-semibold text-slate-700 mb-2">Team Allocation (reference only — not part of PV/EV/AV)</h4>
+      <div className="rounded-lg border border-slate-200 overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50">
+            <tr className="text-left text-xs font-medium text-slate-500">
+              <th className="py-2.5 px-3">Person</th>
+              <th className="py-2.5 px-3 w-28">Allocation %</th>
+              <th className="py-2.5 px-3 w-28">Jira Hours</th>
+              {editable && <th className="py-2.5 px-3 w-8" />}
+            </tr>
+          </thead>
+          <tbody>
+            {allocations.map((a) => (
+              <tr key={a.id} className="border-t border-slate-100">
+                <td className="py-2 px-3 text-slate-600">
+                  {a.personName}
+                  {a.competencyLevel ? ` — ${a.competencyLevel}` : ""}
                 </td>
-              )}
-            </tr>
-          ))}
-          {allocations.length === 0 && (
-            <tr>
-              <td colSpan={editable ? 4 : 3} className="py-2 text-slate-400">
-                No one allocated to this sprint yet.
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
+                <td className="py-2 px-3">
+                  {editable ? (
+                    <InlinePercent value={a.allocationPct} onSave={(v) => updateSprintAllocation(a.id, projectId, { allocationPct: v })} />
+                  ) : (
+                    <span className="text-slate-600">{Math.round(a.allocationPct * 100)}%</span>
+                  )}
+                </td>
+                <td className="py-2 px-3">
+                  {editable ? (
+                    <InlineNumber value={a.jiraHours} step={0.5} onSave={(v) => updateSprintAllocation(a.id, projectId, { jiraHours: v })} />
+                  ) : (
+                    <span className="text-slate-600">{a.jiraHours ?? "—"}</span>
+                  )}
+                </td>
+                {editable && (
+                  <td className="py-2 px-3">
+                    <button
+                      onClick={() => startTransition(() => deleteSprintAllocation(a.id, projectId))}
+                      disabled={pending}
+                      title="Remove from allocation"
+                      className="text-slate-300 hover:text-red-600 disabled:opacity-50"
+                    >
+                      ✕
+                    </button>
+                  </td>
+                )}
+              </tr>
+            ))}
+            {allocations.length === 0 && (
+              <tr>
+                <td colSpan={editable ? 4 : 3} className="py-3 px-3 text-slate-400">
+                  No one allocated to this sprint yet.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
 
       {editable && available.length > 0 && (
         <div className="mt-2 flex items-center gap-2">
           <select
-            className="rounded border border-slate-200 px-2 py-1 text-xs hover:border-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-400"
+            className="rounded border border-slate-200 px-2 py-1.5 text-sm hover:border-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-400"
             value={selected}
             onChange={(e) => setSelected(e.target.value)}
             disabled={pending}
@@ -236,7 +247,7 @@ function TeamAllocationPanel({
               })
             }
             disabled={pending || !selected}
-            className="text-xs font-medium text-slate-500 hover:text-slate-800 disabled:opacity-50"
+            className="text-sm font-medium text-slate-500 hover:text-slate-800 disabled:opacity-50"
           >
             + Add
           </button>
@@ -260,12 +271,14 @@ export function SprintSummaryRow({
   projectId,
   sprint,
   roster,
+  backlogTasks,
   canWrite,
   isAdmin,
 }: {
   projectId: string;
   sprint: SprintSummaryData;
   roster: RosterPerson[];
+  backlogTasks: BacklogTaskOption[];
   canWrite: boolean;
   isAdmin: boolean;
 }) {
@@ -274,8 +287,9 @@ export function SprintSummaryRow({
   const [error, setError] = useState<string | null>(null);
   const [deletePending, startDeleteTransition] = useTransition();
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [addTaskPending, startAddTaskTransition] = useTransition();
-  const [addTaskError, setAddTaskError] = useState<string | null>(null);
+  const [selectedBacklogId, setSelectedBacklogId] = useState("");
+  const [importPending, startImportTransition] = useTransition();
+  const [importError, setImportError] = useState<string | null>(null);
   const [removePendingId, setRemovePendingId] = useState<string | null>(null);
   const [removeError, setRemoveError] = useState<string | null>(null);
   const [, startRemoveTransition] = useTransition();
@@ -478,23 +492,44 @@ export function SprintSummaryRow({
               {removeError && <p className="mt-1.5 text-xs text-red-600">{removeError}</p>}
               {editable && (
                 <div className="mt-2">
-                  <button
-                    onClick={() =>
-                      startAddTaskTransition(async () => {
-                        setAddTaskError(null);
-                        try {
-                          await createWbsTaskInSprint(sprint.id, projectId);
-                        } catch (err) {
-                          setAddTaskError(err instanceof Error ? err.message : "Failed to add task.");
+                  {backlogTasks.length > 0 ? (
+                    <div className="flex items-center gap-2">
+                      <select
+                        className="rounded border border-slate-200 px-2 py-1.5 text-sm hover:border-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-400"
+                        value={selectedBacklogId}
+                        onChange={(e) => setSelectedBacklogId(e.target.value)}
+                        disabled={importPending}
+                      >
+                        <option value="">Import from backlog…</option>
+                        {backlogTasks.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.wbsNumber ? `${t.wbsNumber} — ` : ""}
+                            {t.title} ({t.storyPoints} pts)
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={() =>
+                          startImportTransition(async () => {
+                            setImportError(null);
+                            try {
+                              await assignTaskToSprint(selectedBacklogId, sprint.id, projectId);
+                              setSelectedBacklogId("");
+                            } catch (err) {
+                              setImportError(err instanceof Error ? err.message : "Failed to add task to sprint.");
+                            }
+                          })
                         }
-                      })
-                    }
-                    disabled={addTaskPending}
-                    className="text-sm font-medium text-slate-500 hover:text-slate-800 disabled:opacity-50"
-                  >
-                    {addTaskPending ? "Adding..." : "+ Add Task"}
-                  </button>
-                  {addTaskError && <span className="ml-2 text-xs text-red-600">{addTaskError}</span>}
+                        disabled={importPending || !selectedBacklogId}
+                        className="text-sm font-medium text-slate-500 hover:text-slate-800 disabled:opacity-50"
+                      >
+                        {importPending ? "Adding..." : "+ Add"}
+                      </button>
+                      {importError && <span className="text-xs text-red-600">{importError}</span>}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-400">No unassigned backlog tasks — define a new one on the Tasks tab.</p>
+                  )}
                 </div>
               )}
             </div>
