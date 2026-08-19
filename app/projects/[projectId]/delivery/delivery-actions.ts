@@ -172,10 +172,20 @@ function parseUploadRows(buffer: ArrayBuffer): UploadRow[] {
     .filter((r) => r.title !== ""); // skip fully-blank trailing rows
 }
 
+function exactRowKey(wbsNumber: string, title: string): string {
+  return `${wbsNumber.trim().toLowerCase()}|${normalizeTaskTitle(title)}`;
+}
+
 export async function uploadWbsTasks(
   projectId: string,
   formData: FormData
-): Promise<{ importedCount: number; missingWbsCount: number; duplicateCount: number; duplicateTaskIds: string[] }> {
+): Promise<{
+  importedCount: number;
+  skippedExactDuplicateCount: number;
+  missingWbsCount: number;
+  duplicateCount: number;
+  duplicateTaskIds: string[];
+}> {
   const user = await requireModuleWrite(projectId, "DELIVERY");
 
   const file = formData.get("file");
@@ -183,30 +193,41 @@ export async function uploadWbsTasks(
   const fileName = "name" in file && typeof file.name === "string" ? file.name : "upload";
 
   const buffer = await file.arrayBuffer();
-  const rows = parseUploadRows(buffer);
-  if (rows.length === 0) throw new Error("No rows found in the uploaded file — check it has WBS#/Title/Story Points columns.");
+  const parsedRows = parseUploadRows(buffer);
+  if (parsedRows.length === 0) throw new Error("No rows found in the uploaded file — check it has WBS#/Title/Story Points columns.");
+
+  const existingTasks = await prisma.wbsTask.findMany({ where: { projectId }, select: { wbsNumber: true, title: true } });
+
+  // Exact match (same WBS# *and* same title) is unambiguous — it's the same
+  // work item, not just a similarly-named one — so those rows are skipped
+  // outright rather than imported and cleaned up later. Checked against
+  // both pre-existing tasks and earlier rows in this same file.
+  const existingExactKeys = new Set(existingTasks.map((t) => exactRowKey(t.wbsNumber, t.title)));
+  const seenExactInBatch = new Set<string>();
+  const rows = parsedRows.filter((r) => {
+    const key = exactRowKey(r.wbsNumber, r.title);
+    if (existingExactKeys.has(key) || seenExactInBatch.has(key)) return false;
+    seenExactInBatch.add(key);
+    return true;
+  });
+  const skippedExactDuplicateCount = parsedRows.length - rows.length;
 
   // Silently defaulting wbsNumber to "" (unrecognized column header — e.g. a
   // Jira export's "Key" isn't one of the WBS# aliases) used to be invisible
   // until someone noticed blank cells later. Surface it instead.
   const missingWbsCount = rows.filter((r) => !r.wbsNumber).length;
 
-  // Same "title already exists" check as the manual Add Row flow — catches
-  // re-uploading the same file, or two files (e.g. a manually-numbered CSV
-  // and a Jira export) describing the same backlog, which otherwise import
-  // as full duplicates with no signal until someone notices the row count.
-  // Never blocks the import — just reports how many rows collided, since
-  // title matching is fuzzy and legitimate re-imports (updated estimates
-  // etc.) are also a real workflow.
-  const existingTitles = new Set(
-    (await prisma.wbsTask.findMany({ where: { projectId }, select: { title: true } })).map((t) => normalizeTaskTitle(t.title))
-  );
+  // Same-title-only (different or blank WBS#) is fuzzier — could be a real
+  // duplicate or just a coincidence — so this tier stays a warning with an
+  // undo action, never a silent skip. Same "title already exists" check as
+  // the manual Add Row flow.
+  const existingTitles = new Set(existingTasks.map((t) => normalizeTaskTitle(t.title)));
   // Only rows duplicating a *pre-existing* task get an unambiguous "undo
   // this specific row" action below — two new rows in the same file sharing
   // a title is ambiguous about which one is "the" duplicate, so those are
   // still counted (and flagged per-row on the table afterward) but not
   // included in duplicateTaskIds.
-  const seenInBatch = new Set<string>();
+  const seenTitleInBatch = new Set<string>();
   let duplicateCount = 0;
   const preExistingDuplicateKeys = new Set<string>();
   for (const r of rows) {
@@ -214,10 +235,10 @@ export async function uploadWbsTasks(
     if (existingTitles.has(key)) {
       duplicateCount++;
       preExistingDuplicateKeys.add(key);
-    } else if (seenInBatch.has(key)) {
+    } else if (seenTitleInBatch.has(key)) {
       duplicateCount++;
     }
-    seenInBatch.add(key);
+    seenTitleInBatch.add(key);
   }
 
   // Assignee matches by exact Person.name (case-insensitive) among people
@@ -252,12 +273,13 @@ export async function uploadWbsTasks(
     action: "create",
     entityType: "WbsTask",
     summary: `Uploaded ${rows.length} WBS task${rows.length === 1 ? "" : "s"} from ${fileName}`
+      + (skippedExactDuplicateCount > 0 ? ` (skipped ${skippedExactDuplicateCount} exact duplicate${skippedExactDuplicateCount === 1 ? "" : "s"} — same WBS# and title)` : "")
       + (missingWbsCount > 0 ? ` (WBS# column not recognized for ${missingWbsCount} of them)` : "")
       + (duplicateCount > 0 ? ` (${duplicateCount} look like duplicates of existing titles)` : ""),
   });
 
   revalidateDelivery(projectId);
-  return { importedCount: rows.length, missingWbsCount, duplicateCount, duplicateTaskIds };
+  return { importedCount: rows.length, skippedExactDuplicateCount, missingWbsCount, duplicateCount, duplicateTaskIds };
 }
 
 /**

@@ -30,8 +30,10 @@ export function UploadWbsTasksForm({ projectId }: { projectId: string }) {
           formData.set("file", file);
           startTransition(async () => {
             try {
-              const { importedCount, missingWbsCount, duplicateCount, duplicateTaskIds: dupIds } = await uploadWbsTasks(projectId, formData);
+              const { importedCount, skippedExactDuplicateCount, missingWbsCount, duplicateCount, duplicateTaskIds: dupIds } =
+                await uploadWbsTasks(projectId, formData);
               const issues: string[] = [];
+              if (skippedExactDuplicateCount > 0) issues.push(`skipped ${skippedExactDuplicateCount} exact duplicate${skippedExactDuplicateCount === 1 ? "" : "s"} (same WBS# and title)`);
               if (missingWbsCount > 0) issues.push(`WBS# wasn't recognized for ${missingWbsCount} of them — check the file's WBS# column header`);
               if (duplicateCount > 0) issues.push(`${duplicateCount} look like duplicates of tasks that already exist — look for the "dup?" flag below`);
               setNotice(
@@ -73,6 +75,6 @@ export function UploadWbsTasksForm({ projectId }: { projectId: string }) {
 }
 
 function missingWbsNoticeClass(notice: string): string {
-  const hasIssue = notice.includes("wasn't recognized") || notice.includes("look like duplicates");
+  const hasIssue = notice.includes("wasn't recognized") || notice.includes("look like duplicates") || notice.includes("skipped");
   return hasIssue ? "text-xs text-amber-700" : "text-xs text-emerald-700";
 }
