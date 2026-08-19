@@ -391,7 +391,7 @@ export function SprintSummaryRow({
                       <th className="py-2.5 px-3 w-24">WBS#</th>
                       <th className="py-2.5 px-3">Title</th>
                       <th className="py-2.5 px-3 w-28">Story Pts</th>
-                      <th className="py-2.5 px-3 w-28">%</th>
+                      <th className="py-2.5 px-3 w-28">% Complete</th>
                       {!closed && <th className="py-2.5 px-3 w-32">Actual Hrs</th>}
                       {!closed && <th className="py-2.5 px-3 w-44">Assignee</th>}
                       <th className="py-2.5 px-3 w-16">Done</th>
