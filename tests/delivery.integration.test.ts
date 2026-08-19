@@ -248,6 +248,36 @@ describe("Delivery isolation boundary", () => {
     await prisma.wbsTask.deleteMany({ where: { id: { in: tasks.map((t) => t.id) } } });
   });
 
+  it("uploadWbsTasks: skips a row that exactly matches an existing task's WBS# and title, but still imports a same-title/different-WBS# row and a same-WBS#/different-title row", async () => {
+    const { uploadWbsTasks } = await import("@/app/projects/[projectId]/delivery/delivery-actions");
+
+    actAs(pmAUserId);
+    const existing = await prisma.wbsTask.create({ data: { projectId: projectA.id, wbsNumber: "9.1", title: "Existing task", storyPoints: 3 } });
+
+    const csv = [
+      "WBS#,Title,Story Points",
+      "9.1,Existing task,3", // exact match -> skipped
+      "9.1,Existing task,3", // duplicate of the row above, within the same file -> also skipped
+      "9.2,Existing task,2", // same title, different WBS# -> fuzzy match, still imported
+      "9.1,A different task,4", // same WBS#, different title -> not an exact match, still imported
+    ].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const formData = new FormData();
+    formData.set("file", blob, "wbs.csv");
+
+    const result = await uploadWbsTasks(projectA.id, formData);
+    expect(result.importedCount).toBe(2);
+    expect(result.skippedExactDuplicateCount).toBe(2);
+    expect(result.duplicateCount).toBe(1); // the 9.2 row, fuzzy-matching the pre-existing title
+
+    const tasks = await prisma.wbsTask.findMany({ where: { projectId: projectA.id } });
+    expect(tasks).toHaveLength(3); // the original + the two non-exact rows
+    expect(tasks.filter((t) => t.title === "Existing task")).toHaveLength(2); // original (9.1) + fuzzy import (9.2)
+    expect(tasks.some((t) => t.title === "A different task" && t.wbsNumber === "9.1")).toBe(true);
+
+    await prisma.wbsTask.deleteMany({ where: { id: { in: [existing.id, ...tasks.map((t) => t.id)] } } });
+  });
+
   it("guessed-ID: PM-A cannot upload tasks into Project B", async () => {
     const { uploadWbsTasks } = await import("@/app/projects/[projectId]/delivery/delivery-actions");
     const csv = "WBS#,Title,Story Points\n1.1,Sneaky,5";

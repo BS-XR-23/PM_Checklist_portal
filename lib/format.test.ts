@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { startOfMonthUTC, addMonthsUTC, parseMonthParam, toMonthParam, formatMonthLabel, formatMonthShortLabel } from "./format";
+import { startOfMonthUTC, addMonthsUTC, parseMonthParam, toMonthParam, formatMonthLabel, formatMonthShortLabel, compareWbsNumbers, normalizeTaskTitle } from "./format";
 
 describe("startOfMonthUTC", () => {
   it("normalizes any day of the month to the 1st at UTC midnight", () => {
@@ -51,5 +51,36 @@ describe("formatMonthLabel", () => {
 describe("formatMonthShortLabel", () => {
   it("formats a month as a compact 'Mon YY' label", () => {
     expect(formatMonthShortLabel(new Date("2026-07-01T00:00:00Z"))).toBe("Jul 26");
+  });
+});
+
+describe("compareWbsNumbers", () => {
+  it("sorts numerically within a segment, not lexically (2.10 after 2.9)", () => {
+    const sorted = ["2.10", "2.2", "2.9", "10.1", "2.1"].sort(compareWbsNumbers);
+    expect(sorted).toEqual(["2.1", "2.2", "2.9", "2.10", "10.1"]);
+  });
+
+  it("orders a shorter prefix before its children (1 before 1.1)", () => {
+    expect(compareWbsNumbers("1", "1.1")).toBeLessThan(0);
+  });
+
+  it("sorts blank WBS# last, regardless of comparison order", () => {
+    expect(compareWbsNumbers("", "1")).toBeGreaterThan(0);
+    expect(compareWbsNumbers("1", "")).toBeLessThan(0);
+    expect(compareWbsNumbers("", "")).toBe(0);
+  });
+
+  it("falls back to string comparison for non-numeric segments", () => {
+    expect(compareWbsNumbers("1.a", "1.b")).toBeLessThan(0);
+  });
+});
+
+describe("normalizeTaskTitle", () => {
+  it("ignores case, leading/trailing space, and repeated internal whitespace", () => {
+    expect(normalizeTaskTitle("  Admin  Auth ")).toBe(normalizeTaskTitle("admin auth"));
+  });
+
+  it("still distinguishes genuinely different titles", () => {
+    expect(normalizeTaskTitle("Admin Auth")).not.toBe(normalizeTaskTitle("Admin Authorization"));
   });
 });

@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { InlineText, InlineNumber } from "@/components/ui/inline-edit";
 import { AuditLogTable, type AuditLogRow } from "@/components/rbac/audit-log-table";
+import { computeDuplicateRefs, DuplicateBadge } from "./duplicate-badge";
 import { createWbsTask, updateWbsTask, deleteWbsTask, assignTaskToSprint } from "./delivery-actions";
 
 export type WbsTaskData = {
@@ -112,6 +113,18 @@ export function WbsTasksTable({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [historyTaskId, setHistoryTaskId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [sprintFilter, setSprintFilter] = useState<string>("all");
+  const [assigneeFilter, setAssigneeFilter] = useState<string>("all");
+
+  // Duplicate-title detection, computed client-side from the already-loaded
+  // task list — no extra round-trip needed. Non-blocking: a matching title
+  // just gets flagged (with the other WBS#s it collides with) so the PM can
+  // decide whether to merge/rename/delete, rather than silently allowing
+  // the same work item to exist twice (which is exactly how real duplicates
+  // piled up here before this existed). Computed before the early return
+  // below so this Hook always runs in the same order.
+  const duplicateWbsByTaskId = useMemo(() => computeDuplicateRefs(tasks), [tasks]);
 
   if (tasks.length === 0 && !canWrite) {
     return <p className="text-sm text-slate-400 p-4">No WBS tasks yet.</p>;
@@ -119,8 +132,71 @@ export function WbsTasksTable({
 
   const historyTask = historyTaskId ? tasks.find((t) => t.id === historyTaskId) : undefined;
 
+  const q = search.trim().toLowerCase();
+  const filteredTasks = tasks.filter((t) => {
+    if (sprintFilter === "backlog" && t.sprintId) return false;
+    if (sprintFilter !== "all" && sprintFilter !== "backlog" && t.sprintId !== sprintFilter) return false;
+    if (assigneeFilter === "unassigned" && t.personId) return false;
+    if (assigneeFilter !== "all" && assigneeFilter !== "unassigned" && t.personId !== assigneeFilter) return false;
+    if (q && !t.title.toLowerCase().includes(q) && !t.wbsNumber.toLowerCase().includes(q)) return false;
+    return true;
+  });
+  const filtersActive = sprintFilter !== "all" || assigneeFilter !== "all" || q !== "";
+
   return (
     <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+      {tasks.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 bg-slate-50/60 px-4 py-2.5">
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search title or WBS#…"
+            className="w-48 rounded border border-slate-200 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-slate-400"
+          />
+          <select
+            value={sprintFilter}
+            onChange={(e) => setSprintFilter(e.target.value)}
+            className="rounded border border-slate-200 px-1.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-slate-400"
+          >
+            <option value="all">All sprints</option>
+            <option value="backlog">Backlog (unassigned)</option>
+            {sprints.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+          <select
+            value={assigneeFilter}
+            onChange={(e) => setAssigneeFilter(e.target.value)}
+            className="rounded border border-slate-200 px-1.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-slate-400"
+          >
+            <option value="all">All assignees</option>
+            <option value="unassigned">Unassigned</option>
+            {roster.map((p) => (
+              <option key={p.personId} value={p.personId}>
+                {p.personName}
+              </option>
+            ))}
+          </select>
+          {filtersActive && (
+            <button
+              onClick={() => {
+                setSearch("");
+                setSprintFilter("all");
+                setAssigneeFilter("all");
+              }}
+              className="text-xs text-slate-400 hover:text-slate-700"
+            >
+              Clear filters
+            </button>
+          )}
+          <span className="ml-auto text-xs text-slate-400">
+            {filteredTasks.length === tasks.length ? `${tasks.length} tasks` : `${filteredTasks.length} of ${tasks.length} tasks`}
+          </span>
+        </div>
+      )}
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -141,7 +217,14 @@ export function WbsTasksTable({
             </tr>
           </thead>
           <tbody>
-            {tasks.map((t) => {
+            {filteredTasks.length === 0 && (
+              <tr>
+                <td colSpan={9} className="px-4 py-6 text-center text-sm text-slate-400">
+                  No tasks match the current filters.
+                </td>
+              </tr>
+            )}
+            {filteredTasks.map((t) => {
               const donePts = t.storyPoints * t.pctComplete;
               const remainingPts = t.storyPoints - donePts;
               return (
@@ -154,11 +237,23 @@ export function WbsTasksTable({
                   )}
                 </td>
                 <td className="px-4 py-2">
-                  {canWrite ? (
-                    <InlineText value={t.title} onSave={(v) => updateWbsTask(t.id, projectId, { title: v })} />
-                  ) : (
-                    <span className="text-slate-600">{t.title}</span>
-                  )}
+                  <div className="flex items-center gap-1.5">
+                    <div className="min-w-0 flex-1">
+                      {canWrite ? (
+                        <InlineText value={t.title} onSave={(v) => updateWbsTask(t.id, projectId, { title: v })} />
+                      ) : (
+                        <span className="text-slate-600">{t.title}</span>
+                      )}
+                    </div>
+                    {duplicateWbsByTaskId.has(t.id) && (
+                      <DuplicateBadge
+                        projectId={projectId}
+                        taskId={t.id}
+                        otherRefs={duplicateWbsByTaskId.get(t.id)!}
+                        canWrite={canWrite}
+                      />
+                    )}
+                  </div>
                 </td>
                 <td className="px-4 py-2">
                   {canWrite ? (

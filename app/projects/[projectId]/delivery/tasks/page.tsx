@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { requireModuleAccess, requireUser } from "@/lib/rbac";
+import { compareWbsNumbers } from "@/lib/format";
 import { SubNav } from "@/components/ui/sub-nav";
 import { StatCard } from "@/components/ui/stat-card";
 import { WbsTasksTable } from "../delivery-tasks-table";
@@ -20,7 +21,7 @@ export default async function DeliveryTasksPage({ params }: { params: { projectI
   // see who-changed-what internally).
   const canViewHistory = user.role === "ADMIN" || user.role === "TPM" || user.role === "PM";
 
-  const [tasks, engagements, sprints] = await Promise.all([
+  const [tasksRaw, engagements, sprints] = await Promise.all([
     prisma.wbsTask.findMany({ where: { projectId: params.projectId }, orderBy: { createdAt: "asc" } }),
     prisma.projectEngagement.findMany({
       where: { projectId: params.projectId },
@@ -29,6 +30,12 @@ export default async function DeliveryTasksPage({ params }: { params: { projectI
     }),
     prisma.sprint.findMany({ where: { projectId: params.projectId }, orderBy: { createdAt: "asc" } }),
   ]);
+
+  // Default view order is by WBS#, not upload order — a natural sort so
+  // "2.10" sorts after "2.9" rather than before "2.2". Tasks never numbered
+  // (blank WBS#, e.g. from an import whose file had no recognized WBS
+  // column) sort to the end rather than the top.
+  const tasks = [...tasksRaw].sort((a, b) => compareWbsNumbers(a.wbsNumber, b.wbsNumber));
 
   const roster = Array.from(new Map(engagements.map((e) => [e.personId, e])).values()).map((e) => ({
     personId: e.person.id,

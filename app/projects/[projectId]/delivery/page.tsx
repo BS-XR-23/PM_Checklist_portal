@@ -43,6 +43,15 @@ export default async function DeliverySprintsPage({ params }: { params: { projec
 
   const backlogTasks = backlog.map((t) => ({ id: t.id, wbsNumber: t.wbsNumber, title: t.title, storyPoints: t.storyPoints }));
 
+  // Every WbsTask in the project is either sitting in the backlog or
+  // committed to one of these sprints — no extra query needed to get the
+  // full list for duplicate-title detection inside the Sprint popup.
+  const allProjectTasks = [...backlog, ...sprints.flatMap((s) => s.tasks)].map((t) => ({
+    id: t.id,
+    wbsNumber: t.wbsNumber,
+    title: t.title,
+  }));
+
   const roster = Array.from(new Map(engagements.map((e) => [e.personId, e])).values()).map((e) => ({
     personId: e.person.id,
     personName: e.person.name,
@@ -118,6 +127,7 @@ export default async function DeliverySprintsPage({ params }: { params: { projec
               sprint={s}
               roster={roster}
               backlogTasks={backlogTasks}
+              allProjectTasks={allProjectTasks}
               canWrite={canWrite}
               isAdmin={isAdmin}
             />
