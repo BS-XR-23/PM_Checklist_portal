@@ -7,7 +7,8 @@ import { startOfMonthUTC } from "@/lib/format";
 import { AppShell } from "@/components/layout/app-shell";
 import { IconUsers, IconUserCheck, IconFolder, IconDollar, IconBadge } from "@/components/layout/icons";
 import { CreatePersonForm } from "./create-person-form";
-import { PeopleListCard } from "./people-list-card";
+import { PeopleDirectory } from "./people-directory";
+import { ImportPeopleButton } from "./import-people-button";
 import { CreateRoleRateForm } from "./create-role-rate-form";
 import { RoleRateRow } from "./role-rate-row";
 import { CreateCompetencyForm } from "./create-competency-form";
@@ -94,6 +95,93 @@ export default async function AdminPeoplePage() {
   const linkedAccountCount = linkedUserIds.size;
   const avgRate = roleRates.length > 0 ? roleRates.reduce((sum, r) => sum + r.manDayRate, 0) / roleRates.length : 0;
 
+  const statCards = (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <StatCard icon={<IconUsers />} iconWrapClass="bg-blue-50 text-blue-600" label="Total People" value={totalPeople} subtitle="All team members" />
+      <StatCard
+        icon={<IconUserCheck />}
+        iconWrapClass="bg-emerald-50 text-emerald-600"
+        label="On Project"
+        value={onProject}
+        subtitle="Currently engaged"
+      />
+      <StatCard
+        icon={<IconFolder />}
+        iconWrapClass="bg-violet-50 text-violet-600"
+        label="Linked Accounts"
+        value={linkedAccountCount}
+        subtitle="Have a portal login"
+      />
+      <StatCard
+        icon={<IconDollar />}
+        iconWrapClass="bg-amber-50 text-amber-600"
+        label="Avg. Rate"
+        value={`$${avgRate.toFixed(1)}`}
+        subtitle="Average man-day rate"
+      />
+    </div>
+  );
+
+  const sidebarBottom = (
+    <>
+      <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
+            <IconDollar className="h-4 w-4" />
+          </span>
+          <h3 className="text-sm font-semibold text-slate-900">Role Rates</h3>
+        </div>
+        <p className="text-xs text-slate-500">Rates are set by role, not by named person.</p>
+        <CreateRoleRateForm />
+        <div className="rounded-lg border border-slate-100 overflow-hidden">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-left font-semibold text-slate-500 bg-slate-50">
+                <th className="px-3 py-2">Role</th>
+                <th className="px-3 py-2">Man-Day Rate</th>
+                <th className="px-3 py-2 w-6" />
+              </tr>
+            </thead>
+            <tbody>
+              {roleRates.map((r) => (
+                <RoleRateRow key={r.id} roleRate={r} />
+              ))}
+            </tbody>
+          </table>
+          {roleRates.length === 0 && <p className="text-xs text-slate-400 p-3">No role rates set yet.</p>}
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-violet-600">
+            <IconBadge className="h-4 w-4" />
+          </span>
+          <h3 className="text-sm font-semibold text-slate-900">Competencies</h3>
+        </div>
+        <p className="text-xs text-slate-500">Velocity/capacity multipliers used in Sprint Summary.</p>
+        <CreateCompetencyForm />
+        <div className="rounded-lg border border-slate-100 overflow-hidden">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-left font-semibold text-slate-500 bg-slate-50">
+                <th className="px-3 py-2">Level</th>
+                <th className="px-3 py-2">Multiplier</th>
+                <th className="px-3 py-2 w-6" />
+              </tr>
+            </thead>
+            <tbody>
+              {competencies.map((c) => (
+                <CompetencyRow key={c.id} competency={c} />
+              ))}
+            </tbody>
+          </table>
+          {competencies.length === 0 && <p className="text-xs text-slate-400 p-3">No competencies set yet.</p>}
+        </div>
+      </div>
+    </>
+  );
+
   return (
     <AppShell user={currentUser}>
       <header className="border-b border-slate-200 bg-white px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-3">
@@ -103,115 +191,25 @@ export default async function AdminPeoplePage() {
             Manage team members, roles, rates and competencies used for project planning and resource tracking.
           </p>
         </div>
-        <a
-          href="#add-person"
-          className="inline-flex items-center gap-1.5 rounded-md bg-slate-900 text-white text-sm font-medium px-4 py-2 hover:bg-slate-800"
-        >
-          + Add Person
-        </a>
+        <div className="flex items-center gap-2.5">
+          <ImportPeopleButton />
+          <a
+            href="#add-person"
+            className="inline-flex items-center gap-1.5 rounded-md bg-slate-900 text-white text-sm font-medium px-4 py-2 hover:bg-slate-800"
+          >
+            + Add Person
+          </a>
+        </div>
       </header>
-      <main className="max-w-7xl mx-auto p-4 sm:p-6 space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard
-            icon={<IconUsers />}
-            iconWrapClass="bg-blue-50 text-blue-600"
-            label="Total People"
-            value={totalPeople}
-            subtitle="All team members"
-          />
-          <StatCard
-            icon={<IconUserCheck />}
-            iconWrapClass="bg-emerald-50 text-emerald-600"
-            label="On Project"
-            value={onProject}
-            subtitle="Currently engaged"
-          />
-          <StatCard
-            icon={<IconFolder />}
-            iconWrapClass="bg-violet-50 text-violet-600"
-            label="Linked Accounts"
-            value={linkedAccountCount}
-            subtitle="Have a portal login"
-          />
-          <StatCard
-            icon={<IconDollar />}
-            iconWrapClass="bg-amber-50 text-amber-600"
-            label="Avg. Rate"
-            value={`$${avgRate.toFixed(1)}`}
-            subtitle="Average man-day rate"
-          />
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-6 items-start">
-          <div className="space-y-4 min-w-0">
-            <CreatePersonForm linkableUsers={linkableUsers} roleRates={roleRates} competencies={competencies} />
-            <PeopleListCard rows={rows} roleRates={roleRates} competencies={competencies} />
-            <p className="text-xs text-slate-400">
-              Assigning a Person to a specific project (role, intensity, dates) happens on that project&apos;s
-              Resourcing tab — Admin or that project&apos;s PM. A person&apos;s Rate Role is what the (testing-only)
-              Budget Tracker resolves live to price their actual man-days from the Delivery tab. Their Competency is
-              what converts real days worked into effort units for the Delivery tab&apos;s Sprint Summary.
-            </p>
-          </div>
-
-          <div className="space-y-4">
-            <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
-              <div className="flex items-center gap-2.5">
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
-                  <IconDollar className="h-4 w-4" />
-                </span>
-                <h3 className="text-sm font-semibold text-slate-900">Role Rates</h3>
-              </div>
-              <p className="text-xs text-slate-500">Rates are set by role, not by named person.</p>
-              <CreateRoleRateForm />
-              <div className="rounded-lg border border-slate-100 overflow-hidden">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="text-left font-semibold text-slate-500 bg-slate-50">
-                      <th className="px-3 py-2">Role</th>
-                      <th className="px-3 py-2">Man-Day Rate</th>
-                      <th className="px-3 py-2 w-6" />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {roleRates.map((r) => (
-                      <RoleRateRow key={r.id} roleRate={r} />
-                    ))}
-                  </tbody>
-                </table>
-                {roleRates.length === 0 && <p className="text-xs text-slate-400 p-3">No role rates set yet.</p>}
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
-              <div className="flex items-center gap-2.5">
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-violet-600">
-                  <IconBadge className="h-4 w-4" />
-                </span>
-                <h3 className="text-sm font-semibold text-slate-900">Competencies</h3>
-              </div>
-              <p className="text-xs text-slate-500">Velocity/capacity multipliers used in Sprint Summary.</p>
-              <CreateCompetencyForm />
-              <div className="rounded-lg border border-slate-100 overflow-hidden">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="text-left font-semibold text-slate-500 bg-slate-50">
-                      <th className="px-3 py-2">Level</th>
-                      <th className="px-3 py-2">Multiplier</th>
-                      <th className="px-3 py-2 w-6" />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {competencies.map((c) => (
-                      <CompetencyRow key={c.id} competency={c} />
-                    ))}
-                  </tbody>
-                </table>
-                {competencies.length === 0 && <p className="text-xs text-slate-400 p-3">No competencies set yet.</p>}
-              </div>
-            </div>
-          </div>
-        </div>
+      <main className="max-w-7xl mx-auto p-4 sm:p-6">
+        <PeopleDirectory
+          statCards={statCards}
+          addPersonForm={<CreatePersonForm linkableUsers={linkableUsers} roleRates={roleRates} competencies={competencies} />}
+          rows={rows}
+          roleRates={roleRates}
+          competencies={competencies}
+          sidebarBottom={sidebarBottom}
+        />
       </main>
     </AppShell>
   );

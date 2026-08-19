@@ -2,7 +2,8 @@
 
 import { useTransition } from "react";
 import { InlineText, InlineSelect } from "@/components/ui/inline-edit";
-import { INTENSITY_BAND_COLORS, intensityBand } from "@/lib/colors";
+import { INTENSITY_BAND_COLORS, intensityBand, avatarColorFromString } from "@/lib/colors";
+import { initials } from "@/lib/format";
 import { updatePerson, deletePerson } from "./people-actions";
 
 export type PersonRowData = {
@@ -31,19 +32,29 @@ export function PersonRow({
 
   return (
     <tr className="border-b border-slate-50 last:border-0 align-top">
-      <td className="px-4 py-3">
-        <InlineText value={person.name} onSave={(v) => updatePerson(person.id, { name: v })} />
+      <td className="px-4 py-3.5">
+        <div className="flex items-center gap-2.5">
+          <span
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white"
+            style={{ backgroundColor: avatarColorFromString(person.name) }}
+          >
+            {initials(person.name)}
+          </span>
+          <div className="min-w-0 flex-1">
+            <InlineText value={person.name} onSave={(v) => updatePerson(person.id, { name: v })} />
+          </div>
+        </div>
       </td>
-      <td className="px-4 py-3">
+      <td className="px-4 py-3.5">
         <InlineText value={person.title ?? ""} onSave={(v) => updatePerson(person.id, { title: v })} placeholder="Title" />
       </td>
-      <td className="px-4 py-3">
+      <td className="px-4 py-3.5">
         <InlineText value={person.email ?? ""} onSave={(v) => updatePerson(person.id, { email: v })} placeholder="Email" />
       </td>
-      <td className="px-4 py-3">
+      <td className="px-4 py-3.5">
         <InlineText value={person.phone ?? ""} onSave={(v) => updatePerson(person.id, { phone: v })} placeholder="Phone" />
       </td>
-      <td className="px-4 py-3">
+      <td className="px-4 py-3.5">
         <InlineSelect
           value={person.linkedUserId ?? ""}
           options={["", ...person.linkableUsers.map((u) => u.id)]}
@@ -55,7 +66,7 @@ export function PersonRow({
           onSave={(v) => updatePerson(person.id, { userId: v || null })}
         />
       </td>
-      <td className="px-4 py-3">
+      <td className="px-4 py-3.5">
         <InlineSelect
           value={person.roleRateId ?? ""}
           options={["", ...roleRates.map((r) => r.id)]}
@@ -66,7 +77,7 @@ export function PersonRow({
           onSave={(v) => updatePerson(person.id, { roleRateId: v || null })}
         />
       </td>
-      <td className="px-4 py-3">
+      <td className="px-4 py-3.5">
         <InlineSelect
           value={person.competencyId ?? ""}
           options={["", ...competencies.map((c) => c.id)]}
@@ -77,7 +88,7 @@ export function PersonRow({
           onSave={(v) => updatePerson(person.id, { competencyId: v || null })}
         />
       </td>
-      <td className="px-4 py-3 max-w-[18rem]">
+      <td className="px-4 py-3.5 max-w-[18rem]">
         {person.engagements.length > 0 ? (
           <div className="flex flex-col items-start gap-1">
             {person.engagements.map((e, i) => {
@@ -98,7 +109,7 @@ export function PersonRow({
           <span className="text-slate-400">No current engagements</span>
         )}
       </td>
-      <td className="px-4 py-3">
+      <td className="px-4 py-3.5">
         <button
           onClick={() => startTransition(() => deletePerson(person.id))}
           disabled={pending}

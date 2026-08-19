@@ -63,3 +63,15 @@ export function intensityBand(pct: number): keyof typeof INTENSITY_BAND_COLORS {
   if (pct >= 40) return "medium";
   return "low";
 }
+
+// Deterministic per-person avatar color — same name always gets the same
+// color (stable across reloads/pagination), spread across a fixed palette
+// rather than tied to any role/group, since People (unlike Users) isn't
+// organized into role sections.
+const AVATAR_PALETTE = ["#2563EB", "#7C3AED", "#059669", "#D97706", "#DC2626", "#0891B2", "#4F46E5", "#65A30D"];
+
+export function avatarColorFromString(s: string): string {
+  let hash = 0;
+  for (let i = 0; i < s.length; i++) hash = (hash * 31 + s.charCodeAt(i)) >>> 0;
+  return AVATAR_PALETTE[hash % AVATAR_PALETTE.length];
+}
