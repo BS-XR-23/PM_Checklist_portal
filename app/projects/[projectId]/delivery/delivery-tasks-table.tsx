@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { InlineText, InlineNumber } from "@/components/ui/inline-edit";
 import { AuditLogTable, type AuditLogRow } from "@/components/rbac/audit-log-table";
-import { normalizeTaskTitle } from "@/lib/format";
+import { computeDuplicateRefs, DuplicateBadge } from "./duplicate-badge";
 import { createWbsTask, updateWbsTask, deleteWbsTask, assignTaskToSprint } from "./delivery-actions";
 
 export type WbsTaskData = {
@@ -124,27 +124,7 @@ export function WbsTasksTable({
   // the same work item to exist twice (which is exactly how real duplicates
   // piled up here before this existed). Computed before the early return
   // below so this Hook always runs in the same order.
-  const duplicateWbsByTaskId = useMemo(() => {
-    const byTitle = new Map<string, WbsTaskData[]>();
-    for (const t of tasks) {
-      if (!t.title.trim()) continue;
-      const key = normalizeTaskTitle(t.title);
-      const group = byTitle.get(key) ?? [];
-      group.push(t);
-      byTitle.set(key, group);
-    }
-    const result = new Map<string, string[]>();
-    for (const group of Array.from(byTitle.values())) {
-      if (group.length < 2) continue;
-      for (const t of group) {
-        result.set(
-          t.id,
-          group.filter((o: WbsTaskData) => o.id !== t.id).map((o: WbsTaskData) => o.wbsNumber || "unnumbered")
-        );
-      }
-    }
-    return result;
-  }, [tasks]);
+  const duplicateWbsByTaskId = useMemo(() => computeDuplicateRefs(tasks), [tasks]);
 
   if (tasks.length === 0 && !canWrite) {
     return <p className="text-sm text-slate-400 p-4">No WBS tasks yet.</p>;
@@ -266,12 +246,12 @@ export function WbsTasksTable({
                       )}
                     </div>
                     {duplicateWbsByTaskId.has(t.id) && (
-                      <span
-                        title={`Possible duplicate — same title as WBS ${duplicateWbsByTaskId.get(t.id)!.join(", ")}`}
-                        className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700"
-                      >
-                        ⚠ dup?
-                      </span>
+                      <DuplicateBadge
+                        projectId={projectId}
+                        taskId={t.id}
+                        otherRefs={duplicateWbsByTaskId.get(t.id)!}
+                        canWrite={canWrite}
+                      />
                     )}
                   </div>
                 </td>

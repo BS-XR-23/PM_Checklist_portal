@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { formatDate, toDateInputValue } from "@/lib/format";
 import { competencyCpi } from "@/lib/calculations";
 import { INDEX_FAVORABLE_COLOR, INDEX_UNFAVORABLE_COLOR } from "@/lib/colors";
 import { InlinePercent, InlineNumber, InlineText, InlineDate } from "@/components/ui/inline-edit";
 import { StatCard } from "@/components/ui/stat-card";
+import { computeDuplicateRefs, DuplicateBadge } from "./duplicate-badge";
 import {
   closeSprint,
   updateSprint,
@@ -273,6 +274,7 @@ export function SprintSummaryRow({
   sprint,
   roster,
   backlogTasks,
+  allProjectTasks,
   canWrite,
   isAdmin,
 }: {
@@ -280,10 +282,16 @@ export function SprintSummaryRow({
   sprint: SprintSummaryData;
   roster: RosterPerson[];
   backlogTasks: BacklogTaskOption[];
+  allProjectTasks: { id: string; wbsNumber: string; title: string }[];
   canWrite: boolean;
   isAdmin: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  // Same duplicate-title detection as the Tasks tab, against every task in
+  // the project (not just this sprint's own) — a title edited here can
+  // collide with a task sitting in the backlog or another sprint just as
+  // easily as one in the Tasks tab.
+  const duplicateWbsByTaskId = useMemo(() => computeDuplicateRefs(allProjectTasks), [allProjectTasks]);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [deletePending, startDeleteTransition] = useTransition();
@@ -413,11 +421,23 @@ export function SprintSummaryRow({
                               )}
                             </td>
                             <td className="py-2 px-3">
-                              {editable ? (
-                                <InlineText value={t.title} onSave={(v) => updateWbsTask(t.id, projectId, { title: v })} />
-                              ) : (
-                                <span className="text-slate-600">{t.title}</span>
-                              )}
+                              <div className="flex items-center gap-1.5">
+                                <div className="min-w-0 flex-1">
+                                  {editable ? (
+                                    <InlineText value={t.title} onSave={(v) => updateWbsTask(t.id, projectId, { title: v })} />
+                                  ) : (
+                                    <span className="text-slate-600">{t.title}</span>
+                                  )}
+                                </div>
+                                {duplicateWbsByTaskId.has(t.id) && (
+                                  <DuplicateBadge
+                                    projectId={projectId}
+                                    taskId={t.id}
+                                    otherRefs={duplicateWbsByTaskId.get(t.id)!}
+                                    canWrite={editable}
+                                  />
+                                )}
+                              </div>
                             </td>
                             <td className="py-2 px-3 min-w-[80px]">
                               {editable ? (
@@ -506,8 +526,10 @@ export function SprintSummaryRow({
                         <option value="">Import from backlog…</option>
                         {backlogTasks.map((t) => (
                           <option key={t.id} value={t.id}>
+                            {duplicateWbsByTaskId.has(t.id) ? "⚠ " : ""}
                             {t.wbsNumber ? `${t.wbsNumber} — ` : ""}
                             {t.title} ({t.storyPoints} pts)
+                            {duplicateWbsByTaskId.has(t.id) ? ` — dup of WBS ${duplicateWbsByTaskId.get(t.id)!.join(", ")}` : ""}
                           </option>
                         ))}
                       </select>

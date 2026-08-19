@@ -175,7 +175,7 @@ function parseUploadRows(buffer: ArrayBuffer): UploadRow[] {
 export async function uploadWbsTasks(
   projectId: string,
   formData: FormData
-): Promise<{ importedCount: number; missingWbsCount: number; duplicateCount: number }> {
+): Promise<{ importedCount: number; missingWbsCount: number; duplicateCount: number; duplicateTaskIds: string[] }> {
   const user = await requireModuleWrite(projectId, "DELIVERY");
 
   const file = formData.get("file");
@@ -201,11 +201,22 @@ export async function uploadWbsTasks(
   const existingTitles = new Set(
     (await prisma.wbsTask.findMany({ where: { projectId }, select: { title: true } })).map((t) => normalizeTaskTitle(t.title))
   );
+  // Only rows duplicating a *pre-existing* task get an unambiguous "undo
+  // this specific row" action below — two new rows in the same file sharing
+  // a title is ambiguous about which one is "the" duplicate, so those are
+  // still counted (and flagged per-row on the table afterward) but not
+  // included in duplicateTaskIds.
   const seenInBatch = new Set<string>();
   let duplicateCount = 0;
+  const preExistingDuplicateKeys = new Set<string>();
   for (const r of rows) {
     const key = normalizeTaskTitle(r.title);
-    if (existingTitles.has(key) || seenInBatch.has(key)) duplicateCount++;
+    if (existingTitles.has(key)) {
+      duplicateCount++;
+      preExistingDuplicateKeys.add(key);
+    } else if (seenInBatch.has(key)) {
+      duplicateCount++;
+    }
     seenInBatch.add(key);
   }
 
@@ -216,19 +227,24 @@ export async function uploadWbsTasks(
   const engagements = await prisma.projectEngagement.findMany({ where: { projectId }, include: { person: true } });
   const byName = new Map(engagements.map((e) => [e.person.name.trim().toLowerCase(), e.person]));
 
-  await prisma.wbsTask.createMany({
-    data: rows.map((r) => {
+  // create() in a loop instead of createMany() — need each row's id back to
+  // offer the one-click "undo the duplicates" action below.
+  const created = await Promise.all(
+    rows.map((r) => {
       const person = r.assignee ? byName.get(r.assignee.trim().toLowerCase()) : undefined;
-      return {
-        projectId,
-        wbsNumber: r.wbsNumber,
-        title: r.title,
-        storyPoints: r.storyPoints,
-        personId: person?.id ?? null,
-        personName: person?.name ?? null,
-      };
-    }),
-  });
+      return prisma.wbsTask.create({
+        data: {
+          projectId,
+          wbsNumber: r.wbsNumber,
+          title: r.title,
+          storyPoints: r.storyPoints,
+          personId: person?.id ?? null,
+          personName: person?.name ?? null,
+        },
+      });
+    })
+  );
+  const duplicateTaskIds = created.filter((t) => preExistingDuplicateKeys.has(normalizeTaskTitle(t.title))).map((t) => t.id);
 
   await writeAudit({
     actor: user,
@@ -241,7 +257,7 @@ export async function uploadWbsTasks(
   });
 
   revalidateDelivery(projectId);
-  return { importedCount: rows.length, missingWbsCount, duplicateCount };
+  return { importedCount: rows.length, missingWbsCount, duplicateCount, duplicateTaskIds };
 }
 
 /**
