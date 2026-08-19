@@ -68,13 +68,13 @@ function RoleGroupSection({ group, currentUserId }: { group: RoleGroupData; curr
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide bg-slate-50">
-                <th className="px-4 py-2.5">User</th>
-                <th className="px-4 py-2.5">Email</th>
+                <th className="px-4 py-2.5 min-w-[200px]">User</th>
+                <th className="px-4 py-2.5 min-w-[200px]">Email</th>
                 <th className="px-4 py-2.5 w-44">Role</th>
                 <th className="px-4 py-2.5 w-40">Resource</th>
                 <th className="px-4 py-2.5 w-32">Password</th>
-                <th className="px-4 py-2.5 w-24">Status</th>
-                <th className="px-4 py-2.5 w-10" />
+                <th className="px-4 py-2.5 w-28">Status</th>
+                <th className="px-4 py-2.5 w-12" />
               </tr>
             </thead>
             <tbody>
@@ -89,11 +89,13 @@ function RoleGroupSection({ group, currentUserId }: { group: RoleGroupData; curr
                         >
                           {initials(u.name)}
                         </span>
-                        <span className="font-medium text-slate-800">
+                        <div className="min-w-0 flex-1 font-medium text-slate-800">
                           <UserProfileField userId={u.id} field="name" value={u.name} />
-                        </span>
+                        </div>
                         {isSelf && (
-                          <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">You</span>
+                          <span className="shrink-0 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+                            You
+                          </span>
                         )}
                       </div>
                     </td>
