@@ -129,8 +129,13 @@ const HEADER_ALIASES: Record<string, keyof UploadRow> = {
   "wbs#": "wbsNumber",
   wbs: "wbsNumber",
   "wbs number": "wbsNumber",
+  "wbs no": "wbsNumber",
+  "wbs no.": "wbsNumber",
+  "wbs id": "wbsNumber",
+  "wbs code": "wbsNumber",
   title: "title",
   task: "title",
+  summary: "title",
   "story points": "storyPoints",
   "story pts": "storyPoints",
   points: "storyPoints",
@@ -167,7 +172,10 @@ function parseUploadRows(buffer: ArrayBuffer): UploadRow[] {
     .filter((r) => r.title !== ""); // skip fully-blank trailing rows
 }
 
-export async function uploadWbsTasks(projectId: string, formData: FormData) {
+export async function uploadWbsTasks(
+  projectId: string,
+  formData: FormData
+): Promise<{ importedCount: number; missingWbsCount: number }> {
   const user = await requireModuleWrite(projectId, "DELIVERY");
 
   const file = formData.get("file");
@@ -177,6 +185,11 @@ export async function uploadWbsTasks(projectId: string, formData: FormData) {
   const buffer = await file.arrayBuffer();
   const rows = parseUploadRows(buffer);
   if (rows.length === 0) throw new Error("No rows found in the uploaded file — check it has WBS#/Title/Story Points columns.");
+
+  // Silently defaulting wbsNumber to "" (unrecognized column header — e.g. a
+  // Jira export's "Key" isn't one of the WBS# aliases) used to be invisible
+  // until someone noticed blank cells later. Surface it instead.
+  const missingWbsCount = rows.filter((r) => !r.wbsNumber).length;
 
   // Assignee matches by exact Person.name (case-insensitive) among people
   // actually engaged on this project. No match leaves the row unassigned
@@ -204,10 +217,12 @@ export async function uploadWbsTasks(projectId: string, formData: FormData) {
     projectId,
     action: "create",
     entityType: "WbsTask",
-    summary: `Uploaded ${rows.length} WBS task${rows.length === 1 ? "" : "s"} from ${fileName}`,
+    summary: `Uploaded ${rows.length} WBS task${rows.length === 1 ? "" : "s"} from ${fileName}`
+      + (missingWbsCount > 0 ? ` (WBS# column not recognized for ${missingWbsCount} of them)` : ""),
   });
 
   revalidateDelivery(projectId);
+  return { importedCount: rows.length, missingWbsCount };
 }
 
 /**

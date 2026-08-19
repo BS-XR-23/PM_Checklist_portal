@@ -68,3 +68,29 @@ export function formatMonthLabel(date: Date): string {
 export function formatMonthShortLabel(date: Date): string {
   return date.toLocaleDateString("en-US", { year: "2-digit", month: "short", timeZone: "UTC" });
 }
+
+/**
+ * Natural sort for dotted WBS numbers ("2.10" after "2.9", not before "2.2"
+ * the way a plain string sort would). Blank WBS# sorts last, since it means
+ * "not yet numbered" rather than "comes first".
+ */
+export function compareWbsNumbers(a: string, b: string): number {
+  if (!a && !b) return 0;
+  if (!a) return 1;
+  if (!b) return -1;
+
+  const aParts = a.split(".");
+  const bParts = b.split(".");
+  const len = Math.max(aParts.length, bParts.length);
+  for (let i = 0; i < len; i++) {
+    const ap = aParts[i];
+    const bp = bParts[i];
+    if (ap === undefined) return -1;
+    if (bp === undefined) return 1;
+    const an = Number(ap);
+    const bn = Number(bp);
+    if (!Number.isNaN(an) && !Number.isNaN(bn) && an !== bn) return an - bn;
+    if (ap !== bp) return ap.localeCompare(bp);
+  }
+  return 0;
+}
