@@ -3,7 +3,7 @@ import type { Role } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/rbac";
 import { AppShell } from "@/components/layout/app-shell";
-import { IconShield, IconIdCard, IconUsers, IconUser, IconLayers } from "@/components/layout/icons";
+import { IconShield, IconIdCard, IconUsers, IconUser, IconLayers, IconClock } from "@/components/layout/icons";
 import { CreateUserForm } from "./create-user-form";
 import { UsersDirectory, type RoleGroupData } from "./users-directory";
 
@@ -22,7 +22,6 @@ const ROLE_GROUPS: Omit<RoleGroupData, "users">[] = [
     icon: <IconShield />,
     iconWrapClass: "bg-blue-50 text-blue-600",
     avatarClass: "bg-blue-600",
-    badgeClass: "bg-blue-50 text-blue-700",
   },
   {
     key: "program-management",
@@ -31,16 +30,14 @@ const ROLE_GROUPS: Omit<RoleGroupData, "users">[] = [
     icon: <IconIdCard />,
     iconWrapClass: "bg-violet-50 text-violet-600",
     avatarClass: "bg-violet-600",
-    badgeClass: "bg-violet-50 text-violet-700",
   },
   {
     key: "project-managers",
     label: "Project Managers",
-    description: "Manage assigned projects and team.",
+    description: "Can manage assigned projects and team.",
     icon: <IconUsers />,
     iconWrapClass: "bg-emerald-50 text-emerald-600",
     avatarClass: "bg-emerald-600",
-    badgeClass: "bg-emerald-50 text-emerald-700",
   },
   {
     key: "clients",
@@ -49,7 +46,6 @@ const ROLE_GROUPS: Omit<RoleGroupData, "users">[] = [
     icon: <IconUser />,
     iconWrapClass: "bg-amber-50 text-amber-600",
     avatarClass: "bg-amber-600",
-    badgeClass: "bg-amber-50 text-amber-700",
   },
   {
     key: "limited",
@@ -58,7 +54,6 @@ const ROLE_GROUPS: Omit<RoleGroupData, "users">[] = [
     icon: <IconLayers />,
     iconWrapClass: "bg-indigo-50 text-indigo-600",
     avatarClass: "bg-indigo-600",
-    badgeClass: "bg-indigo-50 text-indigo-700",
   },
 ];
 
@@ -119,7 +114,7 @@ export default async function AdminUsersPage() {
               <h3 className="text-sm font-semibold text-slate-900">User Overview</h3>
               <OverviewRow icon={<IconUsers />} iconWrapClass="bg-blue-50 text-blue-600" label="Total Users" value={totalUsers} />
               <OverviewRow icon={<IconUser />} iconWrapClass="bg-emerald-50 text-emerald-600" label="Active Users" value={activeUsers} />
-              <OverviewRow icon={<IconUser />} iconWrapClass="bg-slate-100 text-slate-500" label="Inactive Users" value={inactiveUsers} />
+              <OverviewRow icon={<IconClock />} iconWrapClass="bg-slate-100 text-slate-500" label="Inactive Users" value={inactiveUsers} />
             </div>
 
             <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">

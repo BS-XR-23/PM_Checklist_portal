@@ -3,7 +3,6 @@
 import { useState } from "react";
 import type { Role } from "@prisma/client";
 import type { ReactNode } from "react";
-import { UserRoleSelect } from "./user-role-select";
 import { ResetPasswordButton } from "./reset-password-button";
 import { UserActiveToggle } from "./user-active-toggle";
 import { UserActionsMenu } from "./user-actions-menu";
@@ -25,7 +24,6 @@ export type RoleGroupData = {
   icon: ReactNode;
   iconWrapClass: string;
   avatarClass: string;
-  badgeClass: string;
   users: UserRow[];
 };
 
@@ -56,8 +54,8 @@ function RoleGroupSection({ group, currentUserId }: { group: RoleGroupData; curr
         <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${group.iconWrapClass}`}>
           <span className="h-4 w-4 [&>svg]:h-4 [&>svg]:w-4">{group.icon}</span>
         </span>
-        <span className="text-sm font-bold text-slate-900">{group.label}</span>
-        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${group.badgeClass}`}>
+        <span className="text-sm font-bold text-slate-900 uppercase tracking-wide">{group.label}</span>
+        <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
           {group.users.length}
         </span>
         <span className="hidden sm:inline text-xs text-slate-400">{group.description}</span>
@@ -68,13 +66,12 @@ function RoleGroupSection({ group, currentUserId }: { group: RoleGroupData; curr
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide bg-slate-50">
-                <th className="px-4 py-2.5 min-w-[200px]">User</th>
-                <th className="px-4 py-2.5 min-w-[200px]">Email</th>
-                <th className="px-4 py-2.5 w-44">Role</th>
-                <th className="px-4 py-2.5 w-40">Resource</th>
-                <th className="px-4 py-2.5 w-32">Password</th>
-                <th className="px-4 py-2.5 w-28">Status</th>
-                <th className="px-4 py-2.5 w-12" />
+                <th className="px-4 py-3 min-w-[200px]">User</th>
+                <th className="px-4 py-3 min-w-[200px]">Email</th>
+                <th className="px-4 py-3 w-40">Resource</th>
+                <th className="px-4 py-3 w-32">Password</th>
+                <th className="px-4 py-3 w-28">Status</th>
+                <th className="px-4 py-3 w-16">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -82,7 +79,7 @@ function RoleGroupSection({ group, currentUserId }: { group: RoleGroupData; curr
                 const isSelf = u.id === currentUserId;
                 return (
                   <tr key={u.id} className={`border-t border-slate-100 ${u.isActive ? "" : "opacity-50"}`}>
-                    <td className="px-4 py-2.5">
+                    <td className="px-4 py-3">
                       <div className="flex items-center gap-2.5">
                         <span
                           className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white ${group.avatarClass}`}
@@ -99,13 +96,10 @@ function RoleGroupSection({ group, currentUserId }: { group: RoleGroupData; curr
                         )}
                       </div>
                     </td>
-                    <td className="px-4 py-2.5 text-slate-500">
+                    <td className="px-4 py-3 text-slate-500">
                       <UserProfileField userId={u.id} field="email" value={u.email} />
                     </td>
-                    <td className="px-4 py-2.5">
-                      <UserRoleSelect userId={u.id} currentRole={u.role} disabled={isSelf} />
-                    </td>
-                    <td className="px-4 py-2.5">
+                    <td className="px-4 py-3">
                       {u.personName ? (
                         <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
                           {u.personName}
@@ -114,14 +108,14 @@ function RoleGroupSection({ group, currentUserId }: { group: RoleGroupData; curr
                         <span className="text-slate-300">—</span>
                       )}
                     </td>
-                    <td className="px-4 py-2.5">
+                    <td className="px-4 py-3">
                       <ResetPasswordButton userId={u.id} />
                     </td>
-                    <td className="px-4 py-2.5">
+                    <td className="px-4 py-3">
                       <UserActiveToggle isActive={u.isActive} />
                     </td>
-                    <td className="px-4 py-2.5">
-                      <UserActionsMenu userId={u.id} isActive={u.isActive} isSelf={isSelf} />
+                    <td className="px-4 py-3">
+                      <UserActionsMenu userId={u.id} currentRole={u.role} isActive={u.isActive} isSelf={isSelf} />
                     </td>
                   </tr>
                 );

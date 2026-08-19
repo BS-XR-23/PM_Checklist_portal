@@ -34,7 +34,7 @@ export function ResetPasswordButton({ userId }: { userId: string }) {
           })
         }
         disabled={pending}
-        className="text-xs font-medium text-slate-500 hover:text-slate-800 disabled:opacity-50"
+        className="text-xs font-medium text-blue-600 hover:text-blue-800 hover:underline disabled:opacity-50"
       >
         {pending ? "Resetting..." : "Reset password"}
       </button>
