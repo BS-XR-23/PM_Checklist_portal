@@ -95,6 +95,42 @@ export function IconClock(props: React.SVGProps<SVGSVGElement>) {
   );
 }
 
+export function IconDollar(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M14.5 9.3c-.4-.8-1.3-1.3-2.5-1.3-1.6 0-2.7.8-2.7 2s1 1.6 2.7 2 2.7.8 2.7 2-1.1 2-2.7 2c-1.2 0-2.1-.5-2.5-1.3M12 6.7v10.6" />
+    </svg>
+  );
+}
+
+export function IconBadge(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <circle cx="12" cy="9.5" r="6" />
+      <path d="M9 14.8L7.5 21l4.5-2.5 4.5 2.5-1.5-6.2" />
+    </svg>
+  );
+}
+
+export function IconUserCheck(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <circle cx="9.5" cy="8" r="3.5" />
+      <path d="M3 20c1.1-3.5 3.7-5.5 6.5-5.5s5.4 2 6.5 5.5" />
+      <path d="M15.5 12l2 2 3.5-3.5" />
+    </svg>
+  );
+}
+
+export function IconFolder(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M3.5 6.5a1.5 1.5 0 011.5-1.5h4l2 2.2h7.5a1.5 1.5 0 011.5 1.5v9a1.5 1.5 0 01-1.5 1.5h-13A1.5 1.5 0 013.5 17.7v-11.2z" />
+    </svg>
+  );
+}
+
 export function IconClipboardList(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" {...props}>

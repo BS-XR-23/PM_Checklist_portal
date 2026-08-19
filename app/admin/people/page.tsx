@@ -5,14 +5,42 @@ import { canManagePersonRegistry } from "@/lib/resourcing-rbac";
 import { isCurrentlyActive, intensityForMonth } from "@/lib/overload";
 import { startOfMonthUTC } from "@/lib/format";
 import { AppShell } from "@/components/layout/app-shell";
+import { IconUsers, IconUserCheck, IconFolder, IconDollar, IconBadge } from "@/components/layout/icons";
 import { CreatePersonForm } from "./create-person-form";
-import { PersonRow } from "./person-row";
+import { PeopleListCard } from "./people-list-card";
 import { CreateRoleRateForm } from "./create-role-rate-form";
 import { RoleRateRow } from "./role-rate-row";
 import { CreateCompetencyForm } from "./create-competency-form";
 import { CompetencyRow } from "./competency-row";
 
 export const dynamic = "force-dynamic";
+
+function StatCard({
+  icon,
+  iconWrapClass,
+  label,
+  value,
+  subtitle,
+}: {
+  icon: React.ReactNode;
+  iconWrapClass: string;
+  label: string;
+  value: string | number;
+  subtitle: string;
+}) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4 flex items-start gap-3">
+      <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${iconWrapClass}`}>
+        <span className="h-5 w-5 [&>svg]:h-5 [&>svg]:w-5">{icon}</span>
+      </span>
+      <div className="min-w-0">
+        <div className="text-xs text-slate-500">{label}</div>
+        <div className="text-lg font-bold text-slate-900 leading-tight">{value}</div>
+        <div className="text-xs text-slate-400 mt-0.5">{subtitle}</div>
+      </div>
+    </div>
+  );
+}
 
 export default async function AdminPeoplePage() {
   const currentUser = await requireUser();
@@ -61,93 +89,127 @@ export default async function AdminPeoplePage() {
     };
   });
 
+  const totalPeople = people.length;
+  const onProject = rows.filter((r) => r.engagements.length > 0).length;
+  const linkedAccountCount = linkedUserIds.size;
+  const avgRate = roleRates.length > 0 ? roleRates.reduce((sum, r) => sum + r.manDayRate, 0) / roleRates.length : 0;
+
   return (
     <AppShell user={currentUser}>
-      <header className="border-b border-slate-200 bg-white px-4 sm:px-6 py-4">
-        <h1 className="text-lg font-semibold text-slate-900">People</h1>
+      <header className="border-b border-slate-200 bg-white px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold text-slate-900">People & Resources</h1>
+          <p className="text-sm text-slate-500 mt-0.5">
+            Manage team members, roles, rates and competencies used for project planning and resource tracking.
+          </p>
+        </div>
+        <a
+          href="#add-person"
+          className="inline-flex items-center gap-1.5 rounded-md bg-slate-900 text-white text-sm font-medium px-4 py-2 hover:bg-slate-800"
+        >
+          + Add Person
+        </a>
       </header>
-      <main className="max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
-        <CreatePersonForm linkableUsers={linkableUsers} roleRates={roleRates} competencies={competencies} />
-
-        <div className="rounded-lg border border-slate-200 bg-white overflow-x-auto">
-          <table className="w-full text-sm min-w-[1440px]">
-            <thead>
-              <tr className="text-left text-xs text-slate-500 border-b border-slate-100 bg-slate-50">
-                <th className="px-4 py-3 font-medium w-40">Name</th>
-                <th className="px-4 py-3 font-medium w-36">Title</th>
-                <th className="px-4 py-3 font-medium w-52">Email</th>
-                <th className="px-4 py-3 font-medium w-32">Phone</th>
-                <th className="px-4 py-3 font-medium w-48">Portal Account</th>
-                <th className="px-4 py-3 font-medium w-40">Rate Role</th>
-                <th className="px-4 py-3 font-medium w-40">Competency</th>
-                <th className="px-4 py-3 font-medium min-w-[220px]">Current Engagements</th>
-                <th className="px-4 py-3 font-medium w-8" />
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((p) => (
-                <PersonRow key={p.id} person={p} roleRates={roleRates} competencies={competencies} />
-              ))}
-            </tbody>
-          </table>
-          {rows.length === 0 && <p className="text-sm text-slate-400 p-4">No people in the registry yet.</p>}
+      <main className="max-w-7xl mx-auto p-4 sm:p-6 space-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard
+            icon={<IconUsers />}
+            iconWrapClass="bg-blue-50 text-blue-600"
+            label="Total People"
+            value={totalPeople}
+            subtitle="All team members"
+          />
+          <StatCard
+            icon={<IconUserCheck />}
+            iconWrapClass="bg-emerald-50 text-emerald-600"
+            label="On Project"
+            value={onProject}
+            subtitle="Currently engaged"
+          />
+          <StatCard
+            icon={<IconFolder />}
+            iconWrapClass="bg-violet-50 text-violet-600"
+            label="Linked Accounts"
+            value={linkedAccountCount}
+            subtitle="Have a portal login"
+          />
+          <StatCard
+            icon={<IconDollar />}
+            iconWrapClass="bg-amber-50 text-amber-600"
+            label="Avg. Rate"
+            value={`$${avgRate.toFixed(1)}`}
+            subtitle="Average man-day rate"
+          />
         </div>
-        <p className="text-xs text-slate-400">
-          Assigning a Person to a specific project (role, intensity, dates) happens on that project&apos;s
-          Resourcing tab — Admin or that project&apos;s PM. A person&apos;s Rate Role is what the (testing-only)
-          Budget Tracker resolves live to price their actual man-days from the Delivery tab. Their Competency is
-          what converts real days worked into effort units for the Delivery tab&apos;s Sprint Summary.
-        </p>
 
-        <div className="pt-4 border-t border-slate-100">
-          <h2 className="text-base font-semibold text-slate-900 mb-1">Role Rates</h2>
-          <p className="text-sm text-slate-500 mb-4">
-            Used by the (testing-only) Budget Tracker to price actual man-days logged on the Delivery tab, by role
-            — rates are set by role, not by named person.
-          </p>
-          <CreateRoleRateForm />
-          <div className="mt-4 rounded-lg border border-slate-200 bg-white overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-xs text-slate-500 border-b border-slate-100 bg-slate-50">
-                  <th className="px-4 py-3 font-medium">Role</th>
-                  <th className="px-4 py-3 font-medium">Man-Day Rate</th>
-                  <th className="px-4 py-3 font-medium w-8" />
-                </tr>
-              </thead>
-              <tbody>
-                {roleRates.map((r) => (
-                  <RoleRateRow key={r.id} roleRate={r} />
-                ))}
-              </tbody>
-            </table>
-            {roleRates.length === 0 && <p className="text-sm text-slate-400 p-4">No role rates set yet.</p>}
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-6 items-start">
+          <div className="space-y-4 min-w-0">
+            <CreatePersonForm linkableUsers={linkableUsers} roleRates={roleRates} competencies={competencies} />
+            <PeopleListCard rows={rows} roleRates={roleRates} competencies={competencies} />
+            <p className="text-xs text-slate-400">
+              Assigning a Person to a specific project (role, intensity, dates) happens on that project&apos;s
+              Resourcing tab — Admin or that project&apos;s PM. A person&apos;s Rate Role is what the (testing-only)
+              Budget Tracker resolves live to price their actual man-days from the Delivery tab. Their Competency is
+              what converts real days worked into effort units for the Delivery tab&apos;s Sprint Summary.
+            </p>
           </div>
-        </div>
 
-        <div className="pt-4 border-t border-slate-100">
-          <h2 className="text-base font-semibold text-slate-900 mb-1">Competencies</h2>
-          <p className="text-sm text-slate-500 mb-4">
-            Velocity/capacity multipliers used on the Delivery tab&apos;s Sprint Summary — 1.0 is baseline, 1.3 means
-            that level completes the same estimated work ~30% faster. Never touches currency.
-          </p>
-          <CreateCompetencyForm />
-          <div className="mt-4 rounded-lg border border-slate-200 bg-white overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-xs text-slate-500 border-b border-slate-100 bg-slate-50">
-                  <th className="px-4 py-3 font-medium">Level</th>
-                  <th className="px-4 py-3 font-medium">Multiplier</th>
-                  <th className="px-4 py-3 font-medium w-8" />
-                </tr>
-              </thead>
-              <tbody>
-                {competencies.map((c) => (
-                  <CompetencyRow key={c.id} competency={c} />
-                ))}
-              </tbody>
-            </table>
-            {competencies.length === 0 && <p className="text-sm text-slate-400 p-4">No competencies set yet.</p>}
+          <div className="space-y-4">
+            <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+              <div className="flex items-center gap-2.5">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
+                  <IconDollar className="h-4 w-4" />
+                </span>
+                <h3 className="text-sm font-semibold text-slate-900">Role Rates</h3>
+              </div>
+              <p className="text-xs text-slate-500">Rates are set by role, not by named person.</p>
+              <CreateRoleRateForm />
+              <div className="rounded-lg border border-slate-100 overflow-hidden">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="text-left font-semibold text-slate-500 bg-slate-50">
+                      <th className="px-3 py-2">Role</th>
+                      <th className="px-3 py-2">Man-Day Rate</th>
+                      <th className="px-3 py-2 w-6" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {roleRates.map((r) => (
+                      <RoleRateRow key={r.id} roleRate={r} />
+                    ))}
+                  </tbody>
+                </table>
+                {roleRates.length === 0 && <p className="text-xs text-slate-400 p-3">No role rates set yet.</p>}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+              <div className="flex items-center gap-2.5">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-violet-600">
+                  <IconBadge className="h-4 w-4" />
+                </span>
+                <h3 className="text-sm font-semibold text-slate-900">Competencies</h3>
+              </div>
+              <p className="text-xs text-slate-500">Velocity/capacity multipliers used in Sprint Summary.</p>
+              <CreateCompetencyForm />
+              <div className="rounded-lg border border-slate-100 overflow-hidden">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="text-left font-semibold text-slate-500 bg-slate-50">
+                      <th className="px-3 py-2">Level</th>
+                      <th className="px-3 py-2">Multiplier</th>
+                      <th className="px-3 py-2 w-6" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {competencies.map((c) => (
+                      <CompetencyRow key={c.id} competency={c} />
+                    ))}
+                  </tbody>
+                </table>
+                {competencies.length === 0 && <p className="text-xs text-slate-400 p-3">No competencies set yet.</p>}
+              </div>
+            </div>
           </div>
         </div>
       </main>

@@ -24,37 +24,32 @@ export function CreateCompetencyForm() {
           }
         });
       }}
-      className="rounded-lg border border-slate-200 bg-white p-4 space-y-3"
+      className="space-y-2"
     >
-      <h2 className="text-sm font-semibold text-slate-700">Add Competency</h2>
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="flex-1 min-w-[200px]">
-          <label className="block text-xs font-medium text-slate-600 mb-1">Level</label>
-          <input
-            required
-            value={level}
-            onChange={(e) => setLevel(e.target.value)}
-            placeholder="e.g. Senior"
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-          />
-        </div>
-        <div className="min-w-[160px]">
-          <label className="block text-xs font-medium text-slate-600 mb-1">Multiplier</label>
-          <input
-            required
-            type="number"
-            step={0.1}
-            min={0}
-            value={multiplier}
-            onChange={(e) => setMultiplier(e.target.value)}
-            placeholder="1.0 = baseline"
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-          />
-        </div>
-        <button type="submit" disabled={pending} className="rounded-md bg-slate-900 text-white text-sm font-medium px-4 py-2 hover:bg-slate-800 disabled:opacity-50">
-          {pending ? "Adding..." : "Add Competency"}
-        </button>
-      </div>
+      <input
+        required
+        value={level}
+        onChange={(e) => setLevel(e.target.value)}
+        placeholder="Level name"
+        className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+      />
+      <input
+        required
+        type="number"
+        step={0.1}
+        min={0}
+        value={multiplier}
+        onChange={(e) => setMultiplier(e.target.value)}
+        placeholder="Multiplier (1.0 = baseline)"
+        className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+      />
+      <button
+        type="submit"
+        disabled={pending}
+        className="w-full rounded-md bg-slate-900 text-white text-sm font-medium px-4 py-2 hover:bg-slate-800 disabled:opacity-50"
+      >
+        {pending ? "Adding..." : "+ Add Competency"}
+      </button>
       {error && <p className="text-xs text-red-600">{error}</p>}
     </form>
   );
