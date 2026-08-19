@@ -6,6 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "build:local": "NEXT_DIST_DIR=.next-local next build",
+    "start:local": "NEXT_DIST_DIR=.next-local NEXTAUTH_URL=http://localhost:3001 next start -p 3001",
     "lint": "next lint",
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
