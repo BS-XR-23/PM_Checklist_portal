@@ -98,16 +98,25 @@ function SprintSelect({ taskId, projectId, value, sprints }: { taskId: string; p
 export function WbsTasksTable({
   projectId,
   tasks,
+  duplicateCheckTasks,
   roster,
   sprints,
   canWrite,
+  showAddRow = true,
+  emptyMessage = "No WBS tasks yet.",
   taskHistory,
 }: {
   projectId: string;
   tasks: WbsTaskData[];
+  /** Defaults to `tasks`. Pass the full project list when `tasks` is a
+   * filtered subset (e.g. the Completed-only table) so duplicate detection
+   * still catches a title colliding with a task outside this subset. */
+  duplicateCheckTasks?: WbsTaskData[];
   roster: RosterPerson[];
   sprints: SprintOption[];
   canWrite: boolean;
+  showAddRow?: boolean;
+  emptyMessage?: string;
   taskHistory?: Record<string, AuditLogRow[]>;
 }) {
   const [pending, startTransition] = useTransition();
@@ -124,10 +133,10 @@ export function WbsTasksTable({
   // the same work item to exist twice (which is exactly how real duplicates
   // piled up here before this existed). Computed before the early return
   // below so this Hook always runs in the same order.
-  const duplicateWbsByTaskId = useMemo(() => computeDuplicateRefs(tasks), [tasks]);
+  const duplicateWbsByTaskId = useMemo(() => computeDuplicateRefs(duplicateCheckTasks ?? tasks), [duplicateCheckTasks, tasks]);
 
-  if (tasks.length === 0 && !canWrite) {
-    return <p className="text-sm text-slate-400 p-4">No WBS tasks yet.</p>;
+  if (tasks.length === 0 && !(canWrite && showAddRow)) {
+    return <p className="text-sm text-slate-400 p-4">{emptyMessage}</p>;
   }
 
   const historyTask = historyTaskId ? tasks.find((t) => t.id === historyTaskId) : undefined;
@@ -220,7 +229,7 @@ export function WbsTasksTable({
             {filteredTasks.length === 0 && (
               <tr>
                 <td colSpan={9} className="px-4 py-6 text-center text-sm text-slate-400">
-                  No tasks match the current filters.
+                  {tasks.length === 0 ? emptyMessage : "No tasks match the current filters."}
                 </td>
               </tr>
             )}
@@ -321,7 +330,7 @@ export function WbsTasksTable({
 
       {error && <p className="text-xs text-red-600 px-4 py-2">{error}</p>}
 
-      {canWrite && (
+      {canWrite && showAddRow && (
         <button
           onClick={() => startTransition(() => createWbsTask(projectId))}
           disabled={pending}
