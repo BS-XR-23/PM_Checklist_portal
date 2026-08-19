@@ -10,6 +10,11 @@ import { useState, useTransition } from "react";
 const cellClass =
   "w-full bg-transparent text-sm px-1.5 py-1 rounded border border-slate-200 hover:border-slate-300 hover:bg-slate-100 focus:bg-white focus:outline-none focus:ring-1 focus:ring-slate-400 disabled:opacity-50";
 
+// Hides the browser's default number-input spinner arrows — they ate
+// visible width in narrow columns (e.g. Role Rates' compact sidebar table)
+// without adding value over typing/arrow-key editing directly.
+const numberCellClass = cellClass + " [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
+
 export function InlineText({
   value,
   onSave,
@@ -80,7 +85,7 @@ export function InlineNumber({
     <input
       type="number"
       step={step}
-      className={cellClass}
+      className={numberCellClass}
       value={draft}
       disabled={pending}
       onChange={(e) => setDraft(e.target.value)}
@@ -110,7 +115,7 @@ export function InlinePercent({
         step={0.5}
         min={0}
         max={100}
-        className={cellClass}
+        className={numberCellClass}
         value={draft}
         disabled={pending}
         onChange={(e) => setDraft(e.target.value)}

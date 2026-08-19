@@ -55,7 +55,7 @@ export function PeopleDirectory({
   const pageRows = filtered.slice((clampedPage - 1) * pageSize, clampedPage * pageSize);
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-6 items-start">
+    <div className="grid grid-cols-1 xl:grid-cols-[1fr_280px] gap-6 items-start">
       <div className="space-y-4 min-w-0">
         {statCards}
         {addPersonForm}
@@ -84,7 +84,7 @@ export function PeopleDirectory({
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[1320px]">
+            <table className="w-full text-sm min-w-[1300px]">
               <thead>
                 <tr className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-100 bg-slate-50">
                   <th className="px-4 py-3 w-40">
@@ -94,11 +94,11 @@ export function PeopleDirectory({
                   </th>
                   <th className="px-4 py-3 w-36">Title</th>
                   <th className="px-4 py-3 w-52">Email</th>
-                  <th className="px-4 py-3 w-32">Phone</th>
-                  <th className="px-4 py-3 w-48">Portal Account</th>
-                  <th className="px-4 py-3 w-40">Rate Role</th>
-                  <th className="px-4 py-3 w-40">Competency</th>
-                  <th className="px-4 py-3 min-w-[220px]">Engagement</th>
+                  <th className="px-4 py-3 w-24">Phone</th>
+                  <th className="px-4 py-3 w-40">Portal Account</th>
+                  <th className="px-4 py-3 w-36">Rate Role</th>
+                  <th className="px-4 py-3 w-36">Competency</th>
+                  <th className="px-4 py-3 min-w-[200px]">Engagement</th>
                   <th className="px-4 py-3 w-12" />
                 </tr>
               </thead>
