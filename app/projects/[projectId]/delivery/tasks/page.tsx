@@ -79,6 +79,13 @@ export default async function DeliveryTasksPage({ params }: { params: { projectI
   const donePts = tasks.reduce((sum, t) => sum + t.storyPoints * t.pctComplete, 0);
   const remainingPts = totalPts - donePts;
 
+  // Split into two tables so completed work stops competing for space with
+  // what's still active, without losing it — "done" here matches the same
+  // continuous pctComplete already used for the Done/Remaining columns
+  // above (informational, not the strict 0/100 EV rule).
+  const activeTasks = tasks.filter((t) => t.pctComplete < 1);
+  const doneTasks = tasks.filter((t) => t.pctComplete >= 1);
+
   return (
     <div className="space-y-6">
       <SubNav
@@ -105,13 +112,30 @@ export default async function DeliveryTasksPage({ params }: { params: { projectI
 
       <WbsTasksTable
         projectId={params.projectId}
-        tasks={tasks}
+        tasks={activeTasks}
+        duplicateCheckTasks={tasks}
         roster={roster}
         sprints={sprintOptions}
         canWrite={canWrite}
+        emptyMessage="No active tasks — everything's either done or nothing's been added yet."
         taskHistory={canViewHistory ? taskHistory : undefined}
       />
       {canWrite && <UploadWbsTasksForm projectId={params.projectId} />}
+
+      <div>
+        <h3 className="text-sm font-semibold text-slate-700 mb-2">Completed ({doneTasks.length})</h3>
+        <WbsTasksTable
+          projectId={params.projectId}
+          tasks={doneTasks}
+          duplicateCheckTasks={tasks}
+          roster={roster}
+          sprints={sprintOptions}
+          canWrite={canWrite}
+          showAddRow={false}
+          emptyMessage="No completed tasks yet."
+          taskHistory={canViewHistory ? taskHistory : undefined}
+        />
+      </div>
     </div>
   );
 }

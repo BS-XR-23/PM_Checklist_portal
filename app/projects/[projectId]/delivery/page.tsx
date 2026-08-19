@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { requireModuleAccess, requireUser } from "@/lib/rbac";
+import { compareWbsNumbers } from "@/lib/format";
 import { wbsPlannedValue, wbsActualValue, sprintEarnedValue, manDaysFromHours } from "@/lib/calculations";
 import { SubNav } from "@/components/ui/sub-nav";
 import { AddSprintModal } from "./add-sprint-modal";
@@ -72,18 +73,24 @@ export default async function DeliverySprintsPage({ params }: { params: { projec
       ? s.frozenActualValue ?? 0
       : wbsActualValue(s.tasks.map((t) => ({ actualManDays: manDaysFromHours(t.actualHours), competencyMultiplier: t.competencyMultiplier })));
 
-    const tasks = s.tasks.map((t) => ({
-      id: t.id,
-      wbsNumber: t.wbsNumber,
-      title: t.title,
-      storyPoints: t.storyPoints,
-      pctComplete: t.pctComplete,
-      actualHours: t.actualHours,
-      personId: t.personId,
-      personName: t.personName,
-    }));
+    // Same natural WBS# sort as the Tasks tab, not commit order — a PM
+    // scanning a sprint's drill-down expects it grouped the same way.
+    const tasks = [...s.tasks]
+      .sort((a, b) => compareWbsNumbers(a.wbsNumber, b.wbsNumber))
+      .map((t) => ({
+        id: t.id,
+        wbsNumber: t.wbsNumber,
+        title: t.title,
+        storyPoints: t.storyPoints,
+        pctComplete: t.pctComplete,
+        actualHours: t.actualHours,
+        personId: t.personId,
+        personName: t.personName,
+      }));
 
-    const frozenTasks = Array.isArray(s.frozenTaskSnapshot) ? (s.frozenTaskSnapshot as unknown as FrozenTaskSnapshotEntry[]) : [];
+    const frozenTasks = Array.isArray(s.frozenTaskSnapshot)
+      ? [...(s.frozenTaskSnapshot as unknown as FrozenTaskSnapshotEntry[])].sort((a, b) => compareWbsNumbers(a.wbsNumber, b.wbsNumber))
+      : [];
 
     const allocations = s.allocations.map((a) => ({
       id: a.id,
