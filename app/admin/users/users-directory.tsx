@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { Role } from "@prisma/client";
 import type { ReactNode } from "react";
+import { initials } from "@/lib/format";
 import { ResetPasswordButton } from "./reset-password-button";
 import { UserActiveToggle } from "./user-active-toggle";
 import { UserActionsMenu } from "./user-actions-menu";
@@ -27,20 +28,7 @@ export type RoleGroupData = {
   users: UserRow[];
 };
 
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
-
-function matchesSearch(u: UserRow, q: string): boolean {
-  if (!q) return true;
-  const s = q.toLowerCase();
-  return u.name.toLowerCase().includes(s) || u.email.toLowerCase().includes(s);
-}
-
-function RoleGroupSection({ group, currentUserId }: { group: RoleGroupData; currentUserId: string }) {
+export function RoleGroupSection({ group, currentUserId }: { group: RoleGroupData; currentUserId: string }) {
   const [collapsed, setCollapsed] = useState(false);
   if (group.users.length === 0) return null;
 
@@ -79,7 +67,7 @@ function RoleGroupSection({ group, currentUserId }: { group: RoleGroupData; curr
                 const isSelf = u.id === currentUserId;
                 return (
                   <tr key={u.id} className={`border-t border-slate-100 ${u.isActive ? "" : "opacity-50"}`}>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3.5">
                       <div className="flex items-center gap-2.5">
                         <span
                           className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white ${group.avatarClass}`}
@@ -96,10 +84,10 @@ function RoleGroupSection({ group, currentUserId }: { group: RoleGroupData; curr
                         )}
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-slate-500">
+                    <td className="px-4 py-3.5 text-slate-500">
                       <UserProfileField userId={u.id} field="email" value={u.email} />
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3.5">
                       {u.personName ? (
                         <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
                           {u.personName}
@@ -108,13 +96,13 @@ function RoleGroupSection({ group, currentUserId }: { group: RoleGroupData; curr
                         <span className="text-slate-300">—</span>
                       )}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3.5">
                       <ResetPasswordButton userId={u.id} />
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3.5">
                       <UserActiveToggle isActive={u.isActive} />
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3.5">
                       <UserActionsMenu userId={u.id} currentRole={u.role} isActive={u.isActive} isSelf={isSelf} />
                     </td>
                   </tr>
@@ -124,34 +112,6 @@ function RoleGroupSection({ group, currentUserId }: { group: RoleGroupData; curr
           </table>
         </div>
       )}
-    </div>
-  );
-}
-
-export function UsersDirectory({ groups, currentUserId }: { groups: RoleGroupData[]; currentUserId: string }) {
-  const [search, setSearch] = useState("");
-
-  const filteredGroups = groups.map((g) => ({ ...g, users: g.users.filter((u) => matchesSearch(u, search)) }));
-  const anyResults = filteredGroups.some((g) => g.users.length > 0);
-
-  return (
-    <div className="space-y-4">
-      <div className="flex justify-end">
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search users…"
-          className="w-64 rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
-        />
-      </div>
-
-      {!anyResults && (
-        <p className="text-sm text-slate-400 rounded-xl border border-slate-200 bg-white p-4">No users match &quot;{search}&quot;.</p>
-      )}
-      {filteredGroups.map((g) => (
-        <RoleGroupSection key={g.key} group={g} currentUserId={currentUserId} />
-      ))}
     </div>
   );
 }

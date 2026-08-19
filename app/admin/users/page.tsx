@@ -4,8 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/rbac";
 import { AppShell } from "@/components/layout/app-shell";
 import { IconShield, IconIdCard, IconUsers, IconUser, IconLayers, IconClock } from "@/components/layout/icons";
-import { CreateUserForm } from "./create-user-form";
-import { UsersDirectory, type RoleGroupData } from "./users-directory";
+import { UsersPageClient } from "./users-page-client";
+import type { RoleGroupData } from "./users-directory";
 
 export const dynamic = "force-dynamic";
 
@@ -73,7 +73,7 @@ function OverviewRow({ icon, iconWrapClass, label, value }: { icon: React.ReactN
       </span>
       <div>
         <div className="text-xs text-slate-500">{label}</div>
-        <div className="text-base font-bold text-slate-900">{value}</div>
+        <div className="text-lg font-bold text-slate-900 leading-tight">{value}</div>
       </div>
     </div>
   );
@@ -96,49 +96,35 @@ export default async function AdminUsersPage() {
   const activeUsers = users.filter((u) => u.isActive).length;
   const inactiveUsers = totalUsers - activeUsers;
 
+  const sidebar = (
+    <>
+      <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+        <h3 className="text-sm font-semibold text-slate-900">User Overview</h3>
+        <OverviewRow icon={<IconUsers />} iconWrapClass="bg-blue-50 text-blue-600" label="Total Users" value={totalUsers} />
+        <OverviewRow icon={<IconUser />} iconWrapClass="bg-emerald-50 text-emerald-600" label="Active Users" value={activeUsers} />
+        <OverviewRow icon={<IconClock />} iconWrapClass="bg-slate-100 text-slate-500" label="Inactive Users" value={inactiveUsers} />
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+        <h3 className="text-sm font-semibold text-slate-900">Role Guide</h3>
+        {ROLE_GROUPS.map((g) => (
+          <div key={g.key} className="flex items-start gap-2.5">
+            <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${g.iconWrapClass}`}>
+              <span className="h-3.5 w-3.5 [&>svg]:h-3.5 [&>svg]:w-3.5">{g.icon}</span>
+            </span>
+            <div>
+              <div className="text-xs font-semibold text-slate-800">{g.label}</div>
+              <div className="text-xs text-slate-500">{g.description}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+
   return (
     <AppShell user={currentUser}>
-      <header className="border-b border-slate-200 bg-white px-4 sm:px-6 py-4">
-        <h1 className="text-lg font-semibold text-slate-900">Users</h1>
-        <p className="text-sm text-slate-500 mt-0.5">Manage portal users and assign them to projects with specific roles.</p>
-      </header>
-      <main className="max-w-6xl mx-auto p-4 sm:p-6">
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-6 items-start">
-          <div className="space-y-4 min-w-0">
-            <CreateUserForm />
-            <UsersDirectory groups={groups} currentUserId={currentUser.id} />
-          </div>
-
-          <div className="space-y-4">
-            <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
-              <h3 className="text-sm font-semibold text-slate-900">User Overview</h3>
-              <OverviewRow icon={<IconUsers />} iconWrapClass="bg-blue-50 text-blue-600" label="Total Users" value={totalUsers} />
-              <OverviewRow icon={<IconUser />} iconWrapClass="bg-emerald-50 text-emerald-600" label="Active Users" value={activeUsers} />
-              <OverviewRow icon={<IconClock />} iconWrapClass="bg-slate-100 text-slate-500" label="Inactive Users" value={inactiveUsers} />
-            </div>
-
-            <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
-              <h3 className="text-sm font-semibold text-slate-900">Role Guide</h3>
-              {ROLE_GROUPS.map((g) => (
-                <div key={g.key} className="flex items-start gap-2.5">
-                  <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${g.iconWrapClass}`}>
-                    <span className="h-3.5 w-3.5 [&>svg]:h-3.5 [&>svg]:w-3.5">{g.icon}</span>
-                  </span>
-                  <div>
-                    <div className="text-xs font-semibold text-slate-800">{g.label}</div>
-                    <div className="text-xs text-slate-500">{g.description}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <p className="text-xs text-slate-400 mt-4">
-          Assigning a user to a specific project (PM / CLIENT / LIMITED) happens on that project&apos;s Team tab, not
-          here — role here is the global role only.
-        </p>
-      </main>
+      <UsersPageClient groups={groups} currentUserId={currentUser.id} sidebar={sidebar} />
     </AppShell>
   );
 }

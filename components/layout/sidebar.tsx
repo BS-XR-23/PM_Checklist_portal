@@ -6,6 +6,7 @@ import clsx from "clsx";
 import { SignOutLink } from "@/components/ui/sign-out-link";
 import { ChangePasswordModal } from "@/components/ui/change-password-modal";
 import { IconGrid, IconChart, IconUser, IconUsers, IconIdCard, IconClipboardList, IconLayers, IconBell, IconTarget } from "./icons";
+import { initials } from "@/lib/format";
 import type { Role } from "@prisma/client";
 
 type NavItem = { href: string; label: string; icon: (props: React.SVGProps<SVGSVGElement>) => React.ReactElement; badge?: number };
@@ -44,9 +45,14 @@ export function Sidebar({ user, reminderCount = 0 }: { user: { name: string; rol
 
   return (
     <aside className="w-60 shrink-0 h-screen sticky top-0 flex flex-col border-r border-slate-200 bg-white">
-      <div className="px-4 py-4 border-b border-slate-100">
-        <p className="text-sm font-semibold text-slate-900 leading-tight">XR PM Checklist</p>
-        <p className="text-xs text-slate-400">Portal</p>
+      <div className="px-4 py-4 border-b border-slate-100 flex items-center gap-2.5">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-900 text-xs font-bold text-white">
+          XR
+        </span>
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-slate-900 leading-tight truncate">XR PM Checklist</p>
+          <p className="text-xs text-slate-400">Portal</p>
+        </div>
       </div>
 
       <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-4">
@@ -60,9 +66,16 @@ export function Sidebar({ user, reminderCount = 0 }: { user: { name: string; rol
       </nav>
 
       <div className="border-t border-slate-100 px-3 py-3">
-        <p className="text-sm font-medium text-slate-800 truncate">{user.name}</p>
-        <p className="text-xs text-slate-400 mb-2">{user.role.replace("_", " ")}</p>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5 mb-2">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-900 text-xs font-semibold text-white">
+            {initials(user.name)}
+          </span>
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-slate-800 truncate">{user.name}</p>
+            <p className="text-xs text-slate-400">{user.role.replace("_", " ")}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3 pl-0.5">
           <ChangePasswordModal />
           <SignOutLink />
         </div>
