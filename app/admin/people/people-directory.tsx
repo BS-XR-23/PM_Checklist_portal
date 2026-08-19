@@ -99,7 +99,7 @@ export function PeopleDirectory({
                   <th className="px-4 py-3 w-40">Rate Role</th>
                   <th className="px-4 py-3 w-40">Competency</th>
                   <th className="px-4 py-3 min-w-[220px]">Engagement</th>
-                  <th className="px-4 py-3 w-8" />
+                  <th className="px-4 py-3 w-12" />
                 </tr>
               </thead>
               <tbody>

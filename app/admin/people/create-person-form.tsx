@@ -70,61 +70,63 @@ export function CreatePersonForm({
         }}
         className="px-4 pb-4 pt-1 space-y-3 border-t border-slate-100"
       >
-        <div className="flex flex-wrap items-end gap-3 pt-3">
-        <div className="flex-1 min-w-[160px]">
-          <label className="block text-xs font-medium text-slate-600 mb-1">Name</label>
-          <input required value={name} onChange={(e) => setName(e.target.value)} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
+        <div className="pt-3 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Name</label>
+            <input required value={name} onChange={(e) => setName(e.target.value)} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Title</label>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="e.g. Lead Engineer"
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Email</label>
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Phone</label>
+            <input value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Portal Account (optional)</label>
+            <select value={userId} onChange={(e) => setUserId(e.target.value)} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
+              <option value="">None</option>
+              {linkableUsers.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name} ({u.email})
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
-        <div className="flex-1 min-w-[160px]">
-          <label className="block text-xs font-medium text-slate-600 mb-1">Title</label>
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="e.g. Lead Engineer"
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-          />
-        </div>
-        <div className="flex-1 min-w-[180px]">
-          <label className="block text-xs font-medium text-slate-600 mb-1">Email</label>
-          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
-        </div>
-        <div className="flex-1 min-w-[140px]">
-          <label className="block text-xs font-medium text-slate-600 mb-1">Phone</label>
-          <input value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
-        </div>
-        <div className="min-w-[200px]">
-          <label className="block text-xs font-medium text-slate-600 mb-1">Linked portal account (optional)</label>
-          <select value={userId} onChange={(e) => setUserId(e.target.value)} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
-            <option value="">None</option>
-            {linkableUsers.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.name} ({u.email})
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="min-w-[160px]">
-          <label className="block text-xs font-medium text-slate-600 mb-1">Rate Role (optional)</label>
-          <select value={roleRateId} onChange={(e) => setRoleRateId(e.target.value)} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
-            <option value="">None</option>
-            {roleRates.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.roleName}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="min-w-[160px]">
-          <label className="block text-xs font-medium text-slate-600 mb-1">Competency (optional)</label>
-          <select value={competencyId} onChange={(e) => setCompetencyId(e.target.value)} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
-            <option value="">None</option>
-            {competencies.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.level}
-              </option>
-            ))}
-          </select>
-        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 items-end">
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Rate Role (optional)</label>
+            <select value={roleRateId} onChange={(e) => setRoleRateId(e.target.value)} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
+              <option value="">None</option>
+              {roleRates.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.roleName}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Competency (optional)</label>
+            <select value={competencyId} onChange={(e) => setCompetencyId(e.target.value)} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
+              <option value="">None</option>
+              {competencies.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.level}
+                </option>
+              ))}
+            </select>
+          </div>
           <button type="submit" disabled={pending} className="rounded-md bg-slate-900 text-white text-sm font-medium px-4 py-2 hover:bg-slate-800 disabled:opacity-50">
             {pending ? "Adding..." : "Add Person"}
           </button>

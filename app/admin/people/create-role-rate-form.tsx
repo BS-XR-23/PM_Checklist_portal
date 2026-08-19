@@ -4,10 +4,23 @@ import { useState, useTransition } from "react";
 import { createRoleRate } from "./role-rate-actions";
 
 export function CreateRoleRateForm() {
+  const [open, setOpen] = useState(false);
   const [roleName, setRoleName] = useState("");
   const [manDayRate, setManDayRate] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="w-full rounded-md bg-slate-900 text-white text-sm font-medium px-4 py-2 hover:bg-slate-800"
+      >
+        + Add Role Rate
+      </button>
+    );
+  }
 
   return (
     <form
@@ -19,6 +32,7 @@ export function CreateRoleRateForm() {
             await createRoleRate({ roleName, manDayRate: manDayRate === "" ? 0 : Number(manDayRate) });
             setRoleName("");
             setManDayRate("");
+            setOpen(false);
           } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to create role rate.");
           }
@@ -28,6 +42,7 @@ export function CreateRoleRateForm() {
     >
       <input
         required
+        autoFocus
         value={roleName}
         onChange={(e) => setRoleName(e.target.value)}
         placeholder="Role name"
@@ -43,13 +58,25 @@ export function CreateRoleRateForm() {
         placeholder="Man-day rate"
         className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
       />
-      <button
-        type="submit"
-        disabled={pending}
-        className="w-full rounded-md bg-slate-900 text-white text-sm font-medium px-4 py-2 hover:bg-slate-800 disabled:opacity-50"
-      >
-        {pending ? "Adding..." : "+ Add Role Rate"}
-      </button>
+      <div className="flex gap-2">
+        <button
+          type="submit"
+          disabled={pending}
+          className="flex-1 rounded-md bg-slate-900 text-white text-sm font-medium px-4 py-2 hover:bg-slate-800 disabled:opacity-50"
+        >
+          {pending ? "Adding..." : "Add"}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setOpen(false);
+            setError(null);
+          }}
+          className="rounded-md border border-slate-300 text-slate-600 text-sm font-medium px-4 py-2 hover:bg-slate-50"
+        >
+          Cancel
+        </button>
+      </div>
       {error && <p className="text-xs text-red-600">{error}</p>}
     </form>
   );

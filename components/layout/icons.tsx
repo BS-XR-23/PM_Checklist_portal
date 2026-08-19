@@ -131,6 +131,15 @@ export function IconFolder(props: React.SVGProps<SVGSVGElement>) {
   );
 }
 
+export function IconPencil(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M4 20l.9-4.2L15.6 5.1a1.5 1.5 0 012.1 0l1.2 1.2a1.5 1.5 0 010 2.1L8.2 19.1 4 20z" />
+      <path d="M14 7l3 3" />
+    </svg>
+  );
+}
+
 export function IconFilter(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" {...props}>

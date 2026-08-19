@@ -138,7 +138,7 @@ export default async function AdminPeoplePage() {
             <thead>
               <tr className="text-left font-semibold text-slate-500 bg-slate-50">
                 <th className="px-3 py-2">Role</th>
-                <th className="px-3 py-2">Man-Day Rate</th>
+                <th className="px-3 py-2 w-16 whitespace-nowrap">Rate</th>
                 <th className="px-3 py-2 w-6" />
               </tr>
             </thead>
