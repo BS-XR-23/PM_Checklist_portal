@@ -96,7 +96,7 @@ export default async function AdminPeoplePage() {
   const avgRate = roleRates.length > 0 ? roleRates.reduce((sum, r) => sum + r.manDayRate, 0) / roleRates.length : 0;
 
   const statCards = (
-    <div className="grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-4 gap-3">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
       <StatCard icon={<IconUsers />} iconWrapClass="bg-blue-50 text-blue-600" label="Total People" value={totalPeople} subtitle="All team members" />
       <StatCard
         icon={<IconUserCheck />}
@@ -117,7 +117,7 @@ export default async function AdminPeoplePage() {
         iconWrapClass="bg-amber-50 text-amber-600"
         label="Avg. Rate"
         value={`$${avgRate.toFixed(1)}`}
-        subtitle="Average man-day rate"
+        subtitle="Avg. man-day rate"
       />
     </div>
   );
