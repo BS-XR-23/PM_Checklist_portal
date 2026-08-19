@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { InlineText, InlineNumber } from "@/components/ui/inline-edit";
 import { AuditLogTable, type AuditLogRow } from "@/components/rbac/audit-log-table";
+import { normalizeTaskTitle } from "@/lib/format";
 import { createWbsTask, updateWbsTask, deleteWbsTask, assignTaskToSprint } from "./delivery-actions";
 
 export type WbsTaskData = {
@@ -116,6 +117,35 @@ export function WbsTasksTable({
   const [sprintFilter, setSprintFilter] = useState<string>("all");
   const [assigneeFilter, setAssigneeFilter] = useState<string>("all");
 
+  // Duplicate-title detection, computed client-side from the already-loaded
+  // task list — no extra round-trip needed. Non-blocking: a matching title
+  // just gets flagged (with the other WBS#s it collides with) so the PM can
+  // decide whether to merge/rename/delete, rather than silently allowing
+  // the same work item to exist twice (which is exactly how real duplicates
+  // piled up here before this existed). Computed before the early return
+  // below so this Hook always runs in the same order.
+  const duplicateWbsByTaskId = useMemo(() => {
+    const byTitle = new Map<string, WbsTaskData[]>();
+    for (const t of tasks) {
+      if (!t.title.trim()) continue;
+      const key = normalizeTaskTitle(t.title);
+      const group = byTitle.get(key) ?? [];
+      group.push(t);
+      byTitle.set(key, group);
+    }
+    const result = new Map<string, string[]>();
+    for (const group of Array.from(byTitle.values())) {
+      if (group.length < 2) continue;
+      for (const t of group) {
+        result.set(
+          t.id,
+          group.filter((o: WbsTaskData) => o.id !== t.id).map((o: WbsTaskData) => o.wbsNumber || "unnumbered")
+        );
+      }
+    }
+    return result;
+  }, [tasks]);
+
   if (tasks.length === 0 && !canWrite) {
     return <p className="text-sm text-slate-400 p-4">No WBS tasks yet.</p>;
   }
@@ -227,11 +257,23 @@ export function WbsTasksTable({
                   )}
                 </td>
                 <td className="px-4 py-2">
-                  {canWrite ? (
-                    <InlineText value={t.title} onSave={(v) => updateWbsTask(t.id, projectId, { title: v })} />
-                  ) : (
-                    <span className="text-slate-600">{t.title}</span>
-                  )}
+                  <div className="flex items-center gap-1.5">
+                    <div className="min-w-0 flex-1">
+                      {canWrite ? (
+                        <InlineText value={t.title} onSave={(v) => updateWbsTask(t.id, projectId, { title: v })} />
+                      ) : (
+                        <span className="text-slate-600">{t.title}</span>
+                      )}
+                    </div>
+                    {duplicateWbsByTaskId.has(t.id) && (
+                      <span
+                        title={`Possible duplicate — same title as WBS ${duplicateWbsByTaskId.get(t.id)!.join(", ")}`}
+                        className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700"
+                      >
+                        ⚠ dup?
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className="px-4 py-2">
                   {canWrite ? (

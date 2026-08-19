@@ -69,6 +69,11 @@ export function formatMonthShortLabel(date: Date): string {
   return date.toLocaleDateString("en-US", { year: "2-digit", month: "short", timeZone: "UTC" });
 }
 
+/** Case/whitespace-insensitive key for spotting likely-duplicate WBS task titles. */
+export function normalizeTaskTitle(title: string): string {
+  return title.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
 /**
  * Natural sort for dotted WBS numbers ("2.10" after "2.9", not before "2.2"
  * the way a plain string sort would). Blank WBS# sorts last, since it means

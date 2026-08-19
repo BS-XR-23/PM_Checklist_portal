@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { startOfMonthUTC, addMonthsUTC, parseMonthParam, toMonthParam, formatMonthLabel, formatMonthShortLabel, compareWbsNumbers } from "./format";
+import { startOfMonthUTC, addMonthsUTC, parseMonthParam, toMonthParam, formatMonthLabel, formatMonthShortLabel, compareWbsNumbers, normalizeTaskTitle } from "./format";
 
 describe("startOfMonthUTC", () => {
   it("normalizes any day of the month to the 1st at UTC midnight", () => {
@@ -72,5 +72,15 @@ describe("compareWbsNumbers", () => {
 
   it("falls back to string comparison for non-numeric segments", () => {
     expect(compareWbsNumbers("1.a", "1.b")).toBeLessThan(0);
+  });
+});
+
+describe("normalizeTaskTitle", () => {
+  it("ignores case, leading/trailing space, and repeated internal whitespace", () => {
+    expect(normalizeTaskTitle("  Admin  Auth ")).toBe(normalizeTaskTitle("admin auth"));
+  });
+
+  it("still distinguishes genuinely different titles", () => {
+    expect(normalizeTaskTitle("Admin Auth")).not.toBe(normalizeTaskTitle("Admin Authorization"));
   });
 });

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import * as XLSX from "xlsx";
 import { prisma } from "@/lib/prisma";
-import { parseDateInput } from "@/lib/format";
+import { parseDateInput, normalizeTaskTitle } from "@/lib/format";
 import { requireModuleWrite, requireUser, writeAudit, type CurrentUser } from "@/lib/rbac";
 import { wbsPlannedValue, wbsActualValue, sprintEarnedValue, manDaysFromHours } from "@/lib/calculations";
 
@@ -175,7 +175,7 @@ function parseUploadRows(buffer: ArrayBuffer): UploadRow[] {
 export async function uploadWbsTasks(
   projectId: string,
   formData: FormData
-): Promise<{ importedCount: number; missingWbsCount: number }> {
+): Promise<{ importedCount: number; missingWbsCount: number; duplicateCount: number }> {
   const user = await requireModuleWrite(projectId, "DELIVERY");
 
   const file = formData.get("file");
@@ -190,6 +190,24 @@ export async function uploadWbsTasks(
   // Jira export's "Key" isn't one of the WBS# aliases) used to be invisible
   // until someone noticed blank cells later. Surface it instead.
   const missingWbsCount = rows.filter((r) => !r.wbsNumber).length;
+
+  // Same "title already exists" check as the manual Add Row flow — catches
+  // re-uploading the same file, or two files (e.g. a manually-numbered CSV
+  // and a Jira export) describing the same backlog, which otherwise import
+  // as full duplicates with no signal until someone notices the row count.
+  // Never blocks the import — just reports how many rows collided, since
+  // title matching is fuzzy and legitimate re-imports (updated estimates
+  // etc.) are also a real workflow.
+  const existingTitles = new Set(
+    (await prisma.wbsTask.findMany({ where: { projectId }, select: { title: true } })).map((t) => normalizeTaskTitle(t.title))
+  );
+  const seenInBatch = new Set<string>();
+  let duplicateCount = 0;
+  for (const r of rows) {
+    const key = normalizeTaskTitle(r.title);
+    if (existingTitles.has(key) || seenInBatch.has(key)) duplicateCount++;
+    seenInBatch.add(key);
+  }
 
   // Assignee matches by exact Person.name (case-insensitive) among people
   // actually engaged on this project. No match leaves the row unassigned
@@ -218,11 +236,12 @@ export async function uploadWbsTasks(
     action: "create",
     entityType: "WbsTask",
     summary: `Uploaded ${rows.length} WBS task${rows.length === 1 ? "" : "s"} from ${fileName}`
-      + (missingWbsCount > 0 ? ` (WBS# column not recognized for ${missingWbsCount} of them)` : ""),
+      + (missingWbsCount > 0 ? ` (WBS# column not recognized for ${missingWbsCount} of them)` : "")
+      + (duplicateCount > 0 ? ` (${duplicateCount} look like duplicates of existing titles)` : ""),
   });
 
   revalidateDelivery(projectId);
-  return { importedCount: rows.length, missingWbsCount };
+  return { importedCount: rows.length, missingWbsCount, duplicateCount };
 }
 
 /**
