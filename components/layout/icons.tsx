@@ -77,6 +77,15 @@ export function IconTarget(props: React.SVGProps<SVGSVGElement>) {
   );
 }
 
+export function IconShield(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M12 3.5l7 2.5v5.3c0 4.4-2.9 7.9-7 9.2-4.1-1.3-7-4.8-7-9.2V6l7-2.5z" />
+      <path d="M8.7 12.2l2.2 2.2 4.4-4.4" />
+    </svg>
+  );
+}
+
 export function IconClipboardList(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" {...props}>

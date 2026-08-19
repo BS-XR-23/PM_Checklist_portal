@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import type { Role } from "@prisma/client";
+import { IconUser } from "@/components/layout/icons";
 import { createUser } from "./user-actions";
 
 const ALL_ROLES: Role[] = ["ADMIN", "TPM", "PROGRAM_MANAGER", "CLIENT", "PM", "LIMITED"];
@@ -15,8 +16,16 @@ export function CreateUserForm() {
   const [pending, startTransition] = useTransition();
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4 space-y-3">
-      <h2 className="text-sm font-semibold text-slate-700">Create User</h2>
+    <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+      <div className="flex items-center gap-3">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+          <IconUser className="h-4 w-4" />
+        </span>
+        <div>
+          <h2 className="text-sm font-semibold text-slate-900">Create User</h2>
+          <p className="text-xs text-slate-500">Add a new user and assign a global role.</p>
+        </div>
+      </div>
       <form
         onSubmit={(e) => {
           e.preventDefault();
