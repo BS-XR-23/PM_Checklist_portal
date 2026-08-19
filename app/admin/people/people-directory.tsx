@@ -55,7 +55,7 @@ export function PeopleDirectory({
   const pageRows = filtered.slice((clampedPage - 1) * pageSize, clampedPage * pageSize);
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-[1fr_280px] gap-6 items-start">
+    <div className="grid grid-cols-1 2xl:grid-cols-[1fr_280px] gap-6 items-start">
       <div className="space-y-4 min-w-0">
         {statCards}
         {addPersonForm}

@@ -29,9 +29,9 @@ export function CreatePersonForm({
       <button
         type="button"
         onClick={() => setCollapsed((v) => !v)}
-        className="w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-slate-50/60"
+        className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-50/60"
       >
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-600">
           <IconUser className="h-4 w-4" />
         </span>
         <div className="flex-1">
@@ -68,9 +68,9 @@ export function CreatePersonForm({
             }
           });
         }}
-        className="px-4 pb-4 pt-1 space-y-3 border-t border-slate-100"
+        className="px-4 pb-3.5 pt-1 space-y-2.5 border-t border-slate-100"
       >
-        <div className="pt-3 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        <div className="pt-2.5 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Name</label>
             <input required value={name} onChange={(e) => setName(e.target.value)} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
@@ -104,7 +104,7 @@ export function CreatePersonForm({
             </select>
           </div>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 items-end">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 items-end">
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Rate Role (optional)</label>
             <select value={roleRateId} onChange={(e) => setRoleRateId(e.target.value)} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">

@@ -30,14 +30,14 @@ function StatCard({
   subtitle: string;
 }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 flex items-start gap-3">
-      <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${iconWrapClass}`}>
-        <span className="h-5 w-5 [&>svg]:h-5 [&>svg]:w-5">{icon}</span>
+    <div className="rounded-xl border border-slate-200 bg-white p-3.5 flex items-start gap-2.5">
+      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${iconWrapClass}`}>
+        <span className="h-4 w-4 [&>svg]:h-4 [&>svg]:w-4">{icon}</span>
       </span>
       <div className="min-w-0">
         <div className="text-xs text-slate-500">{label}</div>
         <div className="text-lg font-bold text-slate-900 leading-tight">{value}</div>
-        <div className="text-xs text-slate-400 mt-0.5">{subtitle}</div>
+        <div className="text-xs text-slate-400 mt-0.5 leading-tight">{subtitle}</div>
       </div>
     </div>
   );
@@ -96,7 +96,7 @@ export default async function AdminPeoplePage() {
   const avgRate = roleRates.length > 0 ? roleRates.reduce((sum, r) => sum + r.manDayRate, 0) / roleRates.length : 0;
 
   const statCards = (
-    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-4 gap-3">
       <StatCard icon={<IconUsers />} iconWrapClass="bg-blue-50 text-blue-600" label="Total People" value={totalPeople} subtitle="All team members" />
       <StatCard
         icon={<IconUserCheck />}
