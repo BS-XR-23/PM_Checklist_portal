@@ -6,6 +6,8 @@ import { isCurrentlyActive, intensityForMonth } from "@/lib/overload";
 import { startOfMonthUTC } from "@/lib/format";
 import { AppShell } from "@/components/layout/app-shell";
 import { IconUsers, IconUserCheck, IconFolder, IconDollar, IconBadge } from "@/components/layout/icons";
+import { StatTile } from "@/components/ui/stat-tile";
+import { SectionHeader } from "@/components/ui/section-header";
 import { CreatePersonForm } from "./create-person-form";
 import { PeopleDirectory } from "./people-directory";
 import { ImportPeopleButton } from "./import-people-button";
@@ -15,33 +17,6 @@ import { CreateCompetencyForm } from "./create-competency-form";
 import { CompetencyRow } from "./competency-row";
 
 export const dynamic = "force-dynamic";
-
-function StatCard({
-  icon,
-  iconWrapClass,
-  label,
-  value,
-  subtitle,
-}: {
-  icon: React.ReactNode;
-  iconWrapClass: string;
-  label: string;
-  value: string | number;
-  subtitle: string;
-}) {
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white p-3.5 flex items-start gap-2.5">
-      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${iconWrapClass}`}>
-        <span className="h-4 w-4 [&>svg]:h-4 [&>svg]:w-4">{icon}</span>
-      </span>
-      <div className="min-w-0">
-        <div className="text-xs text-slate-500">{label}</div>
-        <div className="text-lg font-bold text-slate-900 leading-tight">{value}</div>
-        <div className="text-xs text-slate-400 mt-0.5 leading-tight">{subtitle}</div>
-      </div>
-    </div>
-  );
-}
 
 export default async function AdminPeoplePage() {
   const currentUser = await requireUser();
@@ -97,22 +72,22 @@ export default async function AdminPeoplePage() {
 
   const statCards = (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-      <StatCard icon={<IconUsers />} iconWrapClass="bg-blue-50 text-blue-600" label="Total People" value={totalPeople} subtitle="All team members" />
-      <StatCard
+      <StatTile icon={<IconUsers />} iconWrapClass="bg-blue-50 text-blue-600" label="Total People" value={String(totalPeople)} subtitle="All team members" />
+      <StatTile
         icon={<IconUserCheck />}
         iconWrapClass="bg-emerald-50 text-emerald-600"
         label="On Project"
-        value={onProject}
+        value={String(onProject)}
         subtitle="Currently engaged"
       />
-      <StatCard
+      <StatTile
         icon={<IconFolder />}
         iconWrapClass="bg-violet-50 text-violet-600"
         label="Linked Accounts"
-        value={linkedAccountCount}
+        value={String(linkedAccountCount)}
         subtitle="Have a portal login"
       />
-      <StatCard
+      <StatTile
         icon={<IconDollar />}
         iconWrapClass="bg-amber-50 text-amber-600"
         label="Avg. Rate"
@@ -125,20 +100,15 @@ export default async function AdminPeoplePage() {
   const sidebarBottom = (
     <>
       <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
-        <div className="flex items-center gap-2.5">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
-            <IconDollar className="h-4 w-4" />
-          </span>
-          <h3 className="text-sm font-semibold text-slate-900">Role Rates</h3>
-        </div>
+        <SectionHeader icon={<IconDollar />} iconWrapClass="bg-amber-50 text-amber-600" title="Role Rates" className="" />
         <p className="text-xs text-slate-500">Rates are set by role, not by named person.</p>
         <CreateRoleRateForm />
         <div className="rounded-lg border border-slate-100 overflow-hidden">
-          <table className="w-full text-xs">
+          <table className="w-full text-xs table-fixed">
             <thead>
               <tr className="text-left font-semibold text-slate-500 bg-slate-50">
                 <th className="px-3 py-2">Role</th>
-                <th className="px-3 py-2 w-24 whitespace-nowrap">Rate</th>
+                <th className="px-3 py-2 w-16 whitespace-nowrap">Rate</th>
                 <th className="px-3 py-2 w-6" />
               </tr>
             </thead>
@@ -153,20 +123,15 @@ export default async function AdminPeoplePage() {
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
-        <div className="flex items-center gap-2.5">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-violet-600">
-            <IconBadge className="h-4 w-4" />
-          </span>
-          <h3 className="text-sm font-semibold text-slate-900">Competencies</h3>
-        </div>
+        <SectionHeader icon={<IconBadge />} iconWrapClass="bg-violet-50 text-violet-600" title="Competencies" className="" />
         <p className="text-xs text-slate-500">Velocity/capacity multipliers used in Sprint Summary.</p>
         <CreateCompetencyForm />
         <div className="rounded-lg border border-slate-100 overflow-hidden">
-          <table className="w-full text-xs">
+          <table className="w-full text-xs table-fixed">
             <thead>
               <tr className="text-left font-semibold text-slate-500 bg-slate-50">
                 <th className="px-3 py-2">Level</th>
-                <th className="px-3 py-2">Multiplier</th>
+                <th className="px-3 py-2 w-20 whitespace-nowrap">Multiplier</th>
                 <th className="px-3 py-2 w-6" />
               </tr>
             </thead>
@@ -201,7 +166,7 @@ export default async function AdminPeoplePage() {
           </a>
         </div>
       </header>
-      <main className="max-w-7xl mx-auto p-4 sm:p-6">
+      <main className="p-4 sm:p-6">
         <PeopleDirectory
           statCards={statCards}
           addPersonForm={<CreatePersonForm linkableUsers={linkableUsers} roleRates={roleRates} competencies={competencies} />}

@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { formatMoney, formatPct } from "@/lib/format";
 import { requireUser } from "@/lib/rbac";
 import { AppShell } from "@/components/layout/app-shell";
+import { StatTile } from "@/components/ui/stat-tile";
+import { IconTarget, IconDollar, IconChart } from "@/components/layout/icons";
 import { NewPresalesForm } from "./new-presales-form";
 import { PresalesFilters } from "./presales-filters";
 
@@ -33,7 +35,7 @@ export default async function PresalesPage() {
   return (
     <AppShell user={user}>
       <header className="border-b border-slate-200 bg-white px-4 sm:px-6 py-4">
-        <h1 className="text-lg font-semibold text-slate-900">Presales</h1>
+        <h1 className="text-xl font-bold text-slate-900">Presales</h1>
         <p className="text-sm text-slate-500">Opportunities being pitched before a contract is signed — win it, and it becomes a real project.</p>
       </header>
 
@@ -41,9 +43,9 @@ export default async function PresalesPage() {
         {canWrite && <NewPresalesForm />}
 
         <div className="grid sm:grid-cols-3 gap-4">
-          <StatTile label="Open Opportunities" value={String(openCards.length)} />
-          <StatTile label="Open Pipeline Value" value={formatMoney(openPipelineValue)} />
-          <StatTile label="Win Rate" value={winRate != null ? formatPct(winRate) : "—"} />
+          <StatTile icon={<IconTarget />} iconWrapClass="bg-blue-50 text-blue-600" label="Open Opportunities" value={String(openCards.length)} />
+          <StatTile icon={<IconDollar />} iconWrapClass="bg-amber-50 text-amber-600" label="Open Pipeline Value" value={formatMoney(openPipelineValue)} />
+          <StatTile icon={<IconChart />} iconWrapClass="bg-emerald-50 text-emerald-600" label="Win Rate" value={winRate != null ? formatPct(winRate) : "—"} />
         </div>
 
         <div>
@@ -56,14 +58,5 @@ export default async function PresalesPage() {
         </div>
       </main>
     </AppShell>
-  );
-}
-
-function StatTile({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4">
-      <p className="text-xs text-slate-500">{label}</p>
-      <p className="mt-1 text-2xl font-semibold text-slate-900">{value}</p>
-    </div>
   );
 }

@@ -4,6 +4,8 @@ import { formatPct, formatMoney, formatDate } from "@/lib/format";
 import { STATUS_COLORS, RISK_SEVERITY_COLORS, INDEX_FAVORABLE_COLOR, INDEX_UNFAVORABLE_COLOR } from "@/lib/colors";
 import { requireModuleAccess, getModuleAccess } from "@/lib/rbac";
 import { StatTile } from "@/components/ui/stat-tile";
+import { SectionHeader } from "@/components/ui/section-header";
+import { IconChart, IconShield, IconLayers, IconClock, IconDollar, IconGrid, IconClipboardList, IconBell, IconBadge } from "@/components/layout/icons";
 import { StatusPieChart } from "@/components/charts/status-pie-chart";
 import { CompletionBarChart } from "@/components/charts/completion-bar-chart";
 import { EvmLineChart } from "@/components/charts/evm-line-chart";
@@ -23,11 +25,11 @@ export default async function DashboardPage({ params }: { params: { projectId: s
 
   return (
     <div className="space-y-6">
-      <div className="rounded-lg border border-slate-200 bg-white p-5">
+      <div className="rounded-xl border border-slate-200 bg-white p-5">
         <div className="flex items-baseline justify-between flex-wrap gap-2">
           <div>
             <p className="text-sm text-slate-500">Overall % Complete</p>
-            <p className="text-4xl font-semibold text-slate-900">{formatPct(data.overallPct)}</p>
+            <p className="text-4xl font-bold text-slate-900">{formatPct(data.overallPct)}</p>
           </div>
           <p className="text-sm text-slate-500">
             {data.completedItems} / {data.totalItems} checklist items complete
@@ -40,19 +42,26 @@ export default async function DashboardPage({ params }: { params: { projectId: s
 
       {/* Not financial data — visible to every role with dashboard access, same as the completion hero above. */}
       <div className="grid sm:grid-cols-2 gap-4">
-        <StatTile label="Current Stage (PM Checklist)" value={data.pmStage} />
-        <StatTile label="End Date" value={data.endDate ? formatDate(data.endDate) : "—"} />
+        <StatTile icon={<IconLayers />} iconWrapClass="bg-blue-50 text-blue-600" label="Current Stage (PM Checklist)" value={data.pmStage} />
+        <StatTile icon={<IconClock />} iconWrapClass="bg-emerald-50 text-emerald-600" label="End Date" value={data.endDate ? formatDate(data.endDate) : "—"} />
       </div>
 
       {/* Same visibility as the financial stat tiles below — an overdue-item
           list is a PM/TPM/Admin safety net, not something to surface to a
           Client. */}
       {financialsVisible && data.reminders.length > 0 && (
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <h3 className="text-sm font-semibold text-slate-700 mb-2">
-            Overdue &amp; Due Soon ({data.reminders.filter((r) => r.band === "OVERDUE").length} overdue,{" "}
-            {data.reminders.filter((r) => r.band === "DUE_SOON").length} due soon)
-          </h3>
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <SectionHeader
+            icon={<IconBell />}
+            iconWrapClass="bg-rose-50 text-rose-600"
+            title={
+              <>
+                Overdue &amp; Due Soon ({data.reminders.filter((r) => r.band === "OVERDUE").length} overdue,{" "}
+                {data.reminders.filter((r) => r.band === "DUE_SOON").length} due soon)
+              </>
+            }
+            className="mb-2"
+          />
           <div className="space-y-1.5">
             {data.reminders.map((r) => {
               const color = r.band === "OVERDUE" ? RISK_SEVERITY_COLORS.high : RISK_SEVERITY_COLORS.medium;
@@ -81,8 +90,8 @@ export default async function DashboardPage({ params }: { params: { projectId: s
       )}
 
       {decisionLogAccess !== "NONE" && data.recentDecisions.length > 0 && (
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <h3 className="text-sm font-semibold text-slate-700 mb-2">Recent Decisions</h3>
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <SectionHeader icon={<IconBadge />} iconWrapClass="bg-violet-50 text-violet-600" title="Recent Decisions" className="mb-2" />
           <div className="space-y-1.5">
             {data.recentDecisions.map((d) => (
               <Link
@@ -103,46 +112,66 @@ export default async function DashboardPage({ params }: { params: { projectId: s
 
       {financialsVisible && (
         <div className="grid sm:grid-cols-3 lg:grid-cols-5 gap-4">
-          <StatTile label="Latest SPI" value={financial.latestSpi != null ? financial.latestSpi.toFixed(2) : "—"} valueColor={financial.latestSpi != null ? (financial.latestSpi >= 1 ? INDEX_FAVORABLE_COLOR : INDEX_UNFAVORABLE_COLOR) : undefined} />
-          <StatTile label="Latest CPI" value={financial.latestCpi != null ? financial.latestCpi.toFixed(2) : "—"} valueColor={financial.latestCpi != null ? (financial.latestCpi >= 1 ? INDEX_FAVORABLE_COLOR : INDEX_UNFAVORABLE_COLOR) : undefined} />
-          <StatTile label="Open High Risks" value={String(financial.openHighRisks)} valueColor={financial.openHighRisks > 0 ? INDEX_UNFAVORABLE_COLOR : undefined} />
-          <StatTile label="Active CR Value (man-days)" value={String(financial.activeCRValue)} />
           <StatTile
+            icon={<IconChart />}
+            iconWrapClass="bg-blue-50 text-blue-600"
+            label="Latest SPI"
+            value={financial.latestSpi != null ? financial.latestSpi.toFixed(2) : "—"}
+            valueColor={financial.latestSpi != null ? (financial.latestSpi >= 1 ? INDEX_FAVORABLE_COLOR : INDEX_UNFAVORABLE_COLOR) : undefined}
+          />
+          <StatTile
+            icon={<IconChart />}
+            iconWrapClass="bg-violet-50 text-violet-600"
+            label="Latest CPI"
+            value={financial.latestCpi != null ? financial.latestCpi.toFixed(2) : "—"}
+            valueColor={financial.latestCpi != null ? (financial.latestCpi >= 1 ? INDEX_FAVORABLE_COLOR : INDEX_UNFAVORABLE_COLOR) : undefined}
+          />
+          <StatTile
+            icon={<IconShield />}
+            iconWrapClass="bg-rose-50 text-rose-600"
+            label="Open High Risks"
+            value={String(financial.openHighRisks)}
+            valueColor={financial.openHighRisks > 0 ? INDEX_UNFAVORABLE_COLOR : undefined}
+          />
+          <StatTile icon={<IconLayers />} iconWrapClass="bg-amber-50 text-amber-600" label="Active CR Value (man-days)" value={String(financial.activeCRValue)} />
+          <StatTile
+            icon={<IconClock />}
+            iconWrapClass="bg-emerald-50 text-emerald-600"
             label="Next Payment Due"
             value={financial.nextPaymentDue ? formatDate(financial.nextPaymentDue) : "—"}
-            hint={financial.nextPaymentDue ? formatMoney(financial.nextPaymentAmount) : undefined}
+            subtitle={financial.nextPaymentDue ? formatMoney(financial.nextPaymentAmount) : undefined}
           />
         </div>
       )}
 
       {financialsVisible && (
         <div className="grid sm:grid-cols-3 gap-4">
-          <StatTile label="Total Contract Value" value={formatMoney(financial.contractValue)} />
-          <StatTile label="Paid to Date" value={formatMoney(financial.paidAmount)} />
-          <StatTile label="Invoiced (Awaiting Payment)" value={formatMoney(financial.invoicedAmount)} />
+          <StatTile icon={<IconDollar />} iconWrapClass="bg-blue-50 text-blue-600" label="Total Contract Value" value={formatMoney(financial.contractValue)} />
+          <StatTile icon={<IconDollar />} iconWrapClass="bg-emerald-50 text-emerald-600" label="Paid to Date" value={formatMoney(financial.paidAmount)} />
+          <StatTile icon={<IconDollar />} iconWrapClass="bg-amber-50 text-amber-600" label="Invoiced (Awaiting Payment)" value={formatMoney(financial.invoicedAmount)} />
         </div>
       )}
 
       <div className={financialsVisible ? "grid lg:grid-cols-3 gap-4" : "grid lg:grid-cols-2 gap-4"}>
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <h3 className="text-sm font-semibold text-slate-700 mb-2">Status Breakdown (All Checklists)</h3>
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <SectionHeader icon={<IconChart />} iconWrapClass="bg-blue-50 text-blue-600" title="Status Breakdown (All Checklists)" className="mb-2" />
           <StatusPieChart data={data.statusBreakdown} />
         </div>
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <h3 className="text-sm font-semibold text-slate-700 mb-2">% Complete by Checklist</h3>
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <SectionHeader icon={<IconGrid />} iconWrapClass="bg-violet-50 text-violet-600" title="% Complete by Checklist" className="mb-2" />
           <CompletionBarChart data={data.perChecklistSummary.map((c) => ({ name: c.name, pct: c.pct }))} />
         </div>
         {financialsVisible && (
-          <div className="rounded-lg border border-slate-200 bg-white p-4">
-            <h3 className="text-sm font-semibold text-slate-700 mb-2">Budget Burn (PV / EV / AC)</h3>
+          <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <SectionHeader icon={<IconDollar />} iconWrapClass="bg-amber-50 text-amber-600" title="Budget Burn (PV / EV / AC)" className="mb-2" />
             <EvmLineChart data={data.evmChartData} />
           </div>
         )}
       </div>
 
       <div className="grid lg:grid-cols-2 gap-4">
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <h3 className="text-sm font-semibold text-slate-700 mb-3">Stage / Category Breakdown</h3>
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <SectionHeader icon={<IconLayers />} iconWrapClass="bg-blue-50 text-blue-600" title="Stage / Category Breakdown" />
           <div className="space-y-3">
             <div>
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">PM Checklist</p>
@@ -159,15 +188,15 @@ export default async function DashboardPage({ params }: { params: { projectId: s
           </div>
         </div>
 
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <h3 className="text-sm font-semibold text-slate-700 mb-3">Timeline (Planned → Actual, by Stage/Category)</h3>
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <SectionHeader icon={<IconClock />} iconWrapClass="bg-emerald-50 text-emerald-600" title="Timeline (Planned → Actual, by Stage/Category)" />
           <TimelineStrip rows={data.timelineStrip} />
         </div>
       </div>
 
-      <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
+      <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
         <div className="px-4 py-3 border-b border-slate-100">
-          <h3 className="text-sm font-semibold text-slate-700">Key Milestones</h3>
+          <SectionHeader icon={<IconClipboardList />} iconWrapClass="bg-emerald-50 text-emerald-600" title="Key Milestones" className="" />
         </div>
         <table className="w-full text-sm">
           <thead>

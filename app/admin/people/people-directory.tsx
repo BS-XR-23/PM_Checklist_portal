@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { IconUsers, IconFilter, IconSearch } from "@/components/layout/icons";
+import { SectionHeader } from "@/components/ui/section-header";
 import { PersonRow, type PersonRowData } from "./person-row";
 
 const PAGE_SIZES = [10, 25, 50] as const;
@@ -55,19 +56,14 @@ export function PeopleDirectory({
   const pageRows = filtered.slice((clampedPage - 1) * pageSize, clampedPage * pageSize);
 
   return (
-    <div className="grid grid-cols-1 2xl:grid-cols-[1fr_280px] gap-6 items-start">
+    <div className="grid grid-cols-1 xl:grid-cols-[1fr_280px] gap-6 items-start">
       <div className="space-y-4 min-w-0">
         {statCards}
         {addPersonForm}
 
         <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
           <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3.5 border-b border-slate-100">
-            <div className="flex items-center gap-2.5">
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
-                <IconUsers className="h-4 w-4" />
-              </span>
-              <h2 className="text-sm font-bold text-slate-900">People List</h2>
-            </div>
+            <SectionHeader icon={<IconUsers />} iconWrapClass="bg-blue-50 text-blue-600" title="People List" className="" />
             <div className="relative">
               <IconSearch className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
               <input
@@ -176,12 +172,7 @@ export function PeopleDirectory({
 
       <div className="space-y-4">
         <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-2.5">
-          <div className="flex items-center gap-2.5">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
-              <IconFilter className="h-4 w-4" />
-            </span>
-            <h3 className="text-sm font-semibold text-slate-900">Quick Filters</h3>
-          </div>
+          <SectionHeader icon={<IconFilter />} iconWrapClass="bg-slate-100 text-slate-500" title="Quick Filters" className="" />
           <select
             value={filter}
             onChange={(e) => {

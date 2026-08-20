@@ -7,8 +7,13 @@ import { useState, useTransition } from "react";
 // to click it, which read as "not editable" rather than "editable but
 // unstyled." One shared constant, so the fix applies everywhere this is
 // used (checklist, risks, CRs, milestones, budget, people, users, PM plan).
+// min-w-0 overrides the browser's default ~20ch intrinsic minimum on text/
+// number inputs — without it, w-full can't shrink these below that content
+// size, so a narrow container (e.g. the People page's 280px rate-table
+// sidebar) overflows and gets clipped by its rounded-corner `overflow-hidden`
+// wrapper instead of the input actually fitting the column.
 const cellClass =
-  "w-full bg-transparent text-sm px-1.5 py-1 rounded border border-slate-200 hover:border-slate-300 hover:bg-slate-100 focus:bg-white focus:outline-none focus:ring-1 focus:ring-slate-400 disabled:opacity-50";
+  "w-full min-w-0 truncate bg-transparent text-sm px-1.5 py-1 rounded border border-slate-200 hover:border-slate-300 hover:bg-slate-100 focus:bg-white focus:outline-none focus:ring-1 focus:ring-slate-400 disabled:opacity-50";
 
 // Hides the browser's default number-input spinner arrows — they ate
 // visible width in narrow columns (e.g. Role Rates' compact sidebar table)
