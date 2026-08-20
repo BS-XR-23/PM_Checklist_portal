@@ -11,12 +11,13 @@ export default async function DevOpsChecklistPage({ params }: { params: { projec
     getCurrentUser(),
   ]);
 
-  const [items, people] = await Promise.all([
+  const [items, pmItemCount, people] = await Promise.all([
     prisma.checklistItem.findMany({
       where: { projectId: params.projectId, type: "DEVOPS" },
       orderBy: { order: "asc" },
       include: { ownerPerson: { select: { id: true, name: true } } },
     }),
+    pmAccess !== "NONE" ? prisma.checklistItem.count({ where: { projectId: params.projectId, type: "PM" } }) : Promise.resolve(0),
     access === "WRITE" ? prisma.person.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }) : Promise.resolve([]),
   ]);
 
@@ -24,8 +25,8 @@ export default async function DevOpsChecklistPage({ params }: { params: { projec
   const visibleItems = access === "READ_LIMITED" ? withOwnerName.map((i) => ({ ...i, notes: null })) : withOwnerName;
 
   const subNavOptions = [
-    ...(pmAccess !== "NONE" ? [{ href: "/pm-checklist", label: "PM Checklist" }] : []),
-    { href: "/devops-checklist", label: "DevOps Checklist" },
+    ...(pmAccess !== "NONE" ? [{ href: "/pm-checklist", label: "PM Checklist", count: pmItemCount }] : []),
+    { href: "/devops-checklist", label: "DevOps Checklist", count: items.length },
   ];
 
   return (
@@ -33,7 +34,7 @@ export default async function DevOpsChecklistPage({ params }: { params: { projec
       <SubNav projectId={params.projectId} options={subNavOptions} />
       <div className="mb-4">
         <h2 className="text-base font-semibold text-slate-900">DevOps Checklist</h2>
-        <p className="text-sm text-slate-500">18 items across Infrastructure, CI/CD, Security, Reliability, and Release & Ops.</p>
+        <p className="text-sm text-slate-500">Infrastructure, CI/CD, Security, Reliability, and Release & Ops.</p>
       </div>
       <ChecklistTable
         projectId={params.projectId}
