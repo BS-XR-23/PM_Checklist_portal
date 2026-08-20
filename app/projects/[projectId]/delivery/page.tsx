@@ -109,7 +109,7 @@ export default async function DeliverySprintsPage({ params }: { params: { projec
       <SubNav
         projectId={params.projectId}
         options={[
-          { href: "/delivery", label: "Sprints" },
+          { href: "/delivery", label: "Sprints", count: sprints.length },
           { href: "/delivery/tasks", label: "Tasks" },
         ]}
       />

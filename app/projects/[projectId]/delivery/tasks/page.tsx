@@ -2,7 +2,9 @@ import { prisma } from "@/lib/prisma";
 import { requireModuleAccess, requireUser } from "@/lib/rbac";
 import { compareWbsNumbers } from "@/lib/format";
 import { SubNav } from "@/components/ui/sub-nav";
-import { StatCard } from "@/components/ui/stat-card";
+import { StatTile } from "@/components/ui/stat-tile";
+import { SectionHeader } from "@/components/ui/section-header";
+import { IconClipboardList, IconFileText, IconCheckCircle, IconClock } from "@/components/layout/icons";
 import { WbsTasksTable } from "../delivery-tasks-table";
 import { UploadWbsTasksForm } from "../upload-wbs-tasks-form";
 import type { AuditLogRow } from "@/components/rbac/audit-log-table";
@@ -92,7 +94,7 @@ export default async function DeliveryTasksPage({ params }: { params: { projectI
         projectId={params.projectId}
         options={[
           { href: "/delivery", label: "Sprints" },
-          { href: "/delivery/tasks", label: "Tasks" },
+          { href: "/delivery/tasks", label: "Tasks", count: tasks.length },
         ]}
       />
       <div>
@@ -104,10 +106,28 @@ export default async function DeliveryTasksPage({ params }: { params: { projectI
         </p>
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
-        <StatCard label="Total Pts">{totalPts.toFixed(1)}</StatCard>
-        <StatCard label="Done Pts">{donePts.toFixed(1)}</StatCard>
-        <StatCard label="Remaining Pts">{remainingPts.toFixed(1)}</StatCard>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <StatTile
+          icon={<IconFileText />}
+          iconWrapClass="bg-blue-50 text-blue-600"
+          label="Total Story Points"
+          value={totalPts.toFixed(1)}
+        />
+        <StatTile
+          icon={<IconCheckCircle />}
+          iconWrapClass="bg-emerald-50 text-emerald-600"
+          label="Done Points"
+          value={donePts.toFixed(1)}
+          subtitle={totalPts ? `${((donePts / totalPts) * 100).toFixed(1)}%` : undefined}
+        />
+        <StatTile
+          icon={<IconClock />}
+          iconWrapClass="bg-amber-50 text-amber-600"
+          label="Remaining Points"
+          value={remainingPts.toFixed(1)}
+          subtitle={totalPts ? `${((remainingPts / totalPts) * 100).toFixed(1)}%` : undefined}
+        />
+        <StatTile icon={<IconClipboardList />} iconWrapClass="bg-violet-50 text-violet-600" label="Total Tasks" value={String(tasks.length)} />
       </div>
 
       <WbsTasksTable
@@ -119,11 +139,15 @@ export default async function DeliveryTasksPage({ params }: { params: { projectI
         canWrite={canWrite}
         emptyMessage="No active tasks — everything's either done or nothing's been added yet."
         taskHistory={canViewHistory ? taskHistory : undefined}
+        uploadForm={canWrite ? <UploadWbsTasksForm projectId={params.projectId} /> : undefined}
       />
-      {canWrite && <UploadWbsTasksForm projectId={params.projectId} />}
 
       <div>
-        <h3 className="text-sm font-semibold text-slate-700 mb-2">Completed ({doneTasks.length})</h3>
+        <SectionHeader
+          icon={<IconCheckCircle />}
+          iconWrapClass="bg-slate-100 text-slate-500"
+          title={`Completed (${doneTasks.length})`}
+        />
         <WbsTasksTable
           projectId={params.projectId}
           tasks={doneTasks}

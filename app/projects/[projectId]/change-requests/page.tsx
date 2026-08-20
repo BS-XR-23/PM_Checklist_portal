@@ -1,9 +1,12 @@
 import { prisma } from "@/lib/prisma";
-import { computeCrKpis } from "@/lib/calculations";
+import { computeCrKpis, crAmount } from "@/lib/calculations";
 import { requireModuleAccess, getModuleAccess } from "@/lib/rbac";
 import { SubNav } from "@/components/ui/sub-nav";
+import { StatTile } from "@/components/ui/stat-tile";
+import { IconLayers, IconTarget, IconClock, IconAlertCircle, IconDollar } from "@/components/layout/icons";
+import { formatMoney } from "@/lib/format";
 import { AddCrButton } from "./add-cr-button";
-import { CrRow } from "./cr-row";
+import { CrTable } from "./cr-table";
 
 export default async function CrLogPage({ params }: { params: { projectId: string } }) {
   const [access, riskAccess] = await Promise.all([
@@ -23,6 +26,7 @@ export default async function CrLogPage({ params }: { params: { projectId: strin
   });
 
   const kpis = computeCrKpis(crs);
+  const totalAmount = crs.reduce((sum, cr) => sum + (crAmount(cr.billableManDays, cr.rate) ?? 0), 0);
   const visibleCrs = financialsHidden ? crs.map((cr) => ({ ...cr, rate: null })) : crs;
 
   return (
@@ -39,27 +43,17 @@ export default async function CrLogPage({ params }: { params: { projectId: strin
         {canWrite && <AddCrButton projectId={params.projectId} />}
       </div>
 
-      <div className="grid sm:grid-cols-3 gap-4">
-        <KpiTile label="Upcoming CR # (man-days, Proposed)" value={kpis.upcomingCrManDays} />
-        <KpiTile label="Work Order CR # (billable man-days, Approved + In Progress)" value={kpis.workOrderCrManDays} />
-        <KpiTile label="Remaining CR # (billable man-days, In Progress)" value={kpis.remainingCrManDays} />
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+        <StatTile icon={<IconLayers />} iconWrapClass="bg-violet-50 text-violet-600" label="Total CRs" value={String(crs.length)} />
+        <StatTile icon={<IconTarget />} iconWrapClass="bg-amber-50 text-amber-600" label="Upcoming (Proposed)" value={String(kpis.upcomingCrManDays)} subtitle="man-days" />
+        <StatTile icon={<IconClock />} iconWrapClass="bg-blue-50 text-blue-600" label="Work Order (Approved + In Progress)" value={String(kpis.workOrderCrManDays)} subtitle="billable man-days" />
+        <StatTile icon={<IconAlertCircle />} iconWrapClass="bg-indigo-50 text-indigo-600" label="Remaining (In Progress)" value={String(kpis.remainingCrManDays)} subtitle="billable man-days" />
+        {!financialsHidden && (
+          <StatTile icon={<IconDollar />} iconWrapClass="bg-emerald-50 text-emerald-600" label="Total Amount" value={formatMoney(totalAmount)} />
+        )}
       </div>
 
-      <div className="space-y-3">
-        {visibleCrs.map((cr) => (
-          <CrRow key={cr.id} projectId={params.projectId} cr={cr} canWrite={canWrite} financialsHidden={financialsHidden} />
-        ))}
-        {crs.length === 0 && <p className="text-sm text-slate-400">No change requests logged yet.</p>}
-      </div>
-    </div>
-  );
-}
-
-function KpiTile({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4">
-      <p className="text-xs text-slate-500">{label}</p>
-      <p className="mt-1 text-2xl font-semibold text-slate-900">{value}</p>
+      <CrTable projectId={params.projectId} canWrite={canWrite} financialsHidden={financialsHidden} rows={visibleCrs} />
     </div>
   );
 }

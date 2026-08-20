@@ -1,8 +1,14 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import clsx from "clsx";
 import { InlineText, InlineNumber } from "@/components/ui/inline-edit";
+import { RowActionsMenu } from "@/components/ui/row-actions-menu";
+import { IconSearch, IconUpload, IconSort, IconClock } from "@/components/layout/icons";
 import { AuditLogTable, type AuditLogRow } from "@/components/rbac/audit-log-table";
+import { STATUS_COLORS } from "@/lib/colors";
+import { avatarColorFromString } from "@/lib/colors";
+import { initials, compareWbsNumbers } from "@/lib/format";
 import { computeDuplicateRefs, DuplicateBadge } from "./duplicate-badge";
 import { createWbsTask, updateWbsTask, deleteWbsTask, assignTaskToSprint } from "./delivery-actions";
 
@@ -19,12 +25,36 @@ export type WbsTaskData = {
 export type RosterPerson = { personId: string; personName: string; competencyLevel: string | null };
 export type SprintOption = { id: string; name: string; closedAt: Date | null };
 
+const PAGE_SIZES = [10, 25, 50] as const;
+type SortKey = "wbsNumber" | "storyPoints" | "done" | "remaining";
+
+function taskStatusKey(pctComplete: number): "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED" {
+  if (pctComplete >= 1) return "COMPLETED";
+  if (pctComplete > 0) return "IN_PROGRESS";
+  return "NOT_STARTED";
+}
+
+function SortHeader({ label, sortKey, active, dir, onClick, className }: { label: string; sortKey: SortKey; active: boolean; dir: "asc" | "desc"; onClick: (k: SortKey) => void; className?: string }) {
+  return (
+    <th className={className}>
+      <button
+        type="button"
+        onClick={() => onClick(sortKey)}
+        className={clsx("inline-flex items-center gap-1 hover:text-slate-700", active && "text-slate-800")}
+      >
+        {label}
+        <IconSort className={clsx("h-3 w-3 shrink-0", active ? "text-slate-600" : "text-slate-300", active && dir === "desc" && "rotate-180")} />
+      </button>
+    </th>
+  );
+}
+
 function PersonSelect({ rowId, projectId, value, roster }: { rowId: string; projectId: string; value: string; roster: RosterPerson[] }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
   return (
-    <div className="min-w-[180px]">
+    <div className="min-w-[160px]">
       <select
         className="w-full rounded border border-slate-200 px-1.5 py-1 text-xs hover:border-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-400 disabled:opacity-50"
         defaultValue={value}
@@ -105,6 +135,7 @@ export function WbsTasksTable({
   showAddRow = true,
   emptyMessage = "No WBS tasks yet.",
   taskHistory,
+  uploadForm,
 }: {
   projectId: string;
   tasks: WbsTaskData[];
@@ -118,13 +149,18 @@ export function WbsTasksTable({
   showAddRow?: boolean;
   emptyMessage?: string;
   taskHistory?: Record<string, AuditLogRow[]>;
+  /** Rendered inline (toggled via "Import Tasks") — only meaningful when showAddRow. */
+  uploadForm?: React.ReactNode;
 }) {
   const [pending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
   const [historyTaskId, setHistoryTaskId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [sprintFilter, setSprintFilter] = useState<string>("all");
   const [assigneeFilter, setAssigneeFilter] = useState<string>("all");
+  const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" } | null>(null);
+  const [showImport, setShowImport] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<(typeof PAGE_SIZES)[number]>(10);
 
   // Duplicate-title detection, computed client-side from the already-loaded
   // task list — no extra round-trip needed. Non-blocking: a matching title
@@ -152,20 +188,51 @@ export function WbsTasksTable({
   });
   const filtersActive = sprintFilter !== "all" || assigneeFilter !== "all" || q !== "";
 
+  const sortedTasks = sort
+    ? [...filteredTasks].sort((a, b) => {
+        let cmp = 0;
+        if (sort.key === "wbsNumber") cmp = compareWbsNumbers(a.wbsNumber, b.wbsNumber);
+        else if (sort.key === "storyPoints") cmp = a.storyPoints - b.storyPoints;
+        else if (sort.key === "done") cmp = a.storyPoints * a.pctComplete - b.storyPoints * b.pctComplete;
+        else cmp = a.storyPoints * (1 - a.pctComplete) - b.storyPoints * (1 - b.pctComplete);
+        return sort.dir === "asc" ? cmp : -cmp;
+      })
+    : filteredTasks;
+
+  const pageCount = Math.max(1, Math.ceil(sortedTasks.length / pageSize));
+  const clampedPage = Math.min(page, pageCount);
+  const pageTasks = sortedTasks.slice((clampedPage - 1) * pageSize, clampedPage * pageSize);
+
+  const toggleSort = (key: SortKey) => {
+    setSort((prev) => (prev?.key === key ? { key, dir: prev.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" }));
+    setPage(1);
+  };
+
+  const colCount = 8 + (taskHistory ? 1 : 0) + (canWrite ? 1 : 0);
+
   return (
     <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
       {tasks.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 bg-slate-50/60 px-4 py-2.5">
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search title or WBS#…"
-            className="w-48 rounded border border-slate-200 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-slate-400"
-          />
+          <div className="relative">
+            <IconSearch className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
+              placeholder="Search title or WBS#…"
+              className="w-48 rounded border border-slate-200 pl-7 pr-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-slate-400"
+            />
+          </div>
           <select
             value={sprintFilter}
-            onChange={(e) => setSprintFilter(e.target.value)}
+            onChange={(e) => {
+              setSprintFilter(e.target.value);
+              setPage(1);
+            }}
             className="rounded border border-slate-200 px-1.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-slate-400"
           >
             <option value="all">All sprints</option>
@@ -178,7 +245,10 @@ export function WbsTasksTable({
           </select>
           <select
             value={assigneeFilter}
-            onChange={(e) => setAssigneeFilter(e.target.value)}
+            onChange={(e) => {
+              setAssigneeFilter(e.target.value);
+              setPage(1);
+            }}
             className="rounded border border-slate-200 px-1.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-slate-400"
           >
             <option value="all">All assignees</option>
@@ -195,47 +265,69 @@ export function WbsTasksTable({
                 setSearch("");
                 setSprintFilter("all");
                 setAssigneeFilter("all");
+                setPage(1);
               }}
               className="text-xs text-slate-400 hover:text-slate-700"
             >
               Clear filters
             </button>
           )}
-          <span className="ml-auto text-xs text-slate-400">
-            {filteredTasks.length === tasks.length ? `${tasks.length} tasks` : `${filteredTasks.length} of ${tasks.length} tasks`}
-          </span>
+          {canWrite && showAddRow && (
+            <div className="ml-auto flex items-center gap-2">
+              {uploadForm && (
+                <button
+                  type="button"
+                  onClick={() => setShowImport((v) => !v)}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-300 hover:text-slate-900"
+                >
+                  <IconUpload className="h-3.5 w-3.5" />
+                  Import Tasks
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => startTransition(() => createWbsTask(projectId))}
+                disabled={pending}
+                className="rounded-md bg-indigo-600 text-white text-xs font-semibold px-3 py-1.5 hover:bg-indigo-700 disabled:opacity-50"
+              >
+                + Add Task
+              </button>
+            </div>
+          )}
         </div>
       )}
+
+      {showImport && uploadForm && <div className="border-b border-slate-100 bg-white px-4 py-3">{uploadForm}</div>}
+
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50">
-              <th className="px-4 py-3 w-24">WBS#</th>
+              <SortHeader label="WBS#" sortKey="wbsNumber" active={sort?.key === "wbsNumber"} dir={sort?.dir ?? "asc"} onClick={toggleSort} className="px-4 py-3 w-24" />
               <th className="px-4 py-3">Title</th>
-              <th className="px-4 py-3 w-24">Story Pts</th>
-              <th className="px-4 py-3 w-24" title="Informational only — pctComplete × Story Pts. Actual PV/EV/AV always use the 0/100 rule (see Sprints tab).">
-                Done
-              </th>
-              <th className="px-4 py-3 w-28" title="Informational only — Story Pts minus Done. Actual PV/EV/AV always use the 0/100 rule (see Sprints tab).">
-                Remaining
-              </th>
+              <SortHeader label="Story Pts" sortKey="storyPoints" active={sort?.key === "storyPoints"} dir={sort?.dir ?? "asc"} onClick={toggleSort} className="px-4 py-3 w-24" />
+              <SortHeader label="Done" sortKey="done" active={sort?.key === "done"} dir={sort?.dir ?? "asc"} onClick={toggleSort} className="px-4 py-3 w-24" />
+              <SortHeader label="Remaining" sortKey="remaining" active={sort?.key === "remaining"} dir={sort?.dir ?? "asc"} onClick={toggleSort} className="px-4 py-3 w-28" />
               <th className="px-4 py-3 w-52">Default Assignee</th>
               <th className="px-4 py-3 w-40">Sprint</th>
+              <th className="px-4 py-3 w-28">Status</th>
               {taskHistory && <th className="px-4 py-3 w-10" />}
-              {canWrite && <th className="px-4 py-3 w-10" />}
+              {canWrite && <th className="px-4 py-3 w-16">Actions</th>}
             </tr>
           </thead>
           <tbody>
-            {filteredTasks.length === 0 && (
+            {pageTasks.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-4 py-6 text-center text-sm text-slate-400">
+                <td colSpan={colCount} className="px-4 py-6 text-center text-sm text-slate-400">
                   {tasks.length === 0 ? emptyMessage : "No tasks match the current filters."}
                 </td>
               </tr>
             )}
-            {filteredTasks.map((t) => {
+            {pageTasks.map((t) => {
               const donePts = t.storyPoints * t.pctComplete;
               const remainingPts = t.storyPoints - donePts;
+              const status = STATUS_COLORS[taskStatusKey(t.pctComplete)];
+              const assigneeRoster = roster.find((p) => p.personId === t.personId);
               return (
               <tr key={t.id} className="border-b border-slate-100 last:border-0">
                 <td className="px-4 py-2">
@@ -274,11 +366,24 @@ export function WbsTasksTable({
                 <td className="px-4 py-2 text-emerald-700">{donePts.toFixed(2)}</td>
                 <td className="px-4 py-2 text-slate-500">{remainingPts.toFixed(2)}</td>
                 <td className="px-4 py-2">
-                  {canWrite ? (
-                    <PersonSelect rowId={t.id} projectId={projectId} value={t.personId ?? ""} roster={roster} />
-                  ) : (
-                    <span className="text-slate-600">{t.personName ?? "—"}</span>
-                  )}
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white"
+                      style={{ backgroundColor: avatarColorFromString(t.personName ?? "?") }}
+                    >
+                      {initials(t.personName ?? "?")}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      {canWrite ? (
+                        <PersonSelect rowId={t.id} projectId={projectId} value={t.personId ?? ""} roster={roster} />
+                      ) : (
+                        <span className="text-slate-600 truncate block">{t.personName ?? "—"}</span>
+                      )}
+                      {assigneeRoster?.competencyLevel && (
+                        <span className="text-[11px] text-slate-400 block leading-tight">{assigneeRoster.competencyLevel}</span>
+                      )}
+                    </div>
+                  </div>
                 </td>
                 <td className="px-4 py-2">
                   {canWrite ? (
@@ -289,36 +394,37 @@ export function WbsTasksTable({
                     </span>
                   )}
                 </td>
+                <td className="px-4 py-2">
+                  <span
+                    className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap"
+                    style={{ backgroundColor: status.bg, color: status.text }}
+                  >
+                    {status.label}
+                  </span>
+                </td>
                 {taskHistory && (
                   <td className="px-4 py-2">
                     <button
                       onClick={() => setHistoryTaskId(t.id)}
                       title="View history"
-                      className="text-slate-300 hover:text-slate-700"
+                      className="rounded p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-100"
                     >
-                      🕘
+                      <IconClock className="h-3.5 w-3.5" />
                     </button>
                   </td>
                 )}
                 {canWrite && (
                   <td className="px-4 py-2">
-                    <button
-                      onClick={() =>
-                        startTransition(async () => {
-                          setError(null);
-                          try {
-                            await deleteWbsTask(t.id, projectId);
-                          } catch (err) {
-                            setError(err instanceof Error ? err.message : "Failed to delete task.");
-                          }
-                        })
-                      }
-                      disabled={pending}
-                      title="Delete task"
-                      className="text-slate-300 hover:text-red-600 disabled:opacity-50"
-                    >
-                      ✕
-                    </button>
+                    <RowActionsMenu
+                      actions={[
+                        {
+                          label: "Delete task",
+                          pendingLabel: "Deleting...",
+                          danger: true,
+                          onClick: () => deleteWbsTask(t.id, projectId),
+                        },
+                      ]}
+                    />
                   </td>
                 )}
               </tr>
@@ -328,16 +434,58 @@ export function WbsTasksTable({
         </table>
       </div>
 
-      {error && <p className="text-xs text-red-600 px-4 py-2">{error}</p>}
-
-      {canWrite && showAddRow && (
-        <button
-          onClick={() => startTransition(() => createWbsTask(projectId))}
-          disabled={pending}
-          className="w-full text-left px-4 py-2.5 text-xs font-medium text-slate-500 hover:text-slate-800 hover:bg-slate-50 disabled:opacity-50 border-t border-slate-100"
-        >
-          + Add row
-        </button>
+      {sortedTasks.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-slate-100 text-xs text-slate-500">
+          <span>
+            Showing {(clampedPage - 1) * pageSize + 1} to {Math.min(clampedPage * pageSize, sortedTasks.length)} of {sortedTasks.length} tasks
+          </span>
+          {sortedTasks.length > PAGE_SIZES[0] && (
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setPage((v) => Math.max(1, v - 1))}
+                  disabled={clampedPage <= 1}
+                  className="rounded-md border border-slate-200 px-2 py-1 hover:bg-slate-50 disabled:opacity-40"
+                >
+                  ‹
+                </button>
+                {Array.from({ length: pageCount }, (_, idx) => idx + 1).map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setPage(n)}
+                    className={clsx("min-w-[1.75rem] rounded-md px-2 py-1", n === clampedPage ? "bg-indigo-600 text-white" : "border border-slate-200 hover:bg-slate-50")}
+                  >
+                    {n}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setPage((v) => Math.min(pageCount, v + 1))}
+                  disabled={clampedPage >= pageCount}
+                  className="rounded-md border border-slate-200 px-2 py-1 hover:bg-slate-50 disabled:opacity-40"
+                >
+                  ›
+                </button>
+              </div>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value) as (typeof PAGE_SIZES)[number]);
+                  setPage(1);
+                }}
+                className="rounded-md border border-slate-200 px-2 py-1 text-xs"
+              >
+                {PAGE_SIZES.map((n) => (
+                  <option key={n} value={n}>
+                    {n} / page
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
       )}
 
       {historyTask && (

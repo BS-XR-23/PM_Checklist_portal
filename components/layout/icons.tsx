@@ -239,3 +239,20 @@ export function IconClipboardList(props: React.SVGProps<SVGSVGElement>) {
     </svg>
   );
 }
+
+export function IconUpload(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M12 15V4M8 8l4-4 4 4" />
+      <path d="M4.5 15v3.5A1.5 1.5 0 006 20h12a1.5 1.5 0 001.5-1.5V15" />
+    </svg>
+  );
+}
+
+export function IconSort(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M8 9l4-4 4 4M8 15l4 4 4-4" />
+    </svg>
+  );
+}
