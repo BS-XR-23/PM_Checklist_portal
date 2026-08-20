@@ -3,6 +3,8 @@ import { requireModuleAccess, requireUser } from "@/lib/rbac";
 import { compareWbsNumbers } from "@/lib/format";
 import { wbsPlannedValue, wbsActualValue, sprintEarnedValue, manDaysFromHours } from "@/lib/calculations";
 import { SubNav } from "@/components/ui/sub-nav";
+import { StatTile } from "@/components/ui/stat-tile";
+import { IconLayers, IconClock, IconCheckCircle, IconClipboardList } from "@/components/layout/icons";
 import { AddSprintModal } from "./add-sprint-modal";
 import { SprintSummaryRow, type SprintSummaryData, type FrozenTaskSnapshotEntry } from "./sprint-summary-row";
 
@@ -123,6 +125,23 @@ export default async function DeliverySprintsPage({ params }: { params: { projec
           </p>
         </div>
         {canWrite && <AddSprintModal projectId={params.projectId} suggestedName={`Sprint ${sprints.length + 1}`} />}
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <StatTile icon={<IconLayers />} iconWrapClass="bg-violet-50 text-violet-600" label="Total Sprints" value={String(sprints.length)} />
+        <StatTile
+          icon={<IconClock />}
+          iconWrapClass="bg-blue-50 text-blue-600"
+          label="Open Sprints"
+          value={String(sprints.filter((s) => !s.closedAt).length)}
+        />
+        <StatTile
+          icon={<IconCheckCircle />}
+          iconWrapClass="bg-emerald-50 text-emerald-600"
+          label="Closed Sprints"
+          value={String(sprints.filter((s) => s.closedAt).length)}
+        />
+        <StatTile icon={<IconClipboardList />} iconWrapClass="bg-amber-50 text-amber-600" label="Backlog Tasks" value={String(backlogTasks.length)} />
       </div>
 
       <div className="space-y-3">
