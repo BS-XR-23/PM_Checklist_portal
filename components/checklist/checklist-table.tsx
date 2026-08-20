@@ -2,11 +2,12 @@
 
 import { useState, useTransition } from "react";
 import clsx from "clsx";
-import { InlineText, InlineTextarea, InlineDate, InlineSelect } from "@/components/ui/inline-edit";
+import { InlineText, InlineDate, InlineSelect } from "@/components/ui/inline-edit";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { StatTile } from "@/components/ui/stat-tile";
 import { ProgressRing } from "@/components/ui/progress-ring";
-import { ChecklistItemActionsMenu } from "./checklist-item-actions-menu";
+import { NotesCell } from "@/components/ui/notes-cell";
+import { RowActionsMenu } from "@/components/ui/row-actions-menu";
 import {
   IconCheckCircle,
   IconTarget,
@@ -476,7 +477,15 @@ function ChecklistItemRow({
           <span className="text-slate-300">—</span>
         )}
       </td>
-      <td className="px-3 py-3">{!notesHidden && <NotesCell item={item} projectId={projectId} checklistType={checklistType} canWrite={canWrite} />}</td>
+      <td className="px-3 py-3">
+        {!notesHidden && (
+          <NotesCell
+            value={item.notes}
+            canWrite={canWrite}
+            onSave={(v) => updateChecklistItem(item.id, projectId, checklistType, { notes: v })}
+          />
+        )}
+      </td>
       <td className="px-3 py-3">
         {canWrite ? (
           <InlineSelect
@@ -495,7 +504,7 @@ function ChecklistItemRow({
         <div className="flex items-center gap-1.5">
           {canOverride && viewerRole === "TPM" && <TpmOverrideChecklistModal projectId={projectId} checklistType={checklistType} item={item} />}
           {canWrite && item.isCustom && (
-            <ChecklistItemActionsMenu onDelete={() => deleteChecklistItem(item.id, projectId, checklistType)} />
+            <RowActionsMenu actions={[{ label: "Delete item", pendingLabel: "Deleting...", danger: true, onClick: () => deleteChecklistItem(item.id, projectId, checklistType) }]} />
           )}
         </div>
       </td>
@@ -503,40 +512,6 @@ function ChecklistItemRow({
   );
 }
 
-function NotesCell({
-  item,
-  projectId,
-  checklistType,
-  canWrite,
-}: {
-  item: ChecklistTableItem;
-  projectId: string;
-  checklistType: ChecklistType;
-  canWrite: boolean;
-}) {
-  const [open, setOpen] = useState(false);
-
-  if (!canWrite) {
-    return item.notes ? <span className="text-sm text-slate-600">{item.notes}</span> : <span className="text-slate-300">—</span>;
-  }
-
-  if (!open) {
-    return (
-      <button type="button" onClick={() => setOpen(true)} className="text-sm font-medium text-indigo-600 hover:underline whitespace-nowrap">
-        {item.notes ? "View note" : "Add note"}
-      </button>
-    );
-  }
-
-  return (
-    <div className="min-w-[180px]">
-      <InlineTextarea value={item.notes ?? ""} placeholder="—" onSave={(v) => updateChecklistItem(item.id, projectId, checklistType, { notes: v })} />
-      <button type="button" onClick={() => setOpen(false)} className="mt-1 text-[11px] text-slate-400 hover:text-slate-600">
-        Close
-      </button>
-    </div>
-  );
-}
 
 function AddItemButton({ projectId, checklistType, stage }: { projectId: string; checklistType: ChecklistType; stage: string }) {
   const [pending, startTransition] = useTransition();
