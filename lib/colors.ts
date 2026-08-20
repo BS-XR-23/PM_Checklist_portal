@@ -63,3 +63,35 @@ export function intensityBand(pct: number): keyof typeof INTENSITY_BAND_COLORS {
   if (pct >= 40) return "medium";
   return "low";
 }
+
+// Deterministic per-person avatar color — same name always gets the same
+// color (stable across reloads/pagination), spread across a fixed palette
+// rather than tied to any role/group, since People (unlike Users) isn't
+// organized into role sections.
+const AVATAR_PALETTE = ["#2563EB", "#7C3AED", "#059669", "#D97706", "#DC2626", "#0891B2", "#4F46E5", "#65A30D"];
+
+export function avatarColorFromString(s: string): string {
+  let hash = 0;
+  for (let i = 0; i < s.length; i++) hash = (hash * 31 + s.charCodeAt(i)) >>> 0;
+  return AVATAR_PALETTE[hash % AVATAR_PALETTE.length];
+}
+
+// Same deterministic-hash approach as the avatar palette, but for freeform
+// tag/category text (e.g. Risk Register's Category field) rendered as a
+// pastel pill — pick a stable {bg, text} pair by name, not tied to meaning.
+const TAG_PALETTE: { bg: string; text: string }[] = [
+  { bg: "#EDE9FE", text: "#6D28D9" }, // violet
+  { bg: "#FEF3C7", text: "#92400E" }, // amber
+  { bg: "#DBEAFE", text: "#1D4ED8" }, // blue
+  { bg: "#FCE7F3", text: "#9D174D" }, // pink
+  { bg: "#E0E7FF", text: "#4338CA" }, // indigo
+  { bg: "#D1FAE5", text: "#065F46" }, // emerald
+  { bg: "#FFE4E6", text: "#9F1239" }, // rose
+  { bg: "#CFFAFE", text: "#155E75" }, // cyan
+];
+
+export function tagPillStyle(s: string): { bg: string; text: string } {
+  let hash = 0;
+  for (let i = 0; i < s.length; i++) hash = (hash * 31 + s.charCodeAt(i)) >>> 0;
+  return TAG_PALETTE[hash % TAG_PALETTE.length];
+}

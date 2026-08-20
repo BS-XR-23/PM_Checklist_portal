@@ -7,12 +7,14 @@ import { assignEngagement } from "./resourcing-actions";
 export function AssignEngagementForm({
   projectId,
   people,
+  roleOptions,
 }: {
   projectId: string;
   people: { id: string; name: string; title: string | null }[];
+  roleOptions: string[];
 }) {
   const [personId, setPersonId] = useState(people[0]?.id ?? "");
-  const [roleOnProject, setRoleOnProject] = useState(people[0]?.title ?? "");
+  const [roleOnProject, setRoleOnProject] = useState(people[0]?.title || roleOptions[0] || "");
   const [intensityPct, setIntensityPct] = useState(50);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -49,7 +51,7 @@ export function AssignEngagementForm({
           }
         });
       }}
-      className="rounded-lg border border-slate-200 bg-white p-4 flex flex-wrap items-end gap-3"
+      className="rounded-xl border border-slate-200 bg-white p-5 flex flex-wrap items-end gap-3"
     >
       <div className="min-w-[180px]">
         <label className="block text-xs font-medium text-slate-600 mb-1">Person</label>
@@ -71,12 +73,21 @@ export function AssignEngagementForm({
       </div>
       <div className="flex-1 min-w-[160px]">
         <label className="block text-xs font-medium text-slate-600 mb-1">Role on this project</label>
-        <input
+        <select
           required
           value={roleOnProject}
           onChange={(e) => setRoleOnProject(e.target.value)}
           className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-        />
+        >
+          <option value="" disabled>
+            Select role
+          </option>
+          {roleOptions.map((role) => (
+            <option key={role} value={role}>
+              {role}
+            </option>
+          ))}
+        </select>
       </div>
       <div>
         <label className="block text-xs font-medium text-slate-600 mb-1">Intensity</label>
@@ -87,7 +98,7 @@ export function AssignEngagementForm({
               type="button"
               onClick={() => setIntensityPct(pct)}
               className={`text-xs rounded px-2 py-1.5 border ${
-                intensityPct === pct ? "bg-slate-900 text-white border-slate-900" : "border-slate-300 text-slate-600 hover:bg-slate-50"
+                intensityPct === pct ? "bg-indigo-50 text-indigo-700 border-indigo-300" : "border-slate-300 text-slate-600 hover:bg-slate-50"
               }`}
             >
               {label}
@@ -112,7 +123,7 @@ export function AssignEngagementForm({
         <label className="block text-xs font-medium text-slate-600 mb-1">End (optional)</label>
         <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="rounded-md border border-slate-300 px-3 py-2 text-sm" />
       </div>
-      <button type="submit" disabled={pending} className="rounded-md bg-slate-900 text-white text-sm font-medium px-4 py-2 hover:bg-slate-800 disabled:opacity-50">
+      <button type="submit" disabled={pending} className="rounded-md bg-indigo-600 text-white text-sm font-semibold px-4 py-2 hover:bg-indigo-700 disabled:opacity-50">
         {pending ? "Assigning..." : "Assign"}
       </button>
       {error && <p className="w-full text-xs text-red-600">{error}</p>}

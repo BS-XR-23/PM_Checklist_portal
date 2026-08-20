@@ -2,6 +2,9 @@
 
 import { useTransition } from "react";
 import type { Role, ModuleName, AccessLevel } from "@prisma/client";
+import { RowActionsMenu } from "@/components/ui/row-actions-menu";
+import { avatarColorFromString, tagPillStyle } from "@/lib/colors";
+import { initials } from "@/lib/format";
 import { removeProjectMember, setModulePermission } from "./team-actions";
 
 // BUDGET_TRACKER is intentionally omitted — it's Admin-only now
@@ -34,14 +37,32 @@ export function MemberRow({ projectId, membership, canEdit }: { projectId: strin
   const [pending, startTransition] = useTransition();
 
   const accessFor = (module: ModuleName) => membership.permissions.find((p) => p.module === module)?.access ?? "NONE";
+  const rolePill = tagPillStyle(membership.role);
 
   return (
     <tr className="border-b border-slate-50 last:border-0 align-top">
       <td className="px-3 py-2">
-        <p className="text-slate-800 font-medium">{membership.userName}</p>
-        <p className="text-xs text-slate-500">{membership.userEmail}</p>
+        <div className="flex items-center gap-2.5">
+          <span
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white"
+            style={{ backgroundColor: avatarColorFromString(membership.userName) }}
+          >
+            {initials(membership.userName)}
+          </span>
+          <div>
+            <p className="text-slate-800 font-medium">{membership.userName}</p>
+            <p className="text-xs text-slate-500">{membership.userEmail}</p>
+          </div>
+        </div>
       </td>
-      <td className="px-3 py-2 text-slate-600">{membership.role}</td>
+      <td className="px-3 py-2">
+        <span
+          className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap"
+          style={{ backgroundColor: rolePill.bg, color: rolePill.text }}
+        >
+          {membership.role}
+        </span>
+      </td>
       <td className="px-3 py-2">
         {membership.role === "PM" ? (
           <span className="text-xs text-slate-500">Full read/write on all modules (role-based).</span>
@@ -73,14 +94,16 @@ export function MemberRow({ projectId, membership, canEdit }: { projectId: strin
       </td>
       {canEdit && (
         <td className="px-3 py-2">
-          <button
-            onClick={() => startTransition(() => removeProjectMember(membership.id, projectId))}
-            disabled={pending}
-            title="Remove from project"
-            className="text-slate-300 hover:text-red-600 disabled:opacity-50"
-          >
-            ✕
-          </button>
+          <RowActionsMenu
+            actions={[
+              {
+                label: "Remove from project",
+                pendingLabel: "Removing...",
+                danger: true,
+                onClick: () => removeProjectMember(membership.id, projectId),
+              },
+            ]}
+          />
         </td>
       )}
     </tr>

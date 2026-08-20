@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import type { Role } from "@prisma/client";
+import { IconUser } from "@/components/layout/icons";
 import { createUser } from "./user-actions";
 
 const ALL_ROLES: Role[] = ["ADMIN", "TPM", "PROGRAM_MANAGER", "CLIENT", "PM", "LIMITED"];
@@ -15,8 +16,16 @@ export function CreateUserForm() {
   const [pending, startTransition] = useTransition();
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4 space-y-3">
-      <h2 className="text-sm font-semibold text-slate-700">Create User</h2>
+    <div id="create-user" className="rounded-xl border border-slate-200 bg-white p-4 space-y-3 scroll-mt-4">
+      <div className="flex items-center gap-3">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+          <IconUser className="h-4 w-4" />
+        </span>
+        <div>
+          <h2 className="text-sm font-semibold text-slate-900">Create User</h2>
+          <p className="text-xs text-slate-500">Add a new user and assign a global role.</p>
+        </div>
+      </div>
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -37,11 +46,24 @@ export function CreateUserForm() {
       >
         <div className="flex-1 min-w-[180px]">
           <label className="block text-xs font-medium text-slate-600 mb-1">Name</label>
-          <input required value={name} onChange={(e) => setName(e.target.value)} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
+          <input
+            required
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Enter full name"
+            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm placeholder:text-slate-400"
+          />
         </div>
         <div className="flex-1 min-w-[220px]">
           <label className="block text-xs font-medium text-slate-600 mb-1">Email</label>
-          <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
+          <input
+            type="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Enter email address"
+            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm placeholder:text-slate-400"
+          />
         </div>
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">Role</label>

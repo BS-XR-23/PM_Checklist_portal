@@ -11,13 +11,13 @@ export function CompetencyRow({ competency }: { competency: CompetencyRowData })
 
   return (
     <tr className="border-b border-slate-50 last:border-0 align-top">
-      <td className="px-4 py-3">
+      <td className="px-3 py-2">
         <InlineText value={competency.level} onSave={(v) => updateCompetency(competency.id, { level: v })} />
       </td>
-      <td className="px-4 py-3">
+      <td className="px-3 py-2">
         <InlineNumber value={competency.multiplier} step={0.1} onSave={(v) => updateCompetency(competency.id, { multiplier: v ?? 1 })} />
       </td>
-      <td className="px-4 py-3">
+      <td className="px-3 py-2">
         <button
           onClick={() => startTransition(() => deleteCompetency(competency.id))}
           disabled={pending}

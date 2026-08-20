@@ -11,13 +11,13 @@ export function RoleRateRow({ roleRate }: { roleRate: RoleRateRowData }) {
 
   return (
     <tr className="border-b border-slate-50 last:border-0 align-top">
-      <td className="px-4 py-3">
+      <td className="px-3 py-2">
         <InlineText value={roleRate.roleName} onSave={(v) => updateRoleRate(roleRate.id, { roleName: v })} />
       </td>
-      <td className="px-4 py-3">
+      <td className="px-3 py-2">
         <InlineNumber value={roleRate.manDayRate} step={1} onSave={(v) => updateRoleRate(roleRate.id, { manDayRate: v ?? 0 })} />
       </td>
-      <td className="px-4 py-3">
+      <td className="px-3 py-2">
         <button
           onClick={() => startTransition(() => deleteRoleRate(roleRate.id))}
           disabled={pending}

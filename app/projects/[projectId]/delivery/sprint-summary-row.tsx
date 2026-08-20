@@ -3,9 +3,13 @@
 import { useMemo, useState, useTransition } from "react";
 import { formatDate, toDateInputValue } from "@/lib/format";
 import { competencyCpi } from "@/lib/calculations";
-import { INDEX_FAVORABLE_COLOR, INDEX_UNFAVORABLE_COLOR } from "@/lib/colors";
+import { INDEX_FAVORABLE_COLOR, INDEX_UNFAVORABLE_COLOR, STATUS_COLORS, avatarColorFromString } from "@/lib/colors";
+import { initials } from "@/lib/format";
 import { InlinePercent, InlineNumber, InlineText, InlineDate } from "@/components/ui/inline-edit";
-import { StatCard } from "@/components/ui/stat-card";
+import { StatTile } from "@/components/ui/stat-tile";
+import { SectionHeader } from "@/components/ui/section-header";
+import { RowActionsMenu } from "@/components/ui/row-actions-menu";
+import { IconTarget, IconCheckCircle, IconClock, IconChart, IconUsers, IconClipboardList } from "@/components/layout/icons";
 import { computeDuplicateRefs, DuplicateBadge } from "./duplicate-badge";
 import {
   closeSprint,
@@ -20,23 +24,44 @@ import {
 } from "./delivery-actions";
 import type { RosterPerson } from "./delivery-tasks-table";
 
-// "pill" (default) is a compact badge for dense inline rows (the collapsed
-// summary bar); "plain" is bold colored text sized to match a StatCard's
-// big number, since a pill inside a stat card looks like a mismatched
-// afterthought next to PV/EV/AV's plain figures.
-function IndexValue({ value, variant = "pill" }: { value: number | null; variant?: "pill" | "plain" }) {
+// Compact colored badge for the collapsed summary row's dense inline PV/EV/AV
+// bar. The modal's own SPI/CPI figures use StatTile's valueColor instead.
+function IndexValue({ value }: { value: number | null }) {
   if (value == null) return <span className="text-slate-300">—</span>;
   const favorable = value >= 1;
   const color = favorable ? INDEX_FAVORABLE_COLOR : INDEX_UNFAVORABLE_COLOR;
-  if (variant === "plain") {
-    return <span style={{ color }}>{value.toFixed(2)}</span>;
-  }
   return (
     <span
       className="inline-flex items-center rounded-full px-2 py-0.5 text-sm font-semibold"
       style={{ backgroundColor: favorable ? "#E6F4EC" : "#FBE9E9", color }}
     >
       {value.toFixed(2)}
+    </span>
+  );
+}
+
+// Every row in this table is, by definition, committed to a sprint — so
+// unlike the Tasks tab's derivation there's no "Not Started" state here:
+// commitment alone already means work is underway.
+function StatusPill({ pctComplete }: { pctComplete: number }) {
+  const status = STATUS_COLORS[pctComplete >= 1 ? "COMPLETED" : "IN_PROGRESS"];
+  return (
+    <span
+      className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap"
+      style={{ backgroundColor: status.bg, color: status.text }}
+    >
+      {status.label}
+    </span>
+  );
+}
+
+function PersonAvatar({ name }: { name: string | null }) {
+  return (
+    <span
+      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white"
+      style={{ backgroundColor: avatarColorFromString(name ?? "?") }}
+    >
+      {initials(name ?? "?")}
     </span>
   );
 }
@@ -162,9 +187,16 @@ function TeamAllocationPanel({
 
   return (
     <div className="mb-7">
-      <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
-        Team Allocation <span className="normal-case font-normal text-slate-400">(reference only — not part of PV/EV/AV)</span>
-      </h4>
+      <SectionHeader
+        icon={<IconUsers />}
+        iconWrapClass="bg-violet-50 text-violet-600"
+        title={
+          <>
+            Team Allocation <span className="font-normal text-slate-400">(reference only — not part of PV/EV/AV)</span>
+          </>
+        }
+        className="mb-2"
+      />
       <div className="rounded-xl border border-slate-200 overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-slate-50">
@@ -178,9 +210,14 @@ function TeamAllocationPanel({
           <tbody>
             {allocations.map((a) => (
               <tr key={a.id} className="border-t border-slate-100">
-                <td className="py-2 px-3 text-slate-600">
-                  {a.personName}
-                  {a.competencyLevel ? ` — ${a.competencyLevel}` : ""}
+                <td className="py-2 px-3">
+                  <div className="flex items-center gap-2">
+                    <PersonAvatar name={a.personName} />
+                    <span className="text-slate-600">
+                      {a.personName}
+                      {a.competencyLevel ? ` — ${a.competencyLevel}` : ""}
+                    </span>
+                  </div>
                 </td>
                 <td className="py-2 px-3 min-w-[100px]">
                   {editable ? (
@@ -198,14 +235,16 @@ function TeamAllocationPanel({
                 </td>
                 {editable && (
                   <td className="py-2 px-3">
-                    <button
-                      onClick={() => startTransition(() => deleteSprintAllocation(a.id, projectId))}
-                      disabled={pending}
-                      title="Remove from allocation"
-                      className="text-slate-300 hover:text-red-600 disabled:opacity-50"
-                    >
-                      ✕
-                    </button>
+                    <RowActionsMenu
+                      actions={[
+                        {
+                          label: "Remove from allocation",
+                          pendingLabel: "Removing...",
+                          danger: true,
+                          onClick: () => deleteSprintAllocation(a.id, projectId),
+                        },
+                      ]}
+                    />
                   </td>
                 )}
               </tr>
@@ -299,9 +338,6 @@ export function SprintSummaryRow({
   const [selectedBacklogId, setSelectedBacklogId] = useState("");
   const [importPending, startImportTransition] = useTransition();
   const [importError, setImportError] = useState<string | null>(null);
-  const [removePendingId, setRemovePendingId] = useState<string | null>(null);
-  const [removeError, setRemoveError] = useState<string | null>(null);
-  const [, startRemoveTransition] = useTransition();
 
   const cpi = competencyCpi(sprint.ev, sprint.av);
   const spi = sprint.pv ? sprint.ev / sprint.pv : null;
@@ -370,20 +406,28 @@ export function SprintSummaryRow({
               </button>
             </div>
 
-            <div className="grid grid-cols-5 gap-3 mb-7">
-              <StatCard label="PV">{sprint.pv.toFixed(1)}</StatCard>
-              <StatCard label="EV">{sprint.ev.toFixed(1)}</StatCard>
-              <StatCard label="AV">{sprint.av.toFixed(1)}</StatCard>
-              <StatCard label="SPI">
-                <IndexValue value={spi} variant="plain" />
-              </StatCard>
-              <StatCard label="CPI">
-                <IndexValue value={cpi} variant="plain" />
-              </StatCard>
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-7">
+              <StatTile icon={<IconTarget />} iconWrapClass="bg-blue-50 text-blue-600" label="PV" value={sprint.pv.toFixed(1)} />
+              <StatTile icon={<IconCheckCircle />} iconWrapClass="bg-emerald-50 text-emerald-600" label="EV" value={sprint.ev.toFixed(1)} />
+              <StatTile icon={<IconClock />} iconWrapClass="bg-amber-50 text-amber-600" label="AV" value={sprint.av.toFixed(1)} />
+              <StatTile
+                icon={<IconChart />}
+                iconWrapClass="bg-violet-50 text-violet-600"
+                label="SPI"
+                value={spi == null ? "—" : spi.toFixed(2)}
+                valueColor={spi == null ? undefined : spi >= 1 ? INDEX_FAVORABLE_COLOR : INDEX_UNFAVORABLE_COLOR}
+              />
+              <StatTile
+                icon={<IconChart />}
+                iconWrapClass="bg-indigo-50 text-indigo-600"
+                label="CPI"
+                value={cpi == null ? "—" : cpi.toFixed(2)}
+                valueColor={cpi == null ? undefined : cpi >= 1 ? INDEX_FAVORABLE_COLOR : INDEX_UNFAVORABLE_COLOR}
+              />
             </div>
 
             <div className="mb-7">
-              <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Tasks</h4>
+              <SectionHeader icon={<IconClipboardList />} iconWrapClass="bg-blue-50 text-blue-600" title="Tasks" className="mb-2" />
               <div className="rounded-xl border border-slate-200 overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-slate-50">
@@ -394,8 +438,8 @@ export function SprintSummaryRow({
                       <th className="py-2.5 px-3 w-28">% Complete</th>
                       {!closed && <th className="py-2.5 px-3 w-32">Actual Hrs</th>}
                       {!closed && <th className="py-2.5 px-3 w-44">Assignee</th>}
-                      <th className="py-2.5 px-3 w-16">Done</th>
-                      {editable && <th className="py-2.5 px-3 w-8" />}
+                      <th className="py-2.5 px-3 w-28">Status</th>
+                      {editable && <th className="py-2.5 px-3 w-10" />}
                     </tr>
                   </thead>
                   <tbody>
@@ -407,7 +451,7 @@ export function SprintSummaryRow({
                             <td className="py-2 px-3 text-slate-500">{t.storyPoints}</td>
                             <td className="py-2 px-3 text-slate-500">{Math.round(t.pctComplete * 100)}%</td>
                             <td className="py-2 px-3">
-                              {t.pctComplete >= 1 ? <span className="text-emerald-600 font-medium">✓</span> : <span className="text-slate-300">—</span>}
+                              <StatusPill pctComplete={t.pctComplete} />
                             </td>
                           </tr>
                         ))
@@ -461,37 +505,30 @@ export function SprintSummaryRow({
                               )}
                             </td>
                             <td className="py-2 px-3">
-                              {editable ? (
-                                <AssigneeSelect taskId={t.id} projectId={projectId} value={t.personId ?? ""} roster={roster} />
-                              ) : (
-                                <span className="text-slate-600">{t.personName ?? "—"}</span>
-                              )}
+                              <div className="flex items-center gap-2">
+                                <PersonAvatar name={t.personName} />
+                                {editable ? (
+                                  <AssigneeSelect taskId={t.id} projectId={projectId} value={t.personId ?? ""} roster={roster} />
+                                ) : (
+                                  <span className="text-slate-600">{t.personName ?? "—"}</span>
+                                )}
+                              </div>
                             </td>
                             <td className="py-2 px-3">
-                              {t.pctComplete >= 1 ? <span className="text-emerald-600 font-medium">✓</span> : <span className="text-slate-300">—</span>}
+                              <StatusPill pctComplete={t.pctComplete} />
                             </td>
                             {editable && (
                               <td className="py-2 px-3">
-                                <button
-                                  onClick={() => {
-                                    setRemoveError(null);
-                                    setRemovePendingId(t.id);
-                                    startRemoveTransition(async () => {
-                                      try {
-                                        await assignTaskToSprint(t.id, null, projectId);
-                                      } catch (err) {
-                                        setRemoveError(err instanceof Error ? err.message : "Failed to remove task from sprint.");
-                                      } finally {
-                                        setRemovePendingId(null);
-                                      }
-                                    });
-                                  }}
-                                  disabled={removePendingId === t.id}
-                                  title="Remove from sprint"
-                                  className="text-slate-300 hover:text-red-600 disabled:opacity-50"
-                                >
-                                  ✕
-                                </button>
+                                <RowActionsMenu
+                                  actions={[
+                                    {
+                                      label: "Remove from sprint",
+                                      pendingLabel: "Removing...",
+                                      danger: true,
+                                      onClick: () => assignTaskToSprint(t.id, null, projectId),
+                                    },
+                                  ]}
+                                />
                               </td>
                             )}
                           </tr>
@@ -512,7 +549,6 @@ export function SprintSummaryRow({
                   </tbody>
                 </table>
               </div>
-              {removeError && <p className="mt-1.5 text-xs text-red-600">{removeError}</p>}
               {editable && (
                 <div className="mt-3">
                   {backlogTasks.length > 0 ? (

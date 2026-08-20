@@ -7,6 +7,8 @@ import { computeProjectRag } from "@/lib/rag";
 import { getReminderItems } from "@/lib/notifications";
 import { PM_STAGES } from "@/lib/seed-data";
 import { AppShell } from "@/components/layout/app-shell";
+import { StatTile } from "@/components/ui/stat-tile";
+import { IconGrid, IconChart, IconDollar } from "@/components/layout/icons";
 import { NewProjectForm } from "./new-project-form";
 import { ProjectFilters } from "./project-filters";
 
@@ -73,7 +75,7 @@ export default async function ProjectsPage() {
   return (
     <AppShell user={user}>
       <header className="border-b border-slate-200 bg-white px-4 sm:px-6 py-4">
-        <h1 className="text-lg font-semibold text-slate-900">Projects</h1>
+        <h1 className="text-xl font-bold text-slate-900">Projects</h1>
         <p className="text-sm text-slate-500">Fixed-budget XR project governance — stage-gate checklists, milestones, risk, CRs, and budget/EVM.</p>
       </header>
 
@@ -81,9 +83,9 @@ export default async function ProjectsPage() {
         {user.role === "ADMIN" && <NewProjectForm />}
 
         <div className="grid sm:grid-cols-3 gap-4">
-          <StatTile label="Active Projects" value={String(activeCards.length)} />
-          <StatTile label="Avg. Completion" value={formatPct(avgCompletion)} />
-          <StatTile label="Total Contract Value" value={formatMoney(totalContractValue)} />
+          <StatTile icon={<IconGrid />} iconWrapClass="bg-blue-50 text-blue-600" label="Active Projects" value={String(activeCards.length)} />
+          <StatTile icon={<IconChart />} iconWrapClass="bg-emerald-50 text-emerald-600" label="Avg. Completion" value={formatPct(avgCompletion)} />
+          <StatTile icon={<IconDollar />} iconWrapClass="bg-amber-50 text-amber-600" label="Total Contract Value" value={formatMoney(totalContractValue)} />
         </div>
 
         <div>
@@ -98,14 +100,5 @@ export default async function ProjectsPage() {
         </div>
       </main>
     </AppShell>
-  );
-}
-
-function StatTile({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4">
-      <p className="text-xs text-slate-500">{label}</p>
-      <p className="mt-1 text-2xl font-semibold text-slate-900">{value}</p>
-    </div>
   );
 }

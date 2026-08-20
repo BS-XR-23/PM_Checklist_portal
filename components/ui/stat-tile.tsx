@@ -1,11 +1,30 @@
-export function StatTile({ label, value, valueColor, hint }: { label: string; value: string; valueColor?: string; hint?: string }) {
+export function StatTile({
+  icon,
+  iconWrapClass,
+  label,
+  value,
+  subtitle,
+  valueColor,
+}: {
+  icon: React.ReactNode;
+  iconWrapClass: string;
+  label: string;
+  value: string;
+  subtitle?: React.ReactNode;
+  valueColor?: string;
+}) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4">
-      <p className="text-xs text-slate-500">{label}</p>
-      <p className="mt-1 text-2xl font-semibold" style={{ color: valueColor ?? "#0b0b0b" }}>
-        {value}
-      </p>
-      {hint && <p className="mt-0.5 text-xs text-slate-400">{hint}</p>}
+    <div className="rounded-xl border border-slate-200 bg-white p-3.5 flex items-start gap-2.5">
+      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${iconWrapClass}`}>
+        <span className="h-4 w-4 [&>svg]:h-4 [&>svg]:w-4">{icon}</span>
+      </span>
+      <div className="min-w-0">
+        <p className="text-xs text-slate-500">{label}</p>
+        <p className="text-lg font-bold leading-tight" style={{ color: valueColor }}>
+          {value}
+        </p>
+        {subtitle != null && <div className="text-xs text-slate-400 mt-0.5 leading-tight">{subtitle}</div>}
+      </div>
     </div>
   );
 }
