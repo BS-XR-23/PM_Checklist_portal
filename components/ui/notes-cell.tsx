@@ -9,10 +9,14 @@ export function NotesCell({
   value,
   canWrite,
   onSave,
+  addLabel = "Add note",
+  viewLabel = "View note",
 }: {
   value: string | null;
   canWrite: boolean;
   onSave: (value: string) => Promise<void>;
+  addLabel?: string;
+  viewLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -23,7 +27,7 @@ export function NotesCell({
   if (!open) {
     return (
       <button type="button" onClick={() => setOpen(true)} className="text-sm font-medium text-indigo-600 hover:underline whitespace-nowrap">
-        {value ? "View note" : "Add note"}
+        {value ? viewLabel : addLabel}
       </button>
     );
   }

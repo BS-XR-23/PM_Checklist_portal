@@ -157,6 +157,36 @@ export function IconSearch(props: React.SVGProps<SVGSVGElement>) {
   );
 }
 
+export function IconAlertTriangle(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M12 3.5 21.5 20h-19L12 3.5z" />
+      <path d="M12 9.5v4.5" />
+      <circle cx="12" cy="17" r="0.6" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+export function IconAlertCircle(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 7.5v5" />
+      <circle cx="12" cy="16" r="0.6" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+export function IconFileText(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M6.5 3.5h7l4 4v12a1 1 0 0 1-1 1h-10a1 1 0 0 1-1-1v-15a1 1 0 0 1 1-1Z" />
+      <path d="M13.5 3.5V8h4" />
+      <path d="M8.5 12.5h7M8.5 16h5" />
+    </svg>
+  );
+}
+
 export function IconCheckCircle(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" {...props}>
@@ -188,6 +218,14 @@ export function IconExternalLink(props: React.SVGProps<SVGSVGElement>) {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" {...props}>
       <path d="M9 6H5.5A1.5 1.5 0 004 7.5v11A1.5 1.5 0 005.5 20h11a1.5 1.5 0 001.5-1.5V15" />
       <path d="M14 4h6v6M20 4l-9.5 9.5" />
+    </svg>
+  );
+}
+
+export function IconChevronDown(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M5.5 8.5 12 15l6.5-6.5" />
     </svg>
   );
 }
