@@ -18,6 +18,7 @@ export type WbsTaskData = {
   title: string;
   storyPoints: number;
   pctComplete: number;
+  actualHours: number;
   personId: string | null;
   personName: string | null;
   sprintId: string | null;
@@ -28,9 +29,13 @@ export type SprintOption = { id: string; name: string; closedAt: Date | null };
 const PAGE_SIZES = [10, 25, 50] as const;
 type SortKey = "wbsNumber" | "storyPoints" | "done" | "remaining";
 
-function taskStatusKey(pctComplete: number): "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED" {
-  if (pctComplete >= 1) return "COMPLETED";
-  if (pctComplete > 0) return "IN_PROGRESS";
+// Committing a task to a sprint or logging hours against it is evidence
+// someone has started the work, even before pctComplete is nudged up — so
+// those flip the status out of Not Started the same way a nonzero
+// pctComplete does.
+function taskStatusKey(t: Pick<WbsTaskData, "pctComplete" | "actualHours" | "sprintId">): "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED" {
+  if (t.pctComplete >= 1) return "COMPLETED";
+  if (t.pctComplete > 0 || t.actualHours > 0 || t.sprintId) return "IN_PROGRESS";
   return "NOT_STARTED";
 }
 
@@ -326,7 +331,7 @@ export function WbsTasksTable({
             {pageTasks.map((t) => {
               const donePts = t.storyPoints * t.pctComplete;
               const remainingPts = t.storyPoints - donePts;
-              const status = STATUS_COLORS[taskStatusKey(t.pctComplete)];
+              const status = STATUS_COLORS[taskStatusKey(t)];
               const assigneeRoster = roster.find((p) => p.personId === t.personId);
               return (
               <tr key={t.id} className="border-b border-slate-100 last:border-0">
