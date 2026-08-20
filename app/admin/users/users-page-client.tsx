@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { ReactNode } from "react";
+import { IconSearch } from "@/components/layout/icons";
 import { CreateUserForm } from "./create-user-form";
 import { RoleGroupSection, type RoleGroupData } from "./users-directory";
 
@@ -38,16 +39,19 @@ export function UsersPageClient({
           <h1 className="text-xl font-bold text-slate-900">Users</h1>
           <p className="text-sm text-slate-500 mt-0.5">Manage portal users and assign them to projects with specific roles.</p>
         </div>
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search users…"
-          className="w-72 rounded-lg border border-slate-300 px-3.5 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
-        />
+        <div className="relative">
+          <IconSearch className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search users…"
+            className="w-72 rounded-lg border border-slate-300 pl-8 pr-3.5 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
+          />
+        </div>
       </header>
-      <main className="max-w-6xl mx-auto p-4 sm:p-6">
-        <div className="grid grid-cols-1 2xl:grid-cols-[1fr_280px] gap-6 items-start">
+      <main className="p-4 sm:p-6">
+        <div className="grid grid-cols-1 xl:grid-cols-[1fr_280px] gap-6 items-start">
           <div className="space-y-4 min-w-0">
             <CreateUserForm />
             <div className="space-y-4">
