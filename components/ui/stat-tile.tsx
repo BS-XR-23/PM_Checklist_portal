@@ -10,7 +10,7 @@ export function StatTile({
   iconWrapClass: string;
   label: string;
   value: string;
-  subtitle?: string;
+  subtitle?: React.ReactNode;
   valueColor?: string;
 }) {
   return (
@@ -23,7 +23,7 @@ export function StatTile({
         <p className="text-lg font-bold leading-tight" style={{ color: valueColor }}>
           {value}
         </p>
-        {subtitle && <p className="text-xs text-slate-400 mt-0.5 leading-tight">{subtitle}</p>}
+        {subtitle != null && <div className="text-xs text-slate-400 mt-0.5 leading-tight">{subtitle}</div>}
       </div>
     </div>
   );

@@ -240,6 +240,44 @@ export function IconClipboardList(props: React.SVGProps<SVGSVGElement>) {
   );
 }
 
+export function IconHeart(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M12 20.5s-7.5-4.6-9.5-9.3C1.2 8 3 5 6.2 5c2 0 3.6 1.2 4.5 2.8C11.6 6.2 13.2 5 15.2 5c3.2 0 5 3 3.7 6.2-2 4.7-9.5 9.3-9.5 9.3z" />
+    </svg>
+  );
+}
+
+export function IconGauge(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M3.5 15.5a8.5 8.5 0 1117 0" />
+      <path d="M12 15.5l3.5-4.5" />
+      <path d="M12 15.5h.01" />
+    </svg>
+  );
+}
+
+export function IconUserPlus(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <circle cx="9" cy="8" r="3.5" />
+      <path d="M2.5 20c1.2-3.5 3.9-5.5 6.5-5.5s5.3 2 6.5 5.5" />
+      <path d="M18.5 8v5M16 10.5h5" />
+    </svg>
+  );
+}
+
+export function IconInfo(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 11v5.5" />
+      <circle cx="12" cy="7.8" r="0.6" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
 export function IconUpload(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" {...props}>

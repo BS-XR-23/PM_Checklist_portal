@@ -26,7 +26,7 @@ export function AddMemberForm({ projectId }: { projectId: string }) {
           }
         });
       }}
-      className="rounded-lg border border-slate-200 bg-white p-4 flex flex-wrap items-end gap-3"
+      className="rounded-xl border border-slate-200 bg-white p-5 flex flex-wrap items-end gap-3"
     >
       <div className="flex-1 min-w-[220px]">
         <label className="block text-xs font-medium text-slate-600 mb-1">User email</label>

@@ -190,6 +190,9 @@ export async function getDashboardData(projectId: string) {
     financial: {
       latestSpi: latestEvm?.spi ?? null,
       latestCpi: latestEvm?.cpi ?? null,
+      // Chronological, nulls dropped — feeds the Latest SPI tile's sparkline.
+      // A gap week (no PV yet) just isn't a point, rather than a break in the line.
+      spiHistory: evm.map((e) => e.spi).filter((v): v is number => v != null),
       openHighRisks,
       activeCRValue,
       nextPaymentDue,
