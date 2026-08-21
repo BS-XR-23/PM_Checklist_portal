@@ -36,7 +36,7 @@ export function ImportUsersButton() {
               <p className="text-xs text-slate-600">
                 Created {result.created.length} {result.created.length === 1 ? "user" : "users"}
                 {result.skippedDuplicateCount > 0 && ` — skipped ${result.skippedDuplicateCount} with an email already in use`}
-                {result.unmatchedRoleCount > 0 && ` — ${result.unmatchedRoleCount} had a Role that didn't match, defaulted to Limited`}.
+                {result.unmatchedRoleCount > 0 && ` — ${result.unmatchedRoleCount} had a Role that didn't match, defaulted to Guest`}.
               </p>
               {result.created.length > 0 && (
                 <>
@@ -79,7 +79,7 @@ export function ImportUsersButton() {
             <>
               <p className="text-xs text-slate-500 mb-2">
                 CSV or XLSX with Name / Email / Role columns. Role must match an existing role name (e.g. &quot;PM&quot;,
-                &quot;Client&quot;, &quot;Program Manager&quot;) — unmatched or blank rows default to Limited. Rows whose email
+                &quot;Client&quot;, &quot;Management&quot;) — unmatched or blank rows default to Guest. Rows whose email
                 already exists are skipped.
               </p>
               <input

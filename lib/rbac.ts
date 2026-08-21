@@ -10,6 +10,7 @@ import {
   computeProjectAccess,
   computeModuleAccess,
   DEFAULT_CLIENT_PERMISSIONS,
+  DEFAULT_LIMITED_PERMISSIONS,
   ACCESS_PRESETS,
   ALL_MODULES,
   type MembershipLike,
@@ -20,6 +21,7 @@ export {
   computeProjectAccess,
   computeModuleAccess,
   DEFAULT_CLIENT_PERMISSIONS,
+  DEFAULT_LIMITED_PERMISSIONS,
   ACCESS_PRESETS,
   type MembershipLike,
 };

@@ -1,6 +1,22 @@
 // SQLite has no native enum support in Prisma, so these are plain strings
 // at the DB layer. These types/lists are the single source of truth for
 // valid values across the app.
+import type { Role } from "@prisma/client";
+
+// Display names only — the underlying Role enum values (ADMIN, TPM,
+// PROGRAM_MANAGER, CLIENT, PM, LIMITED) are unchanged everywhere else in
+// the app (every `role === "ADMIN"` check, the DB column, AuditLog rows).
+// Renaming the enum itself would be a data migration on every existing row
+// in a live, shared-with-production database — this map exists so the UI
+// can show new names without that risk.
+export const ROLE_LABELS: Record<Role, string> = {
+  ADMIN: "Super Admin",
+  TPM: "Admin",
+  PROGRAM_MANAGER: "Management",
+  CLIENT: "Client",
+  PM: "PM",
+  LIMITED: "Guest",
+};
 
 export type ChecklistType = "PM" | "DEVOPS";
 

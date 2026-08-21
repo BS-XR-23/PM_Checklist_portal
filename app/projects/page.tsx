@@ -1,4 +1,3 @@
-import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { formatMoney, formatPct } from "@/lib/format";
 import { requireUser } from "@/lib/rbac";
@@ -17,10 +16,7 @@ export const dynamic = "force-dynamic";
 export default async function ProjectsPage() {
   const user = await requireUser();
 
-  // Program Manager gets the coarse portfolio rollup, never this detailed list.
-  if (user.role === "PROGRAM_MANAGER") redirect("/portfolio");
-
-  const canSeeAll = user.role === "ADMIN" || user.role === "TPM";
+  const canSeeAll = user.role === "ADMIN" || user.role === "TPM" || user.role === "PROGRAM_MANAGER";
   const projects = await prisma.project.findMany({
     where: canSeeAll ? {} : { memberships: { some: { userId: user.id } }, deletedAt: null },
     orderBy: { createdAt: "desc" },

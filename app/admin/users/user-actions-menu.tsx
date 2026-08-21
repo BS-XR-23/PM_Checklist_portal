@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import type { Role } from "@prisma/client";
+import { ROLE_LABELS } from "@/lib/constants";
 import { setUserActive, updateUserRole, getDeactivationImpact } from "./user-actions";
 
 const ALL_ROLES: Role[] = ["ADMIN", "TPM", "PROGRAM_MANAGER", "CLIENT", "PM", "LIMITED"];
@@ -123,7 +124,7 @@ export function UserActionsMenu({
               >
                 {ALL_ROLES.map((r) => (
                   <option key={r} value={r}>
-                    {r.replace("_", " ")}
+                    {ROLE_LABELS[r]}
                   </option>
                 ))}
               </select>

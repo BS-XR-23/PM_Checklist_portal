@@ -7,9 +7,22 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUser, writeAudit } from "@/lib/rbac";
 import { isCurrentlyActive } from "@/lib/overload";
+import { ROLE_LABELS } from "@/lib/constants";
 import type { Role } from "@prisma/client";
 
 const ALL_ROLES: Role[] = ["ADMIN", "TPM", "PROGRAM_MANAGER", "CLIENT", "PM", "LIMITED"];
+
+// Accepts either the raw enum name ("PROGRAM_MANAGER", "Program Manager")
+// or the current display label ("Management") — a CSV author reasonably
+// might type either, and silently defaulting an unrecognized-but-plausible
+// value to Guest would be confusing. Raw enum text is spread LAST so it
+// always wins a collision — TPM's label is literally "Admin", which would
+// otherwise shadow the real ADMIN enum name and silently downgrade anyone
+// who typed "Admin" expecting Super Admin.
+const ROLE_TEXT_LOOKUP = new Map<string, Role>([
+  ...ALL_ROLES.map((r) => [ROLE_LABELS[r].toUpperCase().replace(/[\s-]+/g, "_"), r] as const),
+  ...ALL_ROLES.map((r) => [r, r] as const),
+]);
 
 async function requireAdmin() {
   const user = await requireUser();
@@ -98,10 +111,9 @@ export async function importUsersCsv(formData: FormData): Promise<{
     }
     seenEmailsInBatch.add(email);
 
-    const roleKey = row.role.toUpperCase().replace(/[\s-]+/g, "_") as Role;
-    const roleMatched = ALL_ROLES.includes(roleKey);
-    if (row.role && !roleMatched) unmatchedRoleCount++;
-    const role: Role = roleMatched ? roleKey : "LIMITED";
+    const matchedRole = ROLE_TEXT_LOOKUP.get(row.role.toUpperCase().replace(/[\s-]+/g, "_"));
+    if (row.role && !matchedRole) unmatchedRoleCount++;
+    const role: Role = matchedRole ?? "LIMITED";
 
     const tempPassword = randomBytes(9).toString("base64url");
     const passwordHash = await bcrypt.hash(tempPassword, 10);

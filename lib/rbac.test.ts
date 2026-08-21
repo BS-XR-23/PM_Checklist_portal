@@ -1,5 +1,14 @@
 import { describe, it, expect } from "vitest";
-import { meetsLevel, computeProjectAccess, computeModuleAccess, DEFAULT_CLIENT_PERMISSIONS, ACCESS_PRESETS, ALL_MODULES, type MembershipLike } from "./rbac-core";
+import {
+  meetsLevel,
+  computeProjectAccess,
+  computeModuleAccess,
+  DEFAULT_CLIENT_PERMISSIONS,
+  DEFAULT_LIMITED_PERMISSIONS,
+  ACCESS_PRESETS,
+  ALL_MODULES,
+  type MembershipLike,
+} from "./rbac-core";
 import type { Role, ModuleName, AccessLevel } from "@prisma/client";
 
 function membership(role: Role, permissions: { module: ModuleName; access: AccessLevel }[] = []): MembershipLike {
@@ -18,14 +27,15 @@ describe("meetsLevel", () => {
 });
 
 describe("computeProjectAccess (coarse gate)", () => {
-  it("ADMIN and TPM always pass, regardless of membership", () => {
+  it("ADMIN, TPM, and PROGRAM_MANAGER always pass, regardless of membership", () => {
     expect(computeProjectAccess("ADMIN", null)).toBe(true);
     expect(computeProjectAccess("TPM", null)).toBe(true);
+    expect(computeProjectAccess("PROGRAM_MANAGER", null)).toBe(true);
   });
 
-  it("PROGRAM_MANAGER never passes — portfolio summary only, never project detail", () => {
-    expect(computeProjectAccess("PROGRAM_MANAGER", null)).toBe(false);
-    expect(computeProjectAccess("PROGRAM_MANAGER", membership("PM"))).toBe(false);
+  it("PROGRAM_MANAGER (Management) drills into every project read-only, same blanket rule as TPM", () => {
+    expect(computeProjectAccess("PROGRAM_MANAGER", null)).toBe(true);
+    expect(computeProjectAccess("PROGRAM_MANAGER", membership("PM"))).toBe(true);
   });
 
   it("PM / CLIENT / LIMITED require an explicit membership row", () => {
@@ -54,10 +64,13 @@ describe("computeModuleAccess — role x module matrix", () => {
     expect(computeModuleAccess("TPM", null, "BUDGET_TRACKER")).toBe("NONE");
   });
 
-  it("PROGRAM_MANAGER gets NONE on every module", () => {
+  it("PROGRAM_MANAGER gets READ_FULL on every module except Decision Log, Action Items, and Budget Tracker", () => {
+    const excluded: ModuleName[] = ["DECISION_LOG", "ACTION_ITEMS", "BUDGET_TRACKER"];
     for (const m of ALL_MODULES) {
-      expect(computeModuleAccess("PROGRAM_MANAGER", null, m)).toBe("NONE");
-      expect(computeModuleAccess("PROGRAM_MANAGER", membership("PM"), m)).toBe("NONE");
+      const expected = excluded.includes(m) ? "NONE" : "READ_FULL";
+      expect(computeModuleAccess("PROGRAM_MANAGER", null, m)).toBe(expected);
+      // Membership is irrelevant — same blanket rule regardless.
+      expect(computeModuleAccess("PROGRAM_MANAGER", membership("PM"), m)).toBe(expected);
     }
   });
 
@@ -125,6 +138,20 @@ describe("DEFAULT_CLIENT_PERMISSIONS", () => {
 
   it("covers every module exactly once", () => {
     const modules = DEFAULT_CLIENT_PERMISSIONS.map((p) => p.module).sort();
+    expect(modules).toEqual([...ALL_MODULES].sort());
+  });
+});
+
+describe("DEFAULT_LIMITED_PERMISSIONS", () => {
+  it("grants READ_LIMITED on every module except Budget Tracker (Admin-only regardless)", () => {
+    const byModule = Object.fromEntries(DEFAULT_LIMITED_PERMISSIONS.map((p) => [p.module, p.access]));
+    for (const m of ALL_MODULES) {
+      expect(byModule[m]).toBe(m === "BUDGET_TRACKER" ? "NONE" : "READ_LIMITED");
+    }
+  });
+
+  it("covers every module exactly once", () => {
+    const modules = DEFAULT_LIMITED_PERMISSIONS.map((p) => p.module).sort();
     expect(modules).toEqual([...ALL_MODULES].sort());
   });
 });

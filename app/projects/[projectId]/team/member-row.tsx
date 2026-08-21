@@ -5,6 +5,7 @@ import type { Role, ModuleName, AccessLevel } from "@prisma/client";
 import { RowActionsMenu } from "@/components/ui/row-actions-menu";
 import { avatarColorFromString, tagPillStyle } from "@/lib/colors";
 import { initials } from "@/lib/format";
+import { ROLE_LABELS } from "@/lib/constants";
 import { ACCESS_PRESETS } from "@/lib/rbac-core";
 import { removeProjectMember, setModulePermission, applyAccessPreset } from "./team-actions";
 
@@ -61,7 +62,7 @@ export function MemberRow({ projectId, membership, canEdit }: { projectId: strin
           className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap"
           style={{ backgroundColor: rolePill.bg, color: rolePill.text }}
         >
-          {membership.role}
+          {ROLE_LABELS[membership.role]}
         </span>
       </td>
       <td className="px-3 py-2">

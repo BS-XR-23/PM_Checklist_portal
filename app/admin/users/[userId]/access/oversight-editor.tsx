@@ -9,10 +9,12 @@ export function OversightEditor({
   programManagerId,
   overseen,
   assignableProjects,
+  canEdit,
 }: {
   programManagerId: string;
   overseen: OversightRow[];
   assignableProjects: { id: string; name: string }[];
+  canEdit: boolean;
 }) {
   const [pending, startTransition] = useTransition();
   const [selected, setSelected] = useState("");
@@ -35,29 +37,31 @@ export function OversightEditor({
           {overseen.map((row) => (
             <li key={row.id} className="flex items-center justify-between gap-2 rounded-md border border-slate-100 bg-slate-50 px-3 py-1.5">
               <span className="text-sm text-slate-700">{row.projectName}</span>
-              <button
-                type="button"
-                disabled={pending}
-                onClick={() =>
-                  startTransition(async () => {
-                    setError(null);
-                    try {
-                      await removeProgramOversight(row.id, programManagerId);
-                    } catch (err) {
-                      setError(err instanceof Error ? err.message : "Failed to remove.");
-                    }
-                  })
-                }
-                className="text-xs text-slate-400 hover:text-red-600 disabled:opacity-50"
-              >
-                Remove
-              </button>
+              {canEdit && (
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() =>
+                    startTransition(async () => {
+                      setError(null);
+                      try {
+                        await removeProgramOversight(row.id, programManagerId);
+                      } catch (err) {
+                        setError(err instanceof Error ? err.message : "Failed to remove.");
+                      }
+                    })
+                  }
+                  className="text-xs text-slate-400 hover:text-red-600 disabled:opacity-50"
+                >
+                  Remove
+                </button>
+              )}
             </li>
           ))}
         </ul>
       )}
 
-      {assignableProjects.length > 0 && (
+      {canEdit && assignableProjects.length > 0 && (
         <div className="flex items-center gap-2">
           <select
             value={selected}

@@ -21,8 +21,11 @@ export type MembershipLike = {
 
 /** Coarse gate: does this user get into the project's route tree at all? */
 export function computeProjectAccess(userRole: Role, membership: MembershipLike): boolean {
-  if (userRole === "ADMIN" || userRole === "TPM") return true;
-  if (userRole === "PROGRAM_MANAGER") return false; // portfolio summary only, never project detail
+  // ADMIN/TPM/PROGRAM_MANAGER all read every project regardless of
+  // membership — PROGRAM_MANAGER (Management) drills into projects
+  // read-only, same blanket rule as TPM, not scoped by ProgramOversight
+  // (that table is organizational bookkeeping only, never consulted here).
+  if (userRole === "ADMIN" || userRole === "TPM" || userRole === "PROGRAM_MANAGER") return true;
   // PM / CLIENT / LIMITED: only via an explicit membership row
   return membership != null;
 }
@@ -35,7 +38,10 @@ export function computeModuleAccess(userRole: Role, membership: MembershipLike, 
   // can ever grant it, regardless of membership or per-user overrides.
   if (module === "BUDGET_TRACKER") return "NONE";
   if (userRole === "TPM") return "READ_FULL"; // never WRITE through the normal path — see performTpmOverride
-  if (userRole === "PROGRAM_MANAGER") return "NONE"; // no per-project module access; they use /portfolio
+  // PROGRAM_MANAGER (Management): read-only drill-down into every project's
+  // delivery modules, except Decision Log/Action Items — those stay off
+  // limits, same exclusion as Escalations/Activity (hardcoded elsewhere).
+  if (userRole === "PROGRAM_MANAGER") return module === "DECISION_LOG" || module === "ACTION_ITEMS" ? "NONE" : "READ_FULL";
 
   if (!membership) return "NONE";
   if (membership.role === "PM") return "WRITE";
@@ -73,6 +79,18 @@ export const ALL_MODULES: ModuleName[] = [
   "ACTION_ITEMS",
   "DELIVERY",
 ];
+
+/**
+ * Default permission set seeded for a newly-created LIMITED (Guest)
+ * membership — READ_LIMITED across every real per-module grid slot,
+ * BUDGET_TRACKER excluded since it's forced NONE for everyone but Admin
+ * regardless of what's stored. Unlike CLIENT (locked down by default),
+ * Guest starts with baseline visibility and is narrowed from there.
+ */
+export const DEFAULT_LIMITED_PERMISSIONS: { module: ModuleName; access: AccessLevel }[] = ALL_MODULES.map((module) => ({
+  module,
+  access: module === "BUDGET_TRACKER" ? "NONE" : "READ_LIMITED",
+}));
 
 export type AccessPreset = {
   key: string;

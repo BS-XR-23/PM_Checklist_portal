@@ -31,7 +31,7 @@ export default async function ResourcingPage({
 
   if (!canViewResourcing(user.role)) redirect(`/projects/${params.projectId}/dashboard`);
 
-  const canSeeTeamTab = user.role === "ADMIN" || user.role === "TPM" || user.role === "PM";
+  const canSeeTeamTab = user.role === "ADMIN" || user.role === "TPM" || user.role === "PROGRAM_MANAGER" || user.role === "PM";
   const subNavOptions = [
     ...(canSeeTeamTab ? [{ href: "/team", label: "Access" }] : []),
     { href: "/resourcing", label: "Engagement" },

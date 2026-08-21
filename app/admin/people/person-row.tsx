@@ -28,10 +28,12 @@ export function PersonRow({
   person,
   roleRates,
   competencies,
+  canEdit,
 }: {
   person: PersonRowData;
   roleRates: { id: string; roleName: string }[];
   competencies: { id: string; level: string }[];
+  canEdit: boolean;
 }) {
   const [pending, startTransition] = useTransition();
   const [editing, setEditing] = useState(false);
@@ -158,14 +160,16 @@ export function PersonRow({
           <span className="text-slate-400">No current engagement</span>
         )}
       </td>
-      <td className="px-4 py-3.5">
-        <PersonActionsMenu
-          editing={editing}
-          onToggleEdit={() => setEditing((v) => !v)}
-          onDelete={() => startTransition(() => deletePerson(person.id))}
-          deletePending={pending}
-        />
-      </td>
+      {canEdit && (
+        <td className="px-4 py-3.5">
+          <PersonActionsMenu
+            editing={editing}
+            onToggleEdit={() => setEditing((v) => !v)}
+            onDelete={() => startTransition(() => deletePerson(person.id))}
+            deletePending={pending}
+          />
+        </td>
+      )}
     </tr>
   );
 }

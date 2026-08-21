@@ -7,6 +7,7 @@ import { computeModuleAccess, ALL_MODULES } from "@/lib/rbac-core";
 import { AppShell } from "@/components/layout/app-shell";
 import { avatarColorFromString, tagPillStyle } from "@/lib/colors";
 import { initials } from "@/lib/format";
+import { ROLE_LABELS } from "@/lib/constants";
 import { OversightEditor } from "./oversight-editor";
 
 export const dynamic = "force-dynamic";
@@ -37,7 +38,10 @@ function AccessPill({ level }: { level: AccessLevel }) {
 
 export default async function UserAccessPage({ params }: { params: { userId: string } }) {
   const currentUser = await requireUser();
-  if (currentUser.role !== "ADMIN") redirect("/projects");
+  // Super Admin edits; Admin (TPM) and PM can view read-only — Management
+  // (PROGRAM_MANAGER) gets no access to this admin screen at all.
+  if (currentUser.role !== "ADMIN" && currentUser.role !== "TPM" && currentUser.role !== "PM") redirect("/projects");
+  const canEdit = currentUser.role === "ADMIN";
 
   const targetUser = await prisma.user.findUnique({
     where: { id: params.userId },
@@ -68,9 +72,9 @@ export default async function UserAccessPage({ params }: { params: { userId: str
     targetUser.role === "ADMIN"
       ? "Full write access on every project and every module — the only role that can manage Users, People, Checklist Templates, and the global Audit Log."
       : targetUser.role === "TPM"
-        ? "Read-only on every project's delivery modules (Budget Tracker excluded), for every project — no membership row needed. Write access is limited to their own Escalations tab, plus the audited Override control on checklist items."
+        ? "Read-only on every project's delivery modules (Budget Tracker excluded), for every project — no membership row needed. Also read-only on Users and People (rates hidden). Write access is limited to their own Escalations tab, plus the audited Override control on checklist items."
         : targetUser.role === "PROGRAM_MANAGER"
-          ? "No individual project access at all — confined to the aggregate Portfolio page and a read-only view of Presales."
+          ? "Read-only drill-down into every project's delivery modules, except Decision Log and Action Items (off limits, same as Escalations/Activity/Budget Tracker) — no membership row needed. Also read-only on People (rates hidden), but no access to Users at all."
           : null;
 
   return (
@@ -94,7 +98,7 @@ export default async function UserAccessPage({ params }: { params: { userId: str
             className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium"
             style={{ backgroundColor: rolePill.bg, color: rolePill.text }}
           >
-            {targetUser.role.replace("_", " ")}
+            {ROLE_LABELS[targetUser.role]}
           </span>
           {!targetUser.isActive && (
             <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-500">
@@ -114,6 +118,7 @@ export default async function UserAccessPage({ params }: { params: { userId: str
                 programManagerId={targetUser.id}
                 overseen={oversightRows.map((r) => ({ id: r.id, projectId: r.projectId, projectName: r.project.name }))}
                 assignableProjects={assignableProjects.map((p) => ({ id: p.id, name: p.name }))}
+                canEdit={canEdit}
               />
             )}
           </div>
@@ -137,7 +142,7 @@ export default async function UserAccessPage({ params }: { params: { userId: str
                       <Link href={`/projects/${m.projectId}/dashboard`} className="font-medium text-slate-800 hover:underline">
                         {m.project.name}
                       </Link>
-                      <span className="text-xs text-slate-400">({m.role.replace("_", " ")} on this project)</span>
+                      <span className="text-xs text-slate-400">({ROLE_LABELS[m.role]} on this project)</span>
                     </div>
                     {m.role === "PM" ? (
                       <p className="text-xs text-slate-500">Full write on all modules.</p>

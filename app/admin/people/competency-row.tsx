@@ -6,27 +6,33 @@ import { updateCompetency, deleteCompetency } from "./competency-actions";
 
 export type CompetencyRowData = { id: string; level: string; multiplier: number };
 
-export function CompetencyRow({ competency }: { competency: CompetencyRowData }) {
+export function CompetencyRow({ competency, canEdit }: { competency: CompetencyRowData; canEdit: boolean }) {
   const [pending, startTransition] = useTransition();
 
   return (
     <tr className="border-b border-slate-50 last:border-0 align-top">
       <td className="px-3 py-2">
-        <InlineText value={competency.level} onSave={(v) => updateCompetency(competency.id, { level: v })} />
+        {canEdit ? <InlineText value={competency.level} onSave={(v) => updateCompetency(competency.id, { level: v })} /> : competency.level}
       </td>
       <td className="px-3 py-2">
-        <InlineNumber value={competency.multiplier} step={0.1} onSave={(v) => updateCompetency(competency.id, { multiplier: v ?? 1 })} />
+        {canEdit ? (
+          <InlineNumber value={competency.multiplier} step={0.1} onSave={(v) => updateCompetency(competency.id, { multiplier: v ?? 1 })} />
+        ) : (
+          <span className="text-slate-300">Hidden</span>
+        )}
       </td>
-      <td className="px-3 py-2">
-        <button
-          onClick={() => startTransition(() => deleteCompetency(competency.id))}
-          disabled={pending}
-          title="Delete competency"
-          className="text-slate-300 hover:text-red-600 disabled:opacity-50"
-        >
-          ✕
-        </button>
-      </td>
+      {canEdit && (
+        <td className="px-3 py-2">
+          <button
+            onClick={() => startTransition(() => deleteCompetency(competency.id))}
+            disabled={pending}
+            title="Delete competency"
+            className="text-slate-300 hover:text-red-600 disabled:opacity-50"
+          >
+            ✕
+          </button>
+        </td>
+      )}
     </tr>
   );
 }

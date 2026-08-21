@@ -20,10 +20,12 @@ export function UsersPageClient({
   groups,
   currentUserId,
   sidebar,
+  canEdit,
 }: {
   groups: RoleGroupData[];
   currentUserId: string;
   sidebar: ReactNode;
+  canEdit: boolean;
 }) {
   const [search, setSearch] = useState("");
 
@@ -51,13 +53,13 @@ export function UsersPageClient({
               className="w-72 rounded-lg border border-slate-300 pl-8 pr-3.5 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
             />
           </div>
-          <ImportUsersButton />
+          {canEdit && <ImportUsersButton />}
         </div>
       </header>
       <main className="p-4 sm:p-6">
         <div className="grid grid-cols-1 xl:grid-cols-[1fr_280px] gap-6 items-start">
           <div className="space-y-4 min-w-0">
-            <CreateUserForm />
+            {canEdit && <CreateUserForm />}
             <div className="space-y-4">
               {!anyResults && (
                 <p className="text-sm text-slate-400 rounded-xl border border-slate-200 bg-white p-4">
@@ -65,7 +67,7 @@ export function UsersPageClient({
                 </p>
               )}
               {filteredGroups.map((g) => (
-                <RoleGroupSection key={g.key} group={g} currentUserId={currentUserId} />
+                <RoleGroupSection key={g.key} group={g} currentUserId={currentUserId} canEdit={canEdit} />
               ))}
             </div>
           </div>
@@ -73,10 +75,12 @@ export function UsersPageClient({
           <div className="space-y-4">{sidebar}</div>
         </div>
 
-        <p className="text-xs text-slate-400 mt-4">
-          Assigning a user to a specific project (PM / CLIENT / LIMITED) happens on that project&apos;s Team tab, not
-          here — role here is the global role only.
-        </p>
+        {canEdit && (
+          <p className="text-xs text-slate-400 mt-4">
+            Assigning a user to a specific project (PM / CLIENT / LIMITED) happens on that project&apos;s Team tab,
+            not here — role here is the global role only.
+          </p>
+        )}
       </main>
     </>
   );

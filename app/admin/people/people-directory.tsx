@@ -39,6 +39,7 @@ export function PeopleDirectory({
   roleRates,
   competencies,
   sidebarBottom,
+  canEdit,
 }: {
   statCards: ReactNode;
   addPersonForm: ReactNode;
@@ -46,6 +47,7 @@ export function PeopleDirectory({
   roleRates: { id: string; roleName: string }[];
   competencies: { id: string; level: string }[];
   sidebarBottom: ReactNode;
+  canEdit: boolean;
 }) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<EngagementFilter>("all");
@@ -105,12 +107,12 @@ export function PeopleDirectory({
                   <th className="px-4 py-3 w-36">Rate Role</th>
                   <th className="px-4 py-3 w-36">Competency</th>
                   <th className="px-4 py-3 min-w-[200px]">Engagement</th>
-                  <th className="px-4 py-3 w-12" />
+                  {canEdit && <th className="px-4 py-3 w-12" />}
                 </tr>
               </thead>
               <tbody>
                 {pageRows.map((p) => (
-                  <PersonRow key={p.id} person={p} roleRates={roleRates} competencies={competencies} />
+                  <PersonRow key={p.id} person={p} roleRates={roleRates} competencies={competencies} canEdit={canEdit} />
                 ))}
               </tbody>
             </table>
