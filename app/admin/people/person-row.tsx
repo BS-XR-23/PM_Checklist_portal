@@ -28,10 +28,12 @@ export function PersonRow({
   person,
   roleRates,
   competencies,
+  canEdit,
 }: {
   person: PersonRowData;
   roleRates: { id: string; roleName: string }[];
   competencies: { id: string; level: string }[];
+  canEdit: boolean;
 }) {
   const [pending, startTransition] = useTransition();
   const [editing, setEditing] = useState(false);
@@ -95,7 +97,12 @@ export function PersonRow({
         ) : linkedUser ? (
           <span className="text-slate-700">{linkedUser.name}</span>
         ) : (
-          <span className="text-slate-300">— None —</span>
+          <span
+            className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700"
+            title="No linked portal account — this person can't see their own My Engagement page."
+          >
+            Not linked
+          </span>
         )}
       </td>
       <td className="px-4 py-3.5">
@@ -153,14 +160,16 @@ export function PersonRow({
           <span className="text-slate-400">No current engagement</span>
         )}
       </td>
-      <td className="px-4 py-3.5">
-        <PersonActionsMenu
-          editing={editing}
-          onToggleEdit={() => setEditing((v) => !v)}
-          onDelete={() => startTransition(() => deletePerson(person.id))}
-          deletePending={pending}
-        />
-      </td>
+      {canEdit && (
+        <td className="px-4 py-3.5">
+          <PersonActionsMenu
+            editing={editing}
+            onToggleEdit={() => setEditing((v) => !v)}
+            onDelete={() => startTransition(() => deletePerson(person.id))}
+            deletePending={pending}
+          />
+        </td>
+      )}
     </tr>
   );
 }

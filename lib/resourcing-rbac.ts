@@ -6,12 +6,17 @@ import type { Role } from "@prisma/client";
 
 /** Can this role see the Person registry / any project's engagement roster at all? */
 export function canViewResourcing(role: Role): boolean {
-  return role === "ADMIN" || role === "TPM" || role === "PM";
+  return role === "ADMIN" || role === "TPM" || role === "PROGRAM_MANAGER" || role === "PM";
 }
 
-/** Admin owns the canonical Person registry (name/title/contact/linked account). */
+/** Admin owns the canonical Person registry (name/title/contact/linked account, rates, competencies). */
 export function canManagePersonRegistry(role: Role): boolean {
   return role === "ADMIN";
+}
+
+/** Read-only access to the People registry (rate/competency numbers hidden) — a wider circle than who can edit it. */
+export function canViewPersonRegistry(role: Role): boolean {
+  return role === "ADMIN" || role === "TPM" || role === "PROGRAM_MANAGER" || role === "PM";
 }
 
 /** Admin anywhere; PM can assign EXISTING people to their own project only (checked by membership at the call site). */

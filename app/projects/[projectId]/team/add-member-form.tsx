@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import type { Role } from "@prisma/client";
+import { ROLE_LABELS } from "@/lib/constants";
 import { addProjectMember } from "./team-actions";
 
 const ASSIGNABLE_ROLES: Role[] = ["PM", "CLIENT", "LIMITED"];
@@ -44,7 +45,7 @@ export function AddMemberForm({ projectId }: { projectId: string }) {
         <select value={role} onChange={(e) => setRole(e.target.value as Role)} className="rounded-md border border-slate-300 px-3 py-2 text-sm">
           {ASSIGNABLE_ROLES.map((r) => (
             <option key={r} value={r}>
-              {r}
+              {ROLE_LABELS[r]}
             </option>
           ))}
         </select>
@@ -54,8 +55,9 @@ export function AddMemberForm({ projectId }: { projectId: string }) {
       </button>
       {error && <p className="w-full text-xs text-red-600">{error}</p>}
       <p className="w-full text-xs text-slate-400">
-        The user must already exist (Admin &gt; Users) — this only assigns them to this project. CLIENT gets a
-        locked-down default view immediately; LIMITED starts with no access until configured below.
+        The user must already exist (Admin &gt; Users) — this only assigns them to this project. Client gets a
+        locked-down default view immediately; Guest starts at Read Limited across the board — both are adjustable
+        below.
       </p>
     </form>
   );

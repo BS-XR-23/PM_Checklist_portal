@@ -7,11 +7,20 @@ import { SignOutLink } from "@/components/ui/sign-out-link";
 import { ChangePasswordModal } from "@/components/ui/change-password-modal";
 import { IconGrid, IconChart, IconUser, IconUsers, IconIdCard, IconClipboardList, IconLayers, IconBell, IconTarget } from "./icons";
 import { initials } from "@/lib/format";
+import { ROLE_LABELS } from "@/lib/constants";
 import type { Role } from "@prisma/client";
 
 type NavItem = { href: string; label: string; icon: (props: React.SVGProps<SVGSVGElement>) => React.ReactElement; badge?: number };
 
-export function Sidebar({ user, reminderCount = 0 }: { user: { name: string; role: Role }; reminderCount?: number }) {
+export function Sidebar({
+  user,
+  reminderCount = 0,
+  hasLinkedPerson = false,
+}: {
+  user: { name: string; role: Role };
+  reminderCount?: number;
+  hasLinkedPerson?: boolean;
+}) {
   const pathname = usePathname();
 
   const primaryItems: NavItem[] = [{ href: "/projects", label: "Projects", icon: IconGrid }];
@@ -29,19 +38,31 @@ export function Sidebar({ user, reminderCount = 0 }: { user: { name: string; rol
   if (user.role === "ADMIN" || user.role === "TPM" || user.role === "PM") {
     primaryItems.push({ href: "/notifications", label: "Reminders", icon: IconBell, badge: reminderCount });
   }
-  if (user.role === "LIMITED") {
+  // LIMITED always sees this (even unlinked, so the page can tell them to
+  // ask an Admin) — every other role only once their account actually has
+  // something to show, since the page itself has no role restriction.
+  // PROGRAM_MANAGER is excluded even when linked — the page itself
+  // redirects them away, so showing the link here would just bounce.
+  if ((user.role === "LIMITED" || hasLinkedPerson) && user.role !== "PROGRAM_MANAGER") {
     primaryItems.push({ href: "/my-engagement", label: "My Engagement", icon: IconUser });
   }
 
-  const adminItems: NavItem[] =
-    user.role === "ADMIN"
-      ? [
-          { href: "/admin/users", label: "Users", icon: IconUsers },
-          { href: "/admin/people", label: "People", icon: IconIdCard },
-          { href: "/admin/checklist-template", label: "Checklist Template", icon: IconLayers },
-          { href: "/admin/audit-log", label: "Audit Log", icon: IconClipboardList },
-        ]
-      : [];
+  // ADMIN (Super Admin) sees the full toolset; TPM (Admin) and PM see Users
+  // + People read-only; PROGRAM_MANAGER (Management) sees People read-only
+  // only, never Users — matches the page-level guards on each route exactly.
+  const adminItems: NavItem[] = [];
+  if (user.role === "ADMIN" || user.role === "TPM" || user.role === "PM") {
+    adminItems.push({ href: "/admin/users", label: "Users", icon: IconUsers });
+  }
+  if (user.role === "ADMIN" || user.role === "TPM" || user.role === "PROGRAM_MANAGER" || user.role === "PM") {
+    adminItems.push({ href: "/admin/people", label: "People", icon: IconIdCard });
+  }
+  if (user.role === "ADMIN") {
+    adminItems.push(
+      { href: "/admin/checklist-template", label: "Checklist Template", icon: IconLayers },
+      { href: "/admin/audit-log", label: "Audit Log", icon: IconClipboardList }
+    );
+  }
 
   return (
     <aside className="w-60 shrink-0 h-screen sticky top-0 flex flex-col border-r border-slate-200 bg-white">
@@ -59,7 +80,9 @@ export function Sidebar({ user, reminderCount = 0 }: { user: { name: string; rol
         <NavGroup items={primaryItems} pathname={pathname} />
         {adminItems.length > 0 && (
           <div>
-            <p className="px-2 mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Admin</p>
+            <p className="px-2 mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+              {user.role === "ADMIN" ? "Admin" : "Directory"}
+            </p>
             <NavGroup items={adminItems} pathname={pathname} />
           </div>
         )}
@@ -72,7 +95,7 @@ export function Sidebar({ user, reminderCount = 0 }: { user: { name: string; rol
           </span>
           <div className="min-w-0">
             <p className="text-sm font-medium text-slate-800 truncate">{user.name}</p>
-            <p className="text-xs text-slate-400">{user.role.replace("_", " ")}</p>
+            <p className="text-xs text-slate-400">{ROLE_LABELS[user.role]}</p>
           </div>
         </div>
         <div className="flex items-center gap-3 pl-0.5">

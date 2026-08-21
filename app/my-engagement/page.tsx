@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/rbac";
 import { computePersonLoad, intensityForMonth, type EngagementLike } from "@/lib/overload";
@@ -8,6 +9,9 @@ export const dynamic = "force-dynamic";
 
 export default async function MyEngagementPage() {
   const user = await requireUser();
+  // Management (Program Manager) is deliberately excluded — a portfolio-wide
+  // read role, not meant to be chasing its own personal staffing here.
+  if (user.role === "PROGRAM_MANAGER") redirect("/projects");
   const currentMonth = startOfMonthUTC(new Date());
 
   // Resolved by linked Person, not ProjectMembership — a resourcing-only

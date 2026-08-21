@@ -11,8 +11,8 @@ export default async function TeamPage({ params }: { params: { projectId: string
   const user = await requireUser();
   await requireProjectAccess(params.projectId);
 
-  // Admin edits; TPM and the project's own PM can see who has access.
-  if (user.role !== "ADMIN" && user.role !== "TPM" && user.role !== "PM") {
+  // Admin edits; TPM, Program Manager, and the project's own PM can see who has access.
+  if (user.role !== "ADMIN" && user.role !== "TPM" && user.role !== "PROGRAM_MANAGER" && user.role !== "PM") {
     throw new Error("Not authorized to view the project team.");
   }
   const canEdit = user.role === "ADMIN";

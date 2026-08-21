@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import type { Role } from "@prisma/client";
 import type { ReactNode } from "react";
@@ -28,7 +29,15 @@ export type RoleGroupData = {
   users: UserRow[];
 };
 
-export function RoleGroupSection({ group, currentUserId }: { group: RoleGroupData; currentUserId: string }) {
+export function RoleGroupSection({
+  group,
+  currentUserId,
+  canEdit,
+}: {
+  group: RoleGroupData;
+  currentUserId: string;
+  canEdit: boolean;
+}) {
   const [collapsed, setCollapsed] = useState(false);
   if (group.users.length === 0) return null;
 
@@ -75,7 +84,7 @@ export function RoleGroupSection({ group, currentUserId }: { group: RoleGroupDat
                           {initials(u.name)}
                         </span>
                         <div className="min-w-0 flex-1 font-medium text-slate-800">
-                          <UserProfileField userId={u.id} field="name" value={u.name} />
+                          {canEdit ? <UserProfileField userId={u.id} field="name" value={u.name} /> : u.name}
                         </div>
                         {isSelf && (
                           <span className="shrink-0 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
@@ -85,7 +94,7 @@ export function RoleGroupSection({ group, currentUserId }: { group: RoleGroupDat
                       </div>
                     </td>
                     <td className="px-4 py-3.5 text-slate-500">
-                      <UserProfileField userId={u.id} field="email" value={u.email} />
+                      {canEdit ? <UserProfileField userId={u.id} field="email" value={u.email} /> : u.email}
                     </td>
                     <td className="px-4 py-3.5">
                       {u.personName ? (
@@ -93,17 +102,26 @@ export function RoleGroupSection({ group, currentUserId }: { group: RoleGroupDat
                           {u.personName}
                         </span>
                       ) : (
-                        <span className="text-slate-300">—</span>
+                        <span
+                          className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700"
+                          title="No linked Person record — can't be picked as an Owner (Checklist/Risk/Action items) or staffed on a project."
+                        >
+                          Not linked
+                        </span>
                       )}
                     </td>
-                    <td className="px-4 py-3.5">
-                      <ResetPasswordButton userId={u.id} />
-                    </td>
+                    <td className="px-4 py-3.5">{canEdit ? <ResetPasswordButton userId={u.id} /> : <span className="text-slate-300">—</span>}</td>
                     <td className="px-4 py-3.5">
                       <UserActiveToggle isActive={u.isActive} />
                     </td>
                     <td className="px-4 py-3.5">
-                      <UserActionsMenu userId={u.id} currentRole={u.role} isActive={u.isActive} isSelf={isSelf} />
+                      {canEdit ? (
+                        <UserActionsMenu userId={u.id} currentRole={u.role} isActive={u.isActive} isSelf={isSelf} />
+                      ) : (
+                        <Link href={`/admin/users/${u.id}/access`} className="text-xs font-medium text-blue-600 hover:text-blue-800 hover:underline">
+                          View access
+                        </Link>
+                      )}
                     </td>
                   </tr>
                 );

@@ -1,11 +1,28 @@
 "use server";
 
+import * as XLSX from "xlsx";
 import bcrypt from "bcryptjs";
 import { randomBytes } from "crypto";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUser, writeAudit } from "@/lib/rbac";
+import { isCurrentlyActive } from "@/lib/overload";
+import { ROLE_LABELS } from "@/lib/constants";
 import type { Role } from "@prisma/client";
+
+const ALL_ROLES: Role[] = ["ADMIN", "TPM", "PROGRAM_MANAGER", "CLIENT", "PM", "LIMITED"];
+
+// Accepts either the raw enum name ("PROGRAM_MANAGER", "Program Manager")
+// or the current display label ("Management") — a CSV author reasonably
+// might type either, and silently defaulting an unrecognized-but-plausible
+// value to Guest would be confusing. Raw enum text is spread LAST so it
+// always wins a collision — TPM's label is literally "Admin", which would
+// otherwise shadow the real ADMIN enum name and silently downgrade anyone
+// who typed "Admin" expecting Super Admin.
+const ROLE_TEXT_LOOKUP = new Map<string, Role>([
+  ...ALL_ROLES.map((r) => [ROLE_LABELS[r].toUpperCase().replace(/[\s-]+/g, "_"), r] as const),
+  ...ALL_ROLES.map((r) => [r, r] as const),
+]);
 
 async function requireAdmin() {
   const user = await requireUser();
@@ -28,6 +45,93 @@ export async function createUser(email: string, name: string, role: Role): Promi
 
   revalidatePath("/admin/users");
   return { tempPassword };
+}
+
+type ImportUserRow = { name: string; email: string; role: string };
+
+const USER_IMPORT_HEADER_ALIASES: Record<string, keyof ImportUserRow> = {
+  name: "name",
+  "full name": "name",
+  email: "email",
+  "email address": "email",
+  role: "role",
+  "user role": "role",
+};
+
+function parseUserImportRows(buffer: ArrayBuffer): ImportUserRow[] {
+  const workbook = XLSX.read(buffer, { type: "array" });
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  const raw: Record<string, unknown>[] = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+
+  return raw
+    .map((rawRow) => {
+      const row: Partial<ImportUserRow> = {};
+      for (const [key, value] of Object.entries(rawRow)) {
+        const field = USER_IMPORT_HEADER_ALIASES[key.trim().toLowerCase()];
+        if (field) row[field] = String(value).trim();
+      }
+      return { name: row.name ?? "", email: row.email ?? "", role: row.role ?? "" };
+    })
+    .filter((r) => r.name !== "" && r.email !== "");
+}
+
+/**
+ * CSV/XLSX bulk import, same shape as People's importPeopleCsv. Unlike
+ * People, every row here mints a real login (temp password + role), so this
+ * only ever creates — never updates an existing email — and the caller must
+ * be shown every generated temp password once, since (like createUser) it's
+ * never retrievable again afterward.
+ */
+export async function importUsersCsv(formData: FormData): Promise<{
+  created: { email: string; tempPassword: string }[];
+  skippedDuplicateCount: number;
+  unmatchedRoleCount: number;
+}> {
+  const admin = await requireAdmin();
+
+  const file = formData.get("file");
+  if (!(file instanceof Blob)) throw new Error("No file uploaded.");
+  const buffer = await file.arrayBuffer();
+  const rows = parseUserImportRows(buffer);
+  if (rows.length === 0) throw new Error("No rows found — check the file has Name and Email columns.");
+
+  const existingUsers = await prisma.user.findMany({ select: { email: true } });
+  const existingEmails = new Set(existingUsers.map((u) => u.email.toLowerCase()));
+  const seenEmailsInBatch = new Set<string>();
+
+  const created: { email: string; tempPassword: string }[] = [];
+  let skippedDuplicateCount = 0;
+  let unmatchedRoleCount = 0;
+
+  for (const row of rows) {
+    const email = row.email.toLowerCase();
+    if (existingEmails.has(email) || seenEmailsInBatch.has(email)) {
+      skippedDuplicateCount++;
+      continue;
+    }
+    seenEmailsInBatch.add(email);
+
+    const matchedRole = ROLE_TEXT_LOOKUP.get(row.role.toUpperCase().replace(/[\s-]+/g, "_"));
+    if (row.role && !matchedRole) unmatchedRoleCount++;
+    const role: Role = matchedRole ?? "LIMITED";
+
+    const tempPassword = randomBytes(9).toString("base64url");
+    const passwordHash = await bcrypt.hash(tempPassword, 10);
+    await prisma.user.create({ data: { email, name: row.name, passwordHash, role } });
+    created.push({ email, tempPassword });
+  }
+
+  if (created.length > 0) {
+    await writeAudit({
+      actor: admin,
+      action: "create",
+      entityType: "User",
+      entityId: "bulk-import",
+      summary: `Imported ${created.length} users from a file`,
+    });
+  }
+  revalidatePath("/admin/users");
+  return { created, skippedDuplicateCount, unmatchedRoleCount };
 }
 
 export async function changePassword(currentPassword: string, newPassword: string) {
@@ -114,6 +218,46 @@ export async function setUserActive(userId: string, isActive: boolean) {
   });
 
   revalidatePath("/admin/users");
+}
+
+/**
+ * Read-only preview for the "Deactivate account" confirmation — deactivating
+ * only flips isActive (blocks login immediately), it never touches project
+ * memberships, staffing engagements, or item ownership. This just surfaces
+ * what will be silently left behind so an Admin can go clean it up manually
+ * instead of finding out later.
+ */
+export async function getDeactivationImpact(userId: string): Promise<{
+  membershipCount: number;
+  personLinked: boolean;
+  activeEngagementCount: number;
+  openOwnedItemCount: number;
+}> {
+  await requireAdmin();
+
+  const [membershipCount, person] = await Promise.all([
+    prisma.projectMembership.count({ where: { userId } }),
+    prisma.person.findUnique({ where: { userId }, include: { engagements: true } }),
+  ]);
+
+  if (!person) {
+    return { membershipCount, personLinked: false, activeEngagementCount: 0, openOwnedItemCount: 0 };
+  }
+
+  const activeEngagementCount = person.engagements.filter((e) => isCurrentlyActive(e)).length;
+
+  const [openChecklistCount, openRiskCount, openActionCount] = await Promise.all([
+    prisma.checklistItem.count({ where: { ownerPersonId: person.id, status: { notIn: ["COMPLETED", "NOT_APPLICABLE"] } } }),
+    prisma.riskItem.count({ where: { ownerPersonId: person.id, status: { notIn: ["Closed", "Mitigated"] } } }),
+    prisma.actionItem.count({ where: { ownerPersonId: person.id, status: "Open" } }),
+  ]);
+
+  return {
+    membershipCount,
+    personLinked: true,
+    activeEngagementCount,
+    openOwnedItemCount: openChecklistCount + openRiskCount + openActionCount,
+  };
 }
 
 export async function updateUserRole(userId: string, role: Role) {

@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import type { Role } from "@prisma/client";
 import { IconUser } from "@/components/layout/icons";
+import { ROLE_LABELS } from "@/lib/constants";
 import { createUser } from "./user-actions";
 
 const ALL_ROLES: Role[] = ["ADMIN", "TPM", "PROGRAM_MANAGER", "CLIENT", "PM", "LIMITED"];
@@ -70,7 +71,7 @@ export function CreateUserForm() {
           <select value={role} onChange={(e) => setRole(e.target.value as Role)} className="rounded-md border border-slate-300 px-3 py-2 text-sm">
             {ALL_ROLES.map((r) => (
               <option key={r} value={r}>
-                {r.replace("_", " ")}
+                {ROLE_LABELS[r]}
               </option>
             ))}
           </select>
