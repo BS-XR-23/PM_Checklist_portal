@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { formatDate, toDateInputValue } from "@/lib/format";
 import { competencyCpi } from "@/lib/calculations";
-import { INDEX_FAVORABLE_COLOR, INDEX_UNFAVORABLE_COLOR, STATUS_COLORS, avatarColorFromString } from "@/lib/colors";
+import { INDEX_BAND_COLORS, indexBand, STATUS_COLORS, avatarColorFromString } from "@/lib/colors";
 import { initials } from "@/lib/format";
 import { InlinePercent, InlineNumber, InlineText, InlineDate } from "@/components/ui/inline-edit";
 import { StatTile } from "@/components/ui/stat-tile";
@@ -28,12 +28,11 @@ import type { RosterPerson } from "./delivery-tasks-table";
 // bar. The modal's own SPI/CPI figures use StatTile's valueColor instead.
 function IndexValue({ value }: { value: number | null }) {
   if (value == null) return <span className="text-slate-300">—</span>;
-  const favorable = value >= 1;
-  const color = favorable ? INDEX_FAVORABLE_COLOR : INDEX_UNFAVORABLE_COLOR;
+  const band = INDEX_BAND_COLORS[indexBand(value)];
   return (
     <span
       className="inline-flex items-center rounded-full px-2 py-0.5 text-sm font-semibold"
-      style={{ backgroundColor: favorable ? "#E6F4EC" : "#FBE9E9", color }}
+      style={{ backgroundColor: band.bg, color: band.text }}
     >
       {value.toFixed(2)}
     </span>
@@ -415,14 +414,14 @@ export function SprintSummaryRow({
                 iconWrapClass="bg-violet-50 text-violet-600"
                 label="SPI"
                 value={spi == null ? "—" : spi.toFixed(2)}
-                valueColor={spi == null ? undefined : spi >= 1 ? INDEX_FAVORABLE_COLOR : INDEX_UNFAVORABLE_COLOR}
+                valueColor={spi == null ? undefined : INDEX_BAND_COLORS[indexBand(spi)].text}
               />
               <StatTile
                 icon={<IconChart />}
                 iconWrapClass="bg-indigo-50 text-indigo-600"
                 label="CPI"
                 value={cpi == null ? "—" : cpi.toFixed(2)}
-                valueColor={cpi == null ? undefined : cpi >= 1 ? INDEX_FAVORABLE_COLOR : INDEX_UNFAVORABLE_COLOR}
+                valueColor={cpi == null ? undefined : INDEX_BAND_COLORS[indexBand(cpi)].text}
               />
             </div>
 

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { getDashboardData } from "@/lib/dashboard-data";
 import { formatPct, formatMoney, formatDate } from "@/lib/format";
-import { STATUS_COLORS, RISK_SEVERITY_COLORS, INDEX_FAVORABLE_COLOR, INDEX_UNFAVORABLE_COLOR } from "@/lib/colors";
+import { STATUS_COLORS, RISK_SEVERITY_COLORS, INDEX_BAND_COLORS, indexBand } from "@/lib/colors";
 import { requireModuleAccess, getModuleAccess } from "@/lib/rbac";
 import { StatTile } from "@/components/ui/stat-tile";
 import { SectionHeader } from "@/components/ui/section-header";
@@ -167,11 +167,11 @@ export default async function DashboardPage({ params }: { params: { projectId: s
             iconWrapClass="bg-blue-50 text-blue-600"
             label="Latest SPI"
             value={financial.latestSpi != null ? financial.latestSpi.toFixed(2) : "—"}
-            valueColor={financial.latestSpi != null ? (financial.latestSpi >= 1 ? INDEX_FAVORABLE_COLOR : INDEX_UNFAVORABLE_COLOR) : undefined}
+            valueColor={financial.latestSpi != null ? INDEX_BAND_COLORS[indexBand(financial.latestSpi)].text : undefined}
             subtitle={
               <SpiSparkline
                 values={financial.spiHistory}
-                color={financial.latestSpi != null && financial.latestSpi >= 1 ? INDEX_FAVORABLE_COLOR : INDEX_UNFAVORABLE_COLOR}
+                color={financial.latestSpi != null ? INDEX_BAND_COLORS[indexBand(financial.latestSpi)].text : INDEX_BAND_COLORS.unfavorable.text}
               />
             }
           />
@@ -180,7 +180,7 @@ export default async function DashboardPage({ params }: { params: { projectId: s
             iconWrapClass="bg-violet-50 text-violet-600"
             label="Latest CPI"
             value={financial.latestCpi != null ? financial.latestCpi.toFixed(2) : "—"}
-            valueColor={financial.latestCpi != null ? (financial.latestCpi >= 1 ? INDEX_FAVORABLE_COLOR : INDEX_UNFAVORABLE_COLOR) : undefined}
+            valueColor={financial.latestCpi != null ? INDEX_BAND_COLORS[indexBand(financial.latestCpi)].text : undefined}
             subtitle={financial.latestCpi == null ? "No data" : undefined}
           />
           <StatTile
@@ -188,7 +188,7 @@ export default async function DashboardPage({ params }: { params: { projectId: s
             iconWrapClass="bg-rose-50 text-rose-600"
             label="Open High Risks"
             value={String(financial.openHighRisks)}
-            valueColor={financial.openHighRisks > 0 ? INDEX_UNFAVORABLE_COLOR : undefined}
+            valueColor={financial.openHighRisks > 0 ? INDEX_BAND_COLORS.unfavorable.text : undefined}
             subtitle={
               riskRegisterAccess !== "NONE" ? (
                 <Link href={`/projects/${data.project.id}/risks`} prefetch={false} className="font-medium text-indigo-600 hover:text-indigo-700">
