@@ -1,34 +1,82 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import clsx from "clsx";
 
 export type RowAction = { label: string; pendingLabel?: string; onClick: () => Promise<void>; danger?: boolean };
 
-/** Generic "•••" row-actions dropdown for table rows (Checklist, Milestones, ...). */
+const MENU_WIDTH = 192; // matches w-48
+const ITEM_HEIGHT = 32;
+const GAP = 4;
+
+/**
+ * Generic "•••" row-actions dropdown for table rows (Checklist, Milestones,
+ * ...). Rendered into a portal at document.body and positioned with fixed
+ * coordinates (not `absolute` inside the row) so it can't get clipped by a
+ * scrollable/overflow-hidden table container — which used to hide the whole
+ * menu, Delete action included, for rows near the bottom of a table.
+ */
 export function RowActionsMenu({ actions }: { actions: RowAction[] }) {
   const [open, setOpen] = useState(false);
+  const [coords, setCoords] = useState<{ top: number; left: number; openUp: boolean } | null>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
+  const openMenu = () => {
+    const rect = buttonRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const menuHeight = actions.length * ITEM_HEIGHT + 8;
+    const openUp = rect.bottom + GAP + menuHeight > window.innerHeight;
+    setCoords({
+      top: openUp ? rect.top : rect.bottom,
+      left: Math.max(8, rect.right - MENU_WIDTH),
+      openUp,
+    });
+    setOpen(true);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
+  }, [open]);
+
   return (
-    <span className="relative inline-block">
+    <>
       <button
+        ref={buttonRef}
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => (open ? setOpen(false) : openMenu())}
         aria-label="Actions"
         className="rounded p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-100"
       >
         •••
       </button>
-      {open && (
-        <>
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full z-20 mt-1 w-48 rounded-md border border-slate-200 bg-white p-1 text-sm shadow-lg">
-            {actions.map((action) => (
-              <RowActionItem key={action.label} action={action} onDone={() => setOpen(false)} />
-            ))}
-          </div>
-        </>
-      )}
-    </span>
+      {open &&
+        coords &&
+        createPortal(
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+            <div
+              className="fixed z-50 w-48 rounded-md border border-slate-200 bg-white p-1 text-sm shadow-lg"
+              style={{
+                left: coords.left,
+                ...(coords.openUp ? { bottom: window.innerHeight - coords.top + GAP } : { top: coords.top + GAP }),
+              }}
+            >
+              {actions.map((action) => (
+                <RowActionItem key={action.label} action={action} onDone={() => setOpen(false)} />
+              ))}
+            </div>
+          </>,
+          document.body
+        )}
+    </>
   );
 }
 

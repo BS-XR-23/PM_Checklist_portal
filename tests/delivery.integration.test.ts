@@ -290,37 +290,45 @@ describe("Delivery isolation boundary", () => {
     expect(await prisma.wbsTask.count({ where: { projectId: projectB.id } })).toBe(0);
   });
 
-  it("updateSprint/deleteSprint are Admin-only — a PM with normal Delivery WRITE access is rejected", async () => {
+  it("updateSprint/deleteSprint: a PM with normal Delivery WRITE access can rename, re-date, and delete an open sprint", async () => {
     const { createSprint, updateSprint, deleteSprint } = await import("@/app/projects/[projectId]/delivery/delivery-actions");
 
     actAs(pmAUserId);
     await createSprint(projectA.id, "[TEST] Sprint 2", "2026-02-01", "2026-02-14");
     const sprint = await prisma.sprint.findFirstOrThrow({ where: { projectId: projectA.id }, orderBy: { createdAt: "desc" } });
 
-    await expect(updateSprint(sprint.id, projectA.id, { name: "should fail" })).rejects.toThrow(/Admin/);
-    await expect(deleteSprint(sprint.id, projectA.id)).rejects.toThrow(/Admin/);
-    expect((await prisma.sprint.findUniqueOrThrow({ where: { id: sprint.id } })).name).toBe("[TEST] Sprint 2");
+    await updateSprint(sprint.id, projectA.id, { name: "[TEST] Sprint 2 renamed" });
+    expect((await prisma.sprint.findUniqueOrThrow({ where: { id: sprint.id } })).name).toBe("[TEST] Sprint 2 renamed");
 
-    await prisma.sprint.delete({ where: { id: sprint.id } });
+    await deleteSprint(sprint.id, projectA.id);
+    expect(await prisma.sprint.findUnique({ where: { id: sprint.id } })).toBeNull();
   });
 
-  it("updateSprint/deleteSprint: Admin can edit and delete a sprint, including overriding the closed lock", async () => {
-    const { createSprint, updateSprint, closeSprint, deleteSprint } = await import("@/app/projects/[projectId]/delivery/delivery-actions");
+  it("updateSprint/deleteSprint: a closed sprint is locked for everyone, even Admin, until an Admin explicitly reopens it", async () => {
+    const { createSprint, updateSprint, closeSprint, deleteSprint, reopenSprint } = await import(
+      "@/app/projects/[projectId]/delivery/delivery-actions"
+    );
 
     actAs(pmAUserId);
     await createSprint(projectA.id, "[TEST] Sprint 2b", "2026-02-01", "2026-02-14");
     const sprint = await prisma.sprint.findFirstOrThrow({ where: { projectId: projectA.id }, orderBy: { createdAt: "desc" } });
-
-    actAs(adminUserId);
-    await updateSprint(sprint.id, projectA.id, { name: "[TEST] Sprint 2b renamed" });
-    expect((await prisma.sprint.findUniqueOrThrow({ where: { id: sprint.id } })).name).toBe("[TEST] Sprint 2b renamed");
-
     await closeSprint(sprint.id, projectA.id);
 
-    // Admin escape hatch: still editable after close, unlike everyone else.
-    await updateSprint(sprint.id, projectA.id, { name: "[TEST] Sprint 2b renamed again" });
-    expect((await prisma.sprint.findUniqueOrThrow({ where: { id: sprint.id } })).name).toBe("[TEST] Sprint 2b renamed again");
+    await expect(updateSprint(sprint.id, projectA.id, { name: "should fail" })).rejects.toThrow(/closed/);
+    await expect(deleteSprint(sprint.id, projectA.id)).rejects.toThrow(/closed/);
+    await expect(reopenSprint(sprint.id, projectA.id)).rejects.toThrow(/Admin/);
 
+    // Even an Admin can't edit it directly — reopening is the only door.
+    actAs(adminUserId);
+    await expect(updateSprint(sprint.id, projectA.id, { name: "should also fail" })).rejects.toThrow(/closed/);
+    await reopenSprint(sprint.id, projectA.id);
+    expect((await prisma.sprint.findUniqueOrThrow({ where: { id: sprint.id } })).closedAt).toBeNull();
+    await expect(reopenSprint(sprint.id, projectA.id)).rejects.toThrow(/isn't closed/);
+
+    // Reopened — normal PM write access applies again.
+    actAs(pmAUserId);
+    await updateSprint(sprint.id, projectA.id, { name: "[TEST] Sprint 2b renamed" });
+    expect((await prisma.sprint.findUniqueOrThrow({ where: { id: sprint.id } })).name).toBe("[TEST] Sprint 2b renamed");
     await deleteSprint(sprint.id, projectA.id);
     expect(await prisma.sprint.findUnique({ where: { id: sprint.id } })).toBeNull();
   });
@@ -380,8 +388,10 @@ describe("Delivery isolation boundary", () => {
     await prisma.sprint.delete({ where: { id: sprint.id } });
   });
 
-  it("assignTaskToSprint rejects removing a task from an already-closed sprint for a PM, but allows it for Admin", async () => {
-    const { createSprint, createWbsTask, assignTaskToSprint, closeSprint } = await import("@/app/projects/[projectId]/delivery/delivery-actions");
+  it("assignTaskToSprint rejects removing a task from an already-closed sprint for anyone, even Admin, until the sprint is reopened", async () => {
+    const { createSprint, createWbsTask, assignTaskToSprint, closeSprint, reopenSprint } = await import(
+      "@/app/projects/[projectId]/delivery/delivery-actions"
+    );
 
     actAs(pmAUserId);
     await createSprint(projectA.id, "[TEST] Sprint 4b", "2026-04-01", "2026-04-14");
@@ -394,9 +404,10 @@ describe("Delivery isolation boundary", () => {
     await expect(assignTaskToSprint(task.id, null, projectA.id)).rejects.toThrow(/closed/);
     expect((await prisma.wbsTask.findUniqueOrThrow({ where: { id: task.id } })).sprintId).toBe(sprint.id);
 
-    // Admin override — this is what makes deleteSprint's emergency escape
-    // hatch actually usable on a closed sprint that still has tasks.
     actAs(adminUserId);
+    await expect(assignTaskToSprint(task.id, null, projectA.id)).rejects.toThrow(/closed/);
+    await reopenSprint(sprint.id, projectA.id);
+
     await assignTaskToSprint(task.id, null, projectA.id);
     expect((await prisma.wbsTask.findUniqueOrThrow({ where: { id: task.id } })).sprintId).toBeNull();
 

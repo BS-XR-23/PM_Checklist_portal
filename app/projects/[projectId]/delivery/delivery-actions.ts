@@ -8,17 +8,17 @@ import { requireModuleWrite, requireUser, writeAudit, type CurrentUser } from "@
 import { wbsPlannedValue, wbsActualValue, sprintEarnedValue, manDaysFromHours } from "@/lib/calculations";
 
 /**
- * Renaming/re-dating or deleting a sprint (as opposed to the routine
- * "close it at the end of the cycle" action) is an emergency/reorganize
- * tool, not day-to-day PM work — restricted to the global Admin role
- * regardless of a PM's normal Delivery WRITE access. Deliberately checked
- * ahead of, and instead of, requireModuleWrite: an Admin already has WRITE
- * on every project, so this is the only gate that matters here.
+ * Reopening a closed sprint — the one sprint action still restricted to the
+ * global Admin role regardless of a PM's normal Delivery WRITE access. Once
+ * a sprint is closed its PV/EV/AV are a permanent record; un-freezing that
+ * is a deliberate reorganize decision, not day-to-day PM work. Every other
+ * sprint action (rename/re-date/delete while open, close it) just uses
+ * requireModuleWrite like the rest of Delivery.
  */
 async function requireSprintAdmin(): Promise<CurrentUser> {
   const user = await requireUser();
   if (user.role !== "ADMIN") {
-    throw new Error("Only an Admin can edit or delete a sprint.");
+    throw new Error("Only an Admin can reopen a closed sprint.");
   }
   return user;
 }
@@ -39,15 +39,20 @@ async function resolvePerson(projectId: string, personId: string) {
 
 // --- Master WBS (Tasks tab) ---
 
-export async function createWbsTask(projectId: string) {
+export async function createWbsTask(
+  projectId: string,
+  data?: { wbsNumber?: string; title?: string; storyPoints?: number }
+): Promise<{ id: string }> {
   const user = await requireModuleWrite(projectId, "DELIVERY");
 
+  const title = data?.title?.trim() || "New task";
   const created = await prisma.wbsTask.create({
-    data: { projectId, wbsNumber: "", title: "New task" },
+    data: { projectId, wbsNumber: data?.wbsNumber?.trim() ?? "", title, storyPoints: data?.storyPoints ?? 0 },
   });
 
   await writeAudit({ actor: user, projectId, action: "create", entityType: "WbsTask", entityId: created.id, summary: "Added a WBS task" });
   revalidateDelivery(projectId);
+  return { id: created.id };
 }
 
 export async function updateWbsTask(
@@ -355,11 +360,11 @@ export async function createSprint(projectId: string, name: string, startDate: s
 }
 
 /**
- * Admin-only — including on a closed sprint. Everyone else still can't
- * touch a closed sprint at all (no other write path exists); this is
- * specifically the Admin emergency/reorganize escape hatch. A rename or
- * date fix here doesn't touch the frozen frozenPlannedPoints/frozenEarned-
- * Points/frozenActualValue/frozenTaskSnapshot numbers themselves.
+ * Normal PM write access — same as the rest of an open sprint's content
+ * (tasks, allocations). A closed sprint is locked from this too: rename/
+ * re-date it after freezing PV/EV/AV and the numbers on the report no
+ * longer describe the dates/name shown, so it needs an Admin to explicitly
+ * reopenSprint() first rather than being editable (by anyone) in place.
  */
 export async function updateSprint(
   id: string,
@@ -367,7 +372,11 @@ export async function updateSprint(
   data: Partial<{ name: string; startDate: string; endDate: string }>
 ) {
   const existing = await prisma.sprint.findUniqueOrThrow({ where: { id } });
-  const user = await requireSprintAdmin();
+  const user = await requireModuleWrite(existing.projectId, "DELIVERY");
+
+  if (existing.closedAt) {
+    throw new Error("This sprint is closed — ask an Admin to reopen it before editing.");
+  }
 
   const updateData: { name?: string; startDate?: Date; endDate?: Date } = {};
   if (data.name !== undefined) {
@@ -407,7 +416,8 @@ export async function updateSprint(
  * pctComplete/actualHours are edited afterward (they live directly on the
  * mutable WbsTask row) even though the frozen totals stay correct — this
  * keeps the "which tasks earned this" list just as frozen as the numbers
- * it explains. No "reopen" action exists — closing is deliberately final.
+ * it explains. Closing is final for everyone except an Admin, who can undo
+ * it via reopenSprint() below.
  */
 export async function closeSprint(id: string, _projectId: string) {
   const existing = await prisma.sprint.findUniqueOrThrow({
@@ -455,15 +465,47 @@ export async function closeSprint(id: string, _projectId: string) {
 }
 
 /**
- * Admin-only — including on a closed sprint (see requireSprintAdmin). Still
- * requires the sprint to be empty first: deleting one with committed tasks
- * would silently detach them (WbsTask.sprintId -> null via onDelete:
- * SetNull) without a trace, so an Admin uncommits them explicitly first —
- * same data-integrity rail as before, just now Admin-gated too.
+ * Admin-only escape hatch out of the closed lock. Deliberately just flips
+ * closedAt back to null and leaves the frozen* columns alone — they're
+ * simply ignored (the UI reads live task data) once the sprint is open
+ * again, and get overwritten with fresh numbers whenever it's next closed,
+ * so there's nothing to clean up here.
+ */
+export async function reopenSprint(id: string, _projectId: string) {
+  const existing = await prisma.sprint.findUniqueOrThrow({ where: { id } });
+  const user = await requireSprintAdmin();
+
+  if (!existing.closedAt) throw new Error("This sprint isn't closed.");
+
+  await prisma.sprint.update({ where: { id }, data: { closedAt: null } });
+
+  await writeAudit({
+    actor: user,
+    projectId: existing.projectId,
+    action: "update",
+    entityType: "Sprint",
+    entityId: id,
+    summary: `Reopened sprint "${existing.name}"`,
+  });
+
+  revalidateDelivery(existing.projectId);
+}
+
+/**
+ * Normal PM write access, same as updateSprint above — a closed sprint
+ * still can't be deleted until an Admin reopens it first. Still requires
+ * the sprint to be empty: deleting one with committed tasks would silently
+ * detach them (WbsTask.sprintId -> null via onDelete: SetNull) without a
+ * trace, so tasks need to be uncommitted explicitly first regardless of
+ * who's deleting.
  */
 export async function deleteSprint(id: string, _projectId: string) {
   const existing = await prisma.sprint.findUniqueOrThrow({ where: { id } });
-  const user = await requireSprintAdmin();
+  const user = await requireModuleWrite(existing.projectId, "DELIVERY");
+
+  if (existing.closedAt) {
+    throw new Error("This sprint is closed — ask an Admin to reopen it before deleting.");
+  }
 
   const taskCount = await prisma.wbsTask.count({ where: { sprintId: id } });
   if (taskCount > 0) {
@@ -491,12 +533,12 @@ export async function deleteSprint(id: string, _projectId: string) {
  * projectId. sprintId: null uncommits the task instead: no second id is
  * supplied, but the task's *current* sprint (if any) still needs a
  * closed-sprint check — a task can't silently be pulled out of a closed
- * sprint's frozen membership either, matching the same "closed =
- * immutable" rule enforced when committing in. Exception: an Admin can
- * still pull a task out of a closed sprint — this is what makes deleteSprint's
- * Admin emergency override actually usable on a closed sprint that has
- * committed tasks. Doesn't touch the sprint's frozen PV/EV/AV/snapshot,
- * which stay a permanent historical record regardless.
+ * sprint's frozen membership either, matching the same "closed = immutable
+ * until an Admin reopenSprint()s it" rule enforced everywhere else on a
+ * sprint. No role-based exception here anymore: an Admin who needs to
+ * detach a task from a closed sprint reopens it first (via reopenSprint),
+ * same as everyone else. Doesn't touch the sprint's frozen PV/EV/AV/
+ * snapshot, which stay a permanent historical record regardless.
  */
 export async function assignTaskToSprint(taskId: string, sprintId: string | null, _projectId: string) {
   const task = await prisma.wbsTask.findUniqueOrThrow({ where: { id: taskId } });
@@ -505,8 +547,8 @@ export async function assignTaskToSprint(taskId: string, sprintId: string | null
     const user = await requireModuleWrite(task.projectId, "DELIVERY");
     if (task.sprintId) {
       const currentSprint = await prisma.sprint.findUnique({ where: { id: task.sprintId } });
-      if (currentSprint?.closedAt && user.role !== "ADMIN") {
-        throw new Error(`This task's sprint "${currentSprint.name}" is closed — it can no longer be removed.`);
+      if (currentSprint?.closedAt) {
+        throw new Error(`This task's sprint "${currentSprint.name}" is closed — ask an Admin to reopen it before removing tasks.`);
       }
     }
     await prisma.wbsTask.update({ where: { id: taskId }, data: { sprintId: null } });

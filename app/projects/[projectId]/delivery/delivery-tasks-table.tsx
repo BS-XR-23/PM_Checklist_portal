@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import clsx from "clsx";
 import { InlineText, InlineNumber } from "@/components/ui/inline-edit";
 import { RowActionsMenu } from "@/components/ui/row-actions-menu";
@@ -122,6 +122,95 @@ function SprintSelect({ taskId, projectId, value, sprints }: { taskId: string; p
   );
 }
 
+function AddTaskModal({ onSubmit, onClose, pending }: { onSubmit: (data: { wbsNumber: string; title: string; storyPoints: number }) => void; onClose: () => void; pending: boolean }) {
+  const [wbsNumber, setWbsNumber] = useState("");
+  const [title, setTitle] = useState("");
+  const [storyPoints, setStoryPoints] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
+        <div className="flex items-start justify-between gap-4 mb-4">
+          <h3 className="text-lg font-bold text-slate-900">Add task</h3>
+          <button
+            onClick={onClose}
+            className="rounded-full p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 text-xl leading-none"
+            aria-label="Close"
+          >
+            ✕
+          </button>
+        </div>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!title.trim()) {
+              setError("A title is required.");
+              return;
+            }
+            setError(null);
+            onSubmit({ wbsNumber: wbsNumber.trim(), title: title.trim(), storyPoints: storyPoints === "" ? 0 : Number(storyPoints) });
+          }}
+        >
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">WBS#</label>
+              <input
+                type="text"
+                value={wbsNumber}
+                onChange={(e) => setWbsNumber(e.target.value)}
+                placeholder="e.g. 14.11.4"
+                className="w-full rounded border border-slate-200 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">Title</label>
+              <input
+                type="text"
+                autoFocus
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Task title"
+                className="w-full rounded border border-slate-200 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">Story Points</label>
+              <input
+                type="number"
+                step="0.5"
+                min="0"
+                value={storyPoints}
+                onChange={(e) => setStoryPoints(e.target.value)}
+                placeholder="0"
+                className="w-full rounded border border-slate-200 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
+              />
+            </div>
+          </div>
+          {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
+          <div className="flex justify-end gap-2 mt-5">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={pending}
+              className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-300 hover:text-slate-900 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={pending}
+              className="rounded-md bg-indigo-600 text-white text-xs font-semibold px-3 py-1.5 hover:bg-indigo-700 disabled:opacity-50"
+            >
+              {pending ? "Adding..." : "Add Task"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 /** The project-wide WBS master list (Tasks tab) — no week grouping. Story
  * Points is the estimate, driving Sprint's PV and 0/100 EV rule directly;
  * assignee here is the default a task starts with, overridable once it's
@@ -164,6 +253,8 @@ export function WbsTasksTable({
   const [assigneeFilter, setAssigneeFilter] = useState<string>("all");
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" } | null>(null);
   const [showImport, setShowImport] = useState(false);
+  const [showAddTask, setShowAddTask] = useState(false);
+  const [pendingFocusId, setPendingFocusId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<(typeof PAGE_SIZES)[number]>(10);
 
@@ -176,12 +267,9 @@ export function WbsTasksTable({
   // below so this Hook always runs in the same order.
   const duplicateWbsByTaskId = useMemo(() => computeDuplicateRefs(duplicateCheckTasks ?? tasks), [duplicateCheckTasks, tasks]);
 
-  if (tasks.length === 0 && !(canWrite && showAddRow)) {
-    return <p className="text-sm text-slate-400 p-4">{emptyMessage}</p>;
-  }
-
-  const historyTask = historyTaskId ? tasks.find((t) => t.id === historyTaskId) : undefined;
-
+  // Filtering/sorting/paging computed before the early return below so the
+  // jump-to-new-task effect (which needs the sorted+paged position) always
+  // runs in the same Hook order regardless of that branch.
   const q = search.trim().toLowerCase();
   const filteredTasks = tasks.filter((t) => {
     if (sprintFilter === "backlog" && t.sprintId) return false;
@@ -207,6 +295,24 @@ export function WbsTasksTable({
   const pageCount = Math.max(1, Math.ceil(sortedTasks.length / pageSize));
   const clampedPage = Math.min(page, pageCount);
   const pageTasks = sortedTasks.slice((clampedPage - 1) * pageSize, clampedPage * pageSize);
+
+  // After adding a task via the modal, jump to whichever page it actually
+  // landed on (position depends on current sort) instead of leaving the PM
+  // on the page they were viewing, where a task appended at the end of an
+  // unsorted list would otherwise be invisible.
+  useEffect(() => {
+    if (!pendingFocusId) return;
+    const idx = sortedTasks.findIndex((t) => t.id === pendingFocusId);
+    if (idx === -1) return;
+    setPage(Math.floor(idx / pageSize) + 1);
+    setPendingFocusId(null);
+  }, [sortedTasks, pendingFocusId, pageSize]);
+
+  if (tasks.length === 0 && !(canWrite && showAddRow)) {
+    return <p className="text-sm text-slate-400 p-4">{emptyMessage}</p>;
+  }
+
+  const historyTask = historyTaskId ? tasks.find((t) => t.id === historyTaskId) : undefined;
 
   const toggleSort = (key: SortKey) => {
     setSort((prev) => (prev?.key === key ? { key, dir: prev.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" }));
@@ -291,7 +397,7 @@ export function WbsTasksTable({
               )}
               <button
                 type="button"
-                onClick={() => startTransition(() => createWbsTask(projectId))}
+                onClick={() => setShowAddTask(true)}
                 disabled={pending}
                 className="rounded-md bg-indigo-600 text-white text-xs font-semibold px-3 py-1.5 hover:bg-indigo-700 disabled:opacity-50"
               >
@@ -491,6 +597,23 @@ export function WbsTasksTable({
             </div>
           )}
         </div>
+      )}
+
+      {showAddTask && (
+        <AddTaskModal
+          pending={pending}
+          onClose={() => setShowAddTask(false)}
+          onSubmit={(data) => {
+            setSearch("");
+            setSprintFilter("all");
+            setAssigneeFilter("all");
+            startTransition(async () => {
+              const created = await createWbsTask(projectId, data);
+              setPendingFocusId(created.id);
+              setShowAddTask(false);
+            });
+          }}
+        />
       )}
 
       {historyTask && (
