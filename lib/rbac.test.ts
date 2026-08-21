@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { meetsLevel, computeProjectAccess, computeModuleAccess, DEFAULT_CLIENT_PERMISSIONS, ALL_MODULES, type MembershipLike } from "./rbac-core";
+import { meetsLevel, computeProjectAccess, computeModuleAccess, DEFAULT_CLIENT_PERMISSIONS, ACCESS_PRESETS, ALL_MODULES, type MembershipLike } from "./rbac-core";
 import type { Role, ModuleName, AccessLevel } from "@prisma/client";
 
 function membership(role: Role, permissions: { module: ModuleName; access: AccessLevel }[] = []): MembershipLike {
@@ -126,5 +126,37 @@ describe("DEFAULT_CLIENT_PERMISSIONS", () => {
   it("covers every module exactly once", () => {
     const modules = DEFAULT_CLIENT_PERMISSIONS.map((p) => p.module).sort();
     expect(modules).toEqual([...ALL_MODULES].sort());
+  });
+});
+
+describe("ACCESS_PRESETS", () => {
+  it("has a unique key per preset, each covering every module exactly once", () => {
+    const keys = ACCESS_PRESETS.map((p) => p.key);
+    expect(new Set(keys).size).toBe(keys.length);
+    for (const preset of ACCESS_PRESETS) {
+      const modules = preset.permissions.map((p) => p.module).sort();
+      expect(modules).toEqual([...ALL_MODULES].sort());
+    }
+  });
+
+  it("never sets BUDGET_TRACKER to anything but NONE — it's Admin-only regardless of what's stored", () => {
+    for (const preset of ACCESS_PRESETS) {
+      const budget = preset.permissions.find((p) => p.module === "BUDGET_TRACKER");
+      expect(budget?.access).toBe("NONE");
+    }
+  });
+
+  it("'full-visibility' grants READ_FULL everywhere except Budget Tracker", () => {
+    const preset = ACCESS_PRESETS.find((p) => p.key === "full-visibility")!;
+    for (const p of preset.permissions) {
+      expect(p.access).toBe(p.module === "BUDGET_TRACKER" ? "NONE" : "READ_FULL");
+    }
+  });
+
+  it("'no-access' clears every module to NONE", () => {
+    const preset = ACCESS_PRESETS.find((p) => p.key === "no-access")!;
+    for (const p of preset.permissions) {
+      expect(p.access).toBe("NONE");
+    }
   });
 });

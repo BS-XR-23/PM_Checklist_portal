@@ -11,7 +11,15 @@ import type { Role } from "@prisma/client";
 
 type NavItem = { href: string; label: string; icon: (props: React.SVGProps<SVGSVGElement>) => React.ReactElement; badge?: number };
 
-export function Sidebar({ user, reminderCount = 0 }: { user: { name: string; role: Role }; reminderCount?: number }) {
+export function Sidebar({
+  user,
+  reminderCount = 0,
+  hasLinkedPerson = false,
+}: {
+  user: { name: string; role: Role };
+  reminderCount?: number;
+  hasLinkedPerson?: boolean;
+}) {
   const pathname = usePathname();
 
   const primaryItems: NavItem[] = [{ href: "/projects", label: "Projects", icon: IconGrid }];
@@ -29,7 +37,10 @@ export function Sidebar({ user, reminderCount = 0 }: { user: { name: string; rol
   if (user.role === "ADMIN" || user.role === "TPM" || user.role === "PM") {
     primaryItems.push({ href: "/notifications", label: "Reminders", icon: IconBell, badge: reminderCount });
   }
-  if (user.role === "LIMITED") {
+  // LIMITED always sees this (even unlinked, so the page can tell them to
+  // ask an Admin) — every other role only once their account actually has
+  // something to show, since the page itself has no role restriction.
+  if (user.role === "LIMITED" || hasLinkedPerson) {
     primaryItems.push({ href: "/my-engagement", label: "My Engagement", icon: IconUser });
   }
 

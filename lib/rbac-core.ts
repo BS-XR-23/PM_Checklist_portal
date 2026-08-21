@@ -73,3 +73,39 @@ export const ALL_MODULES: ModuleName[] = [
   "ACTION_ITEMS",
   "DELIVERY",
 ];
+
+export type AccessPreset = {
+  key: string;
+  label: string;
+  description: string;
+  permissions: { module: ModuleName; access: AccessLevel }[];
+};
+
+/**
+ * One-click starting points for a CLIENT/LIMITED member's module grid on
+ * the Team tab — still freely editable per-module afterward, this just
+ * saves setting all 11 dropdowns by hand for the common cases. BUDGET_TRACKER
+ * is always left NONE: computeModuleAccess forces it to NONE for everyone
+ * but Admin regardless of what's stored, so setting it to anything else
+ * here would be a silently-ignored no-op.
+ */
+export const ACCESS_PRESETS: AccessPreset[] = [
+  {
+    key: "standard-client",
+    label: "Standard Client",
+    description: "Same as a new Client's default: Dashboard/Checklists limited, Milestones full, everything else hidden.",
+    permissions: DEFAULT_CLIENT_PERMISSIONS,
+  },
+  {
+    key: "full-visibility",
+    label: "Full Visibility (Read-Only)",
+    description: "Read-only on every module except Budget Tracker (Admin-only regardless) — no write access anywhere.",
+    permissions: ALL_MODULES.map((module) => ({ module, access: module === "BUDGET_TRACKER" ? "NONE" : "READ_FULL" })),
+  },
+  {
+    key: "no-access",
+    label: "No Access",
+    description: "Clears every module back to NONE — a clean reset before reconfiguring by hand.",
+    permissions: ALL_MODULES.map((module) => ({ module, access: "NONE" as AccessLevel })),
+  },
+];

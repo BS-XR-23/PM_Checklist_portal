@@ -8,6 +8,7 @@ import { PersonRow, type PersonRowData } from "./person-row";
 
 const PAGE_SIZES = [10, 25, 50] as const;
 type EngagementFilter = "all" | "on-project" | "bench";
+type AccountFilter = "all" | "linked" | "unlinked";
 
 function matchesSearch(p: PersonRowData, q: string): boolean {
   if (!q) return true;
@@ -18,6 +19,12 @@ function matchesSearch(p: PersonRowData, q: string): boolean {
 function matchesFilter(p: PersonRowData, filter: EngagementFilter): boolean {
   if (filter === "on-project") return p.engagements.length > 0;
   if (filter === "bench") return p.engagements.length === 0;
+  return true;
+}
+
+function matchesAccountFilter(p: PersonRowData, filter: AccountFilter): boolean {
+  if (filter === "linked") return p.linkedUserId !== null;
+  if (filter === "unlinked") return p.linkedUserId === null;
   return true;
 }
 
@@ -42,14 +49,17 @@ export function PeopleDirectory({
 }) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<EngagementFilter>("all");
+  const [accountFilter, setAccountFilter] = useState<AccountFilter>("all");
   const [sortAsc, setSortAsc] = useState(true);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<(typeof PAGE_SIZES)[number]>(10);
 
   const filtered = useMemo(() => {
-    const matched = rows.filter((p) => matchesSearch(p, search) && matchesFilter(p, filter));
+    const matched = rows.filter(
+      (p) => matchesSearch(p, search) && matchesFilter(p, filter) && matchesAccountFilter(p, accountFilter)
+    );
     return [...matched].sort((a, b) => (sortAsc ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name)));
-  }, [rows, search, filter, sortAsc]);
+  }, [rows, search, filter, accountFilter, sortAsc]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
   const clampedPage = Math.min(page, pageCount);
@@ -184,6 +194,18 @@ export function PeopleDirectory({
             <option value="all">All Engagement</option>
             <option value="on-project">On Project</option>
             <option value="bench">Bench (no current project)</option>
+          </select>
+          <select
+            value={accountFilter}
+            onChange={(e) => {
+              setAccountFilter(e.target.value as AccountFilter);
+              setPage(1);
+            }}
+            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+          >
+            <option value="all">All Portal Accounts</option>
+            <option value="linked">Linked to a User</option>
+            <option value="unlinked">Not linked</option>
           </select>
         </div>
 

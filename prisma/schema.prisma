@@ -57,6 +57,7 @@ model User {
   escalationsRaised       EscalationItem[]
   person                  Person?
   presalesProjectsCreated PresalesProject[]
+  programOversights       ProgramOversight[]
 }
 
 model Project {
@@ -75,19 +76,40 @@ model Project {
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
 
-  checklistItems  ChecklistItem[]
-  risks           RiskItem[]
-  changeRequests  ChangeRequest[]
-  pmPlan          PMPlan?
-  memberships     ProjectMembership[]
-  auditLogs       AuditLog[]
-  escalations     EscalationItem[]
-  engagements     ProjectEngagement[]
-  decisions       DecisionLogItem[]
-  actionItems     ActionItem[]
-  wonFromPresales PresalesProject?
-  wbsTasks        WbsTask[]
-  sprints         Sprint[]
+  checklistItems    ChecklistItem[]
+  risks             RiskItem[]
+  changeRequests    ChangeRequest[]
+  pmPlan            PMPlan?
+  memberships       ProjectMembership[]
+  auditLogs         AuditLog[]
+  escalations       EscalationItem[]
+  engagements       ProjectEngagement[]
+  decisions         DecisionLogItem[]
+  actionItems       ActionItem[]
+  wonFromPresales   PresalesProject?
+  wbsTasks          WbsTask[]
+  sprints           Sprint[]
+  programOversights ProgramOversight[]
+}
+
+/// Organizational-only mapping of which projects a PROGRAM_MANAGER oversees.
+/// Deliberately does NOT grant access — a PROGRAM_MANAGER's actual access
+/// stays the blanket "portfolio-only, no project drill-down" rule in
+/// rbac-core.ts (computeProjectAccess/computeModuleAccess never consult this
+/// table), so adding or removing a row here can never widen or narrow what
+/// they can open. It exists purely so "who oversees what" is a recorded fact
+/// instead of tribal knowledge, and to give a future "My Programs" filter on
+/// the Portfolio page something to filter by.
+model ProgramOversight {
+  id               String   @id @default(cuid())
+  programManagerId String
+  programManager   User     @relation(fields: [programManagerId], references: [id], onDelete: Cascade)
+  projectId        String
+  project          Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdAt        DateTime @default(now())
+
+  @@unique([programManagerId, projectId])
+  @@index([projectId])
 }
 
 /// A user's access to one specific project. Only meaningful for PM/CLIENT/LIMITED
@@ -367,19 +389,19 @@ model WbsTask {
 // no "reopen" — closing is one-way, and once closed, a task can no longer
 // be committed into or removed from this sprint (see delivery-actions.ts).
 model Sprint {
-  id        String    @id @default(cuid())
+  id        String   @id @default(cuid())
   projectId String
-  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   name      String
   startDate DateTime
   endDate   DateTime
-  createdAt DateTime  @default(now())
+  createdAt DateTime @default(now())
 
-  closedAt             DateTime?
-  frozenPlannedPoints  Float?
-  frozenEarnedPoints   Float?
-  frozenActualValue    Float?
-  frozenTaskSnapshot   Json?
+  closedAt            DateTime?
+  frozenPlannedPoints Float?
+  frozenEarnedPoints  Float?
+  frozenActualValue   Float?
+  frozenTaskSnapshot  Json?
 
   tasks       WbsTask[]
   allocations SprintAllocation[]

@@ -93,7 +93,12 @@ export function RoleGroupSection({ group, currentUserId }: { group: RoleGroupDat
                           {u.personName}
                         </span>
                       ) : (
-                        <span className="text-slate-300">—</span>
+                        <span
+                          className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700"
+                          title="No linked Person record — can't be picked as an Owner (Checklist/Risk/Action items) or staffed on a project."
+                        >
+                          Not linked
+                        </span>
                       )}
                     </td>
                     <td className="px-4 py-3.5">
