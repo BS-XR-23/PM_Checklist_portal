@@ -39,9 +39,22 @@ export function riskScoreSeverity(score: number): keyof typeof RISK_SEVERITY_COL
   return "low";
 }
 
-// Budget Tracker H9:I28 CF: <1.0 unfavorable, >=1.0 favorable.
-export const INDEX_FAVORABLE_COLOR = "#00713C";
-export const INDEX_UNFAVORABLE_COLOR = "#C00000";
+// Budget Tracker H9:I28 CF: <1.0 unfavorable, >=1.0 favorable — the >=1.0
+// cutoff for "favorable" (green) is unchanged from that spec. Below 1.0, the
+// spreadsheet's flat "unfavorable" is split into two: a value close to 1.0
+// (>=0.85) is genuinely different at a glance from one that's badly off, so
+// it gets its own "near" amber band rather than reading as equally alarming.
+export const INDEX_BAND_COLORS = {
+  favorable: { bg: "#E6F4EC", text: "#00713C", label: "On Track" },
+  near: { bg: "#FEF3C7", text: "#92400E", label: "Watch" },
+  unfavorable: { bg: "#FBE9E9", text: "#C00000", label: "Off Track" },
+};
+
+export function indexBand(value: number): keyof typeof INDEX_BAND_COLORS {
+  if (value >= 1) return "favorable";
+  if (value >= 0.85) return "near";
+  return "unfavorable";
+}
 
 // Actual Date slipped past Planned Date flag (G column CF), non-blocking.
 export const SLIPPED_FLAG_COLOR = "#C00000";

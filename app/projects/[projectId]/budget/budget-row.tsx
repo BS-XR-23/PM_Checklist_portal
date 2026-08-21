@@ -1,17 +1,16 @@
 import { formatMoney, formatDate, formatPct } from "@/lib/format";
-import { INDEX_FAVORABLE_COLOR, INDEX_UNFAVORABLE_COLOR } from "@/lib/colors";
+import { INDEX_BAND_COLORS, indexBand } from "@/lib/colors";
 import type { EvmPoint } from "@/lib/calculations";
 
 export type RoleBreakdownRow = { roleName: string; manDaysEquivalent: number; manDayRate: number; cost: number };
 
 function IndexValue({ value }: { value: number | null }) {
   if (value == null) return <span className="text-slate-300">—</span>;
-  const favorable = value >= 1;
-  const color = favorable ? INDEX_FAVORABLE_COLOR : INDEX_UNFAVORABLE_COLOR;
+  const band = INDEX_BAND_COLORS[indexBand(value)];
   return (
     <span
       className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold"
-      style={{ backgroundColor: favorable ? "#E6F4EC" : "#FBE9E9", color }}
+      style={{ backgroundColor: band.bg, color: band.text }}
     >
       {value.toFixed(2)}
     </span>
