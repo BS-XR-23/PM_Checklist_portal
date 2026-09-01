@@ -1,8 +1,10 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import clsx from "clsx";
-import { InlineText, InlineDate, InlineSelect } from "@/components/ui/inline-edit";
+import { InlineDate, InlineSelect } from "@/components/ui/inline-edit";
+import { useAnchoredPosition } from "@/components/ui/use-anchored-position";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { StatTile } from "@/components/ui/stat-tile";
 import { ProgressRing } from "@/components/ui/progress-ring";
@@ -16,6 +18,7 @@ import {
   IconLayers,
   IconCalendar,
   IconExternalLink,
+  IconFileText,
 } from "@/components/layout/icons";
 import { STATUS_COLORS, STATUS_ORDER, SLIPPED_FLAG_COLOR, avatarColorFromString } from "@/lib/colors";
 import { ITEM_STATUSES, type ChecklistType, type ItemStatus } from "@/lib/constants";
@@ -249,7 +252,7 @@ function StageGroupCard({
           <div className="overflow-x-auto border-t border-slate-100">
             <table className="w-full text-sm min-w-[1100px]">
               <thead>
-                <tr className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide bg-slate-50">
+                <tr className="text-left text-xs font-medium text-slate-500 bg-slate-50">
                   <th className="px-3 py-2.5 w-10">#</th>
                   <th className="px-3 py-2.5 min-w-[260px]">Checklist Item</th>
                   <th className="px-3 py-2.5 w-40">Milestone</th>
@@ -357,6 +360,177 @@ function StatusDot({ status }: { status: ItemStatus }) {
   );
 }
 
+const FLOAT_WIDTH = 360;
+
+/**
+ * Always shows the item's full wording, wrapped across as many lines as it
+ * needs — no truncated single-line input chrome at rest. Editing (canWrite
+ * only) still goes through the same floating textarea popup as everywhere
+ * else (see InlineText/NotesCell), just triggered by clicking the plain
+ * text instead of an input box, since an `<input>` can't wrap text and this
+ * design deliberately doesn't want a boxed-looking cell until you interact
+ * with it.
+ */
+function ChecklistItemText({ value, onSave }: { value: string; onSave: (v: string) => Promise<void> }) {
+  const [draft, setDraft] = useState(value);
+  const [pending, startTransition] = useTransition();
+  const [expanded, setExpanded] = useState(false);
+  const anchorRef = useRef<HTMLParagraphElement>(null);
+  const coords = useAnchoredPosition(expanded, anchorRef, () => setExpanded(false), { width: FLOAT_WIDTH, estHeight: 140 });
+
+  const commit = () => {
+    if (draft !== value) startTransition(() => onSave(draft));
+  };
+
+  return (
+    <>
+      <p
+        ref={anchorRef}
+        role="button"
+        tabIndex={0}
+        onClick={() => setExpanded(true)}
+        onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && setExpanded(true)}
+        className="text-sm font-medium text-slate-900 rounded px-1 -mx-1 py-0.5 hover:bg-slate-50 cursor-text"
+      >
+        {draft}
+      </p>
+      {expanded &&
+        coords &&
+        createPortal(
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setExpanded(false)} />
+            <textarea
+              autoFocus
+              className="fixed z-50 resize-none rounded-md border border-slate-300 bg-white p-2 text-sm shadow-lg focus:outline-none focus:ring-1 focus:ring-slate-400"
+              style={{
+                width: FLOAT_WIDTH,
+                minHeight: 96,
+                left: coords.left,
+                ...(coords.openUp ? { bottom: window.innerHeight - coords.top + 4 } : { top: coords.top + 4 }),
+              }}
+              value={draft}
+              disabled={pending}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  commit();
+                  setExpanded(false);
+                } else if (e.key === "Escape") {
+                  setDraft(value);
+                  setExpanded(false);
+                }
+              }}
+              onBlur={() => {
+                commit();
+                setExpanded(false);
+              }}
+            />
+          </>,
+          document.body
+        )}
+    </>
+  );
+}
+
+/**
+ * A link shown as a chip (icon + text) rather than a plain input — matches
+ * the rest of this table's badge-y styling. Clicking the chip (canWrite
+ * only) opens the same floating-textarea edit pattern as ChecklistItemText/
+ * InlineText; the separate small icon-button always navigates, so the two
+ * affordances (edit vs. open) never fight over the same click target.
+ */
+function ChecklistLinkCell({ value, canWrite, onSave }: { value: string | null; canWrite: boolean; onSave: (v: string) => Promise<void> }) {
+  const [draft, setDraft] = useState(value ?? "");
+  const [pending, startTransition] = useTransition();
+  const [expanded, setExpanded] = useState(false);
+  const anchorRef = useRef<HTMLButtonElement>(null);
+  const coords = useAnchoredPosition(expanded, anchorRef, () => setExpanded(false), { width: 320, estHeight: 90 });
+
+  const commit = () => {
+    if (draft !== (value ?? "")) startTransition(() => onSave(draft));
+  };
+
+  if (!canWrite) {
+    return value ? (
+      <a
+        href={value}
+        target="_blank"
+        rel="noopener noreferrer"
+        title={value}
+        className="inline-flex max-w-[220px] items-center gap-1.5 rounded-full bg-indigo-50 px-2 py-1 text-xs text-indigo-700 hover:bg-indigo-100"
+      >
+        <IconExternalLink className="h-3 w-3 shrink-0" />
+        <span className="truncate">{value}</span>
+      </a>
+    ) : (
+      <span className="text-slate-300">—</span>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <button
+        ref={anchorRef}
+        type="button"
+        onClick={() => {
+          setDraft(value ?? "");
+          setExpanded(true);
+        }}
+        title={value ?? undefined}
+        className={clsx(
+          "inline-flex max-w-[180px] items-center gap-1.5 rounded-full px-2 py-1 text-xs",
+          value ? "bg-indigo-50 text-indigo-700 hover:bg-indigo-100" : "border border-dashed border-slate-300 text-slate-400 hover:border-slate-400 hover:text-slate-600"
+        )}
+      >
+        <IconExternalLink className="h-3 w-3 shrink-0" />
+        <span className="truncate">{value || "Add link"}</span>
+      </button>
+      {value && (
+        <a href={value} target="_blank" rel="noopener noreferrer" title="Open link" className="shrink-0 text-slate-400 hover:text-indigo-600">
+          <IconExternalLink className="h-3.5 w-3.5" />
+        </a>
+      )}
+      {expanded &&
+        coords &&
+        createPortal(
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setExpanded(false)} />
+            <textarea
+              autoFocus
+              className="fixed z-50 resize-none rounded-md border border-slate-300 bg-white p-2 text-sm shadow-lg focus:outline-none focus:ring-1 focus:ring-slate-400"
+              style={{
+                width: 320,
+                minHeight: 60,
+                left: coords.left,
+                ...(coords.openUp ? { bottom: window.innerHeight - coords.top + 4 } : { top: coords.top + 4 }),
+              }}
+              value={draft}
+              placeholder="https://…"
+              disabled={pending}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  commit();
+                  setExpanded(false);
+                } else if (e.key === "Escape") {
+                  setDraft(value ?? "");
+                  setExpanded(false);
+                }
+              }}
+              onBlur={() => {
+                commit();
+                setExpanded(false);
+              }}
+            />
+          </>,
+          document.body
+        )}
+    </div>
+  );
+}
+
 function ChecklistItemRow({
   item,
   projectId,
@@ -394,7 +568,7 @@ function ChecklistItemRow({
               </span>
             )}
             {canEditText ? (
-              <InlineText value={item.itemText} onSave={(v) => updateChecklistItem(item.id, projectId, checklistType, { itemText: v })} />
+              <ChecklistItemText value={item.itemText} onSave={(v) => updateChecklistItem(item.id, projectId, checklistType, { itemText: v })} />
             ) : (
               <p className="text-sm font-medium text-slate-900">{item.itemText}</p>
             )}
@@ -403,7 +577,7 @@ function ChecklistItemRow({
       </td>
       <td className="px-3 py-3">
         {item.milestoneName ? (
-          <span className="inline-flex items-center rounded-full bg-indigo-50 text-indigo-700 px-2 py-0.5 text-xs font-medium whitespace-nowrap">
+          <span className="inline-flex items-center rounded-full bg-indigo-50 text-indigo-700 px-2 py-0.5 text-xs font-medium">
             {item.milestoneName}
           </span>
         ) : (
@@ -458,28 +632,12 @@ function ChecklistItemRow({
         </div>
       </td>
       <td className="px-3 py-3">
-        {canWrite ? (
-          <div className="flex items-center gap-1.5">
-            <div className="flex-1 min-w-0">
-              <InlineText value={item.link ?? ""} placeholder="—" onSave={(v) => updateChecklistItem(item.id, projectId, checklistType, { link: v })} />
-            </div>
-            {item.link && (
-              <a href={item.link} target="_blank" rel="noopener noreferrer" title="Open link" className="shrink-0 text-slate-400 hover:text-indigo-600">
-                <IconExternalLink className="h-3.5 w-3.5" />
-              </a>
-            )}
-          </div>
-        ) : item.link ? (
-          <a href={item.link} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline text-sm truncate block">
-            {item.link}
-          </a>
-        ) : (
-          <span className="text-slate-300">—</span>
-        )}
+        <ChecklistLinkCell value={item.link} canWrite={canWrite} onSave={(v) => updateChecklistItem(item.id, projectId, checklistType, { link: v })} />
       </td>
       <td className="px-3 py-3">
         {!notesHidden && (
           <NotesCell
+            icon={<IconFileText className="h-3.5 w-3.5 shrink-0" />}
             value={item.notes}
             canWrite={canWrite}
             onSave={(v) => updateChecklistItem(item.id, projectId, checklistType, { notes: v })}

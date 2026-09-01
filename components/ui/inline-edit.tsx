@@ -1,6 +1,10 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
+import { useAnchoredPosition } from "./use-anchored-position";
+
+const EXPANDED_WIDTH = 360;
 
 // A visible border at rest (not just on hover/focus) is deliberate — every
 // field built on this primitive looked like static text until you happened
@@ -20,6 +24,18 @@ const cellClass =
 // without adding value over typing/arrow-key editing directly.
 const numberCellClass = cellClass + " [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
 
+/**
+ * A single-line value at rest (truncated + a `title` tooltip so hovering
+ * still reveals a value too long for the column), but text long enough to
+ * need real editing — a checklist item's wording, a URL — is unreadable
+ * and near-unwritable squeezed into that width. Clicking in opens a
+ * floating multi-line textarea (via the same clipping-proof portal
+ * positioning as RowActionsMenu's dropdown) sized wide enough to actually
+ * work in, then collapses back to the compact cell on blur/Enter/Escape.
+ * Enter commits rather than inserting a newline — this is still a
+ * conceptually single-line field, just wrapped for readability while
+ * expanded, not a free-text notes box (see NotesCell for that).
+ */
 export function InlineText({
   value,
   onSave,
@@ -31,20 +47,84 @@ export function InlineText({
 }) {
   const [draft, setDraft] = useState(value);
   const [pending, startTransition] = useTransition();
+  const [expanded, setExpanded] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const coords = useAnchoredPosition(expanded, inputRef, () => setExpanded(false), { width: EXPANDED_WIDTH, estHeight: 140 });
+
+  const commit = () => {
+    if (draft !== value) startTransition(() => onSave(draft));
+  };
 
   return (
-    <input
-      type="text"
-      className={cellClass}
-      value={draft}
-      placeholder={placeholder}
-      disabled={pending}
-      onChange={(e) => setDraft(e.target.value)}
-      onBlur={() => {
-        if (draft !== value) startTransition(() => onSave(draft));
-      }}
-    />
+    <>
+      <input
+        ref={inputRef}
+        type="text"
+        className={cellClass}
+        value={draft}
+        title={draft}
+        placeholder={placeholder}
+        disabled={pending}
+        onChange={(e) => setDraft(e.target.value)}
+        onFocus={() => setExpanded(true)}
+      />
+      {expanded &&
+        coords &&
+        createPortal(
+          <>
+            {/* Outside-click catcher only — the textarea's own onBlur (which
+                fires first, since blur precedes click for the same
+                interaction) already commits, so this doesn't call commit()
+                again and risk a duplicate save. */}
+            <div className="fixed inset-0 z-40" onClick={() => setExpanded(false)} />
+            <textarea
+              autoFocus
+              className="fixed z-50 resize-none rounded-md border border-slate-300 bg-white p-2 text-sm shadow-lg focus:outline-none focus:ring-1 focus:ring-slate-400"
+              style={{
+                width: EXPANDED_WIDTH,
+                minHeight: 72,
+                left: coords.left,
+                ...(coords.openUp ? { bottom: window.innerHeight - coords.top + 4 } : { top: coords.top + 4 }),
+              }}
+              value={draft}
+              placeholder={placeholder}
+              disabled={pending}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  commit();
+                  setExpanded(false);
+                } else if (e.key === "Escape") {
+                  setDraft(value);
+                  setExpanded(false);
+                }
+              }}
+              onBlur={() => {
+                commit();
+                setExpanded(false);
+              }}
+            />
+          </>,
+          document.body
+        )}
+    </>
   );
+}
+
+// Deliberately not built on cellClass — that bakes in `truncate`
+// (white-space: nowrap + ellipsis), which silently clips a risk
+// description/CR note/decision rationale to one line with no way to read
+// or write the rest. This wraps instead, and auto-grows to fit content via
+// the ref callback below so the surrounding row just gets taller rather
+// than the text disappearing off both ends.
+const textareaClass =
+  "w-full min-w-0 bg-transparent text-sm px-1.5 py-1 rounded border border-slate-200 hover:border-slate-300 hover:bg-slate-100 focus:bg-white focus:outline-none focus:ring-1 focus:ring-slate-400 disabled:opacity-50 resize-none whitespace-pre-wrap";
+
+function autoGrow(el: HTMLTextAreaElement | null) {
+  if (!el) return;
+  el.style.height = "auto";
+  el.style.height = `${el.scrollHeight}px`;
 }
 
 export function InlineTextarea({
@@ -61,12 +141,16 @@ export function InlineTextarea({
 
   return (
     <textarea
-      className={cellClass + " resize-none"}
+      ref={autoGrow}
+      className={textareaClass}
       rows={1}
       value={draft}
       placeholder={placeholder}
       disabled={pending}
-      onChange={(e) => setDraft(e.target.value)}
+      onChange={(e) => {
+        setDraft(e.target.value);
+        autoGrow(e.target);
+      }}
       onBlur={() => {
         if (draft !== value) startTransition(() => onSave(draft));
       }}
