@@ -367,6 +367,13 @@ model WbsTask {
   sprint               Sprint?  @relation(fields: [sprintId], references: [id], onDelete: SetNull)
   pctComplete          Float    @default(0)
   actualHours          Float    @default(0)
+  // actualHours baseline snapshotted at the moment this task was last
+  // committed to its current sprint — actualHours is a lifetime-cumulative
+  // value (the Task tab always shows it in full), so a sprint's own Actual
+  // Value must use (actualHours - sprintEntryHours), not actualHours
+  // directly, or a task moved mid-flight would bring its whole history with
+  // it. See sprintOwnHours() in lib/calculations.ts.
+  sprintEntryHours     Float    @default(0)
   competencyMultiplier Float    @default(1)
   createdAt            DateTime @default(now())
 
@@ -385,9 +392,10 @@ model WbsTask {
 // the drill-down list at close time) are a permanent record the UI reads
 // directly instead of recomputing — so a task carrying over into a later
 // sprint, or being edited afterward, can never silently rewrite this
-// sprint's already-reported numbers or which tasks earned them. There is
-// no "reopen" — closing is one-way, and once closed, a task can no longer
-// be committed into or removed from this sprint (see delivery-actions.ts).
+// sprint's already-reported numbers or which tasks earned them. A closed
+// sprint can only be reopened by an Admin (reopenSprint in
+// delivery-actions.ts); while closed, a task can't be committed into or
+// removed from it.
 model Sprint {
   id        String   @id @default(cuid())
   projectId String
@@ -402,6 +410,17 @@ model Sprint {
   frozenEarnedPoints  Float?
   frozenActualValue   Float?
   frozenTaskSnapshot  Json?
+  // Tasks detached from this sprint (moved elsewhere, or uncommitted to the
+  // backlog) *while it was still open* — each entry freezes that task's
+  // contribution (points/pctComplete/its own actual hours/cost) at the
+  // moment it left, keyed by taskId (at most one entry per task; a task
+  // that returns to this sprint has its entry removed, since its live row
+  // covers it again). Without this, an open sprint's live PV/EV/AV would
+  // silently drop a task's contribution the instant it moved elsewhere,
+  // with zero trace it was ever here. Folded into frozenTaskSnapshot's
+  // union (with the still-live tasks) the moment this sprint is closed —
+  // see closeSprint() and sprintContributionEntries() in calculations.ts.
+  departedTaskSnapshot Json @default("[]")
 
   tasks       WbsTask[]
   allocations SprintAllocation[]

@@ -1,5 +1,13 @@
 import { prisma } from "@/lib/prisma";
-import { computeEvm, manDayRate, manDaysFromHours, budgetEntriesFromSprints, toSprintsForBudget } from "@/lib/calculations";
+import {
+  computeEvm,
+  manDayRate,
+  budgetEntriesFromSprints,
+  toSprintsForBudget,
+  liveSprintContribution,
+  parseSprintContributions,
+  roleBreakdownFromContributions,
+} from "@/lib/calculations";
 import { formatMoney } from "@/lib/format";
 import { requireModuleAccess } from "@/lib/rbac";
 import { EvmLineChart } from "@/components/charts/evm-line-chart";
@@ -28,18 +36,16 @@ export default async function BudgetTrackerPage({ params }: { params: { projectI
   const evm = computeEvm(evmSource, project.contractValue);
   const rate = manDayRate(project.contractValue, project.plannedManDays);
 
+  // Closed sprints read their frozen snapshot (so a role-rate change after
+  // close can't retroactively rewrite reported cost); an open sprint's own
+  // spend is its live tasks plus anything that departed it mid-flight
+  // (moved elsewhere/uncommitted while still open) — same union closeSprint
+  // itself freezes. See sprintTotalsFromContributions/closeSprint.
   const roleBreakdowns: RoleBreakdownRow[][] = sprints.map((s) => {
-    const groups = new Map<string, RoleBreakdownRow>();
-    for (const t of s.tasks) {
-      const roleName = t.person?.roleRate?.roleName ?? "Unassigned / No Rate Role";
-      const rowRate = t.person?.roleRate?.manDayRate ?? 0;
-      const manDaysEquivalent = manDaysFromHours(t.actualHours);
-      const existing = groups.get(roleName) ?? { roleName, manDaysEquivalent: 0, manDayRate: rowRate, cost: 0 };
-      existing.manDaysEquivalent += manDaysEquivalent;
-      existing.cost += manDaysEquivalent * rowRate;
-      groups.set(roleName, existing);
-    }
-    return Array.from(groups.values()).filter((g) => g.manDaysEquivalent > 0);
+    const entries = s.closedAt
+      ? parseSprintContributions(s.frozenTaskSnapshot)
+      : [...s.tasks.map(liveSprintContribution), ...parseSprintContributions(s.departedTaskSnapshot)];
+    return roleBreakdownFromContributions(entries);
   });
 
   const chartData = evm.map((e) => ({ weekEnding: e.weekEnding.toISOString(), pv: e.pv, ev: e.ev, ac: e.actualCost }));

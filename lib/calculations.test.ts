@@ -10,7 +10,42 @@ import {
   budgetEntriesFromSprints,
   sprintEarnedValue,
   manDaysFromHours,
+  sprintOwnHours,
+  sprintTotalsFromContributions,
+  roleBreakdownFromContributions,
+  parseSprintContributions,
+  type SprintTaskContribution,
+  type SprintForBudget,
 } from "./calculations";
+
+function contribution(overrides: Partial<SprintTaskContribution> = {}): SprintTaskContribution {
+  return {
+    taskId: "t1",
+    wbsNumber: "1.1",
+    title: "Task",
+    storyPoints: 0,
+    pctComplete: 0,
+    sprintOwnHours: 0,
+    competencyMultiplier: 1,
+    manDayRate: 0,
+    roleName: null,
+    ...overrides,
+  };
+}
+
+function sprintForBudget(overrides: Partial<SprintForBudget> = {}): SprintForBudget {
+  return {
+    endDate: new Date("2026-01-14"),
+    closedAt: null,
+    frozenPlannedPoints: null,
+    frozenEarnedPoints: null,
+    frozenActualValue: null,
+    frozenEntries: [],
+    liveEntries: [],
+    departedEntries: [],
+    ...overrides,
+  };
+}
 
 describe("currentStage", () => {
   const STAGES = ["Planning", "Development", "Release"] as const;
@@ -192,20 +227,70 @@ describe("manDaysFromHours", () => {
   });
 });
 
+describe("sprintOwnHours", () => {
+  it("subtracts the entry baseline from lifetime actualHours", () => {
+    expect(sprintOwnHours(28, 20)).toBe(8);
+  });
+
+  it("clamps at 0 rather than going negative (e.g. a downward data-entry correction)", () => {
+    expect(sprintOwnHours(15, 20)).toBe(0);
+  });
+
+  it("a freshly-committed task (baseline == current hours) starts at 0", () => {
+    expect(sprintOwnHours(20, 20)).toBe(0);
+  });
+});
+
+describe("sprintTotalsFromContributions / roleBreakdownFromContributions", () => {
+  it("computes PV/EV/AV/cost from a list of contribution entries", () => {
+    const entries = [
+      contribution({ storyPoints: 10, pctComplete: 1, sprintOwnHours: 40, competencyMultiplier: 1, manDayRate: 100, roleName: "Engineer" }),
+      contribution({ storyPoints: 5, pctComplete: 0.5, sprintOwnHours: 10, competencyMultiplier: 1, manDayRate: 100, roleName: "Engineer" }),
+    ];
+    const totals = sprintTotalsFromContributions(entries);
+    expect(totals.plannedValue).toBe(15);
+    expect(totals.earnedValue).toBe(10); // only the fully-done task earns (0/100 rule)
+    expect(totals.actualValue).toBeCloseTo(6.25); // (40+10)/8 man-days x 1
+    expect(totals.actualCost).toBeCloseTo(625); // (40+10)/8 man-days x 100
+  });
+
+  it("groups cost by role and drops roles with no hours logged", () => {
+    const entries = [
+      contribution({ sprintOwnHours: 16, manDayRate: 100, roleName: "Engineer" }),
+      contribution({ sprintOwnHours: 8, manDayRate: 150, roleName: "Designer" }),
+      contribution({ sprintOwnHours: 0, manDayRate: 200, roleName: "QA" }), // no hours — excluded
+    ];
+    const breakdown = roleBreakdownFromContributions(entries);
+    expect(breakdown).toHaveLength(2);
+    expect(breakdown.find((r) => r.roleName === "Engineer")).toMatchObject({ manDaysEquivalent: 2, cost: 200 });
+    expect(breakdown.find((r) => r.roleName === "Designer")).toMatchObject({ manDaysEquivalent: 1, cost: 150 });
+  });
+});
+
+describe("parseSprintContributions", () => {
+  it("returns [] for anything that isn't an array (e.g. an unset Json column)", () => {
+    expect(parseSprintContributions(null)).toEqual([]);
+    expect(parseSprintContributions(undefined)).toEqual([]);
+    expect(parseSprintContributions({})).toEqual([]);
+  });
+
+  it("fills in defaults for a pre-migration snapshot missing the newer fields", () => {
+    const parsed = parseSprintContributions([{ taskId: "t1", wbsNumber: "1.1", title: "Old task", storyPoints: 5, pctComplete: 1 }]);
+    expect(parsed).toEqual([
+      { taskId: "t1", wbsNumber: "1.1", title: "Old task", storyPoints: 5, pctComplete: 1, sprintOwnHours: 0, competencyMultiplier: 1, manDayRate: 0, roleName: null },
+    ]);
+  });
+});
+
 describe("budgetEntriesFromSprints", () => {
   it("an open sprint computes PV/EV live from its tasks (0/100 rule)", () => {
     const sprints = [
-      {
-        endDate: new Date("2026-01-14"),
-        closedAt: null,
-        frozenPlannedPoints: null,
-        frozenEarnedPoints: null,
-        frozenActualValue: null,
-        tasks: [
-          { storyPoints: 10, pctComplete: 1, actualHours: 40, competencyMultiplier: 1, manDayRate: 100 },
-          { storyPoints: 5, pctComplete: 0.5, actualHours: 10, competencyMultiplier: 1, manDayRate: 100 },
+      sprintForBudget({
+        liveEntries: [
+          contribution({ storyPoints: 10, pctComplete: 1 }),
+          contribution({ storyPoints: 5, pctComplete: 0.5 }),
         ],
-      },
+      }),
     ];
     const result = budgetEntriesFromSprints(sprints, 15);
     expect(result[0].pctPlannedComplete).toBeCloseTo(1); // (10+5) / 15
@@ -214,14 +299,14 @@ describe("budgetEntriesFromSprints", () => {
 
   it("a closed sprint reads its frozen snapshot, ignoring the (possibly since-changed) live tasks", () => {
     const sprints = [
-      {
-        endDate: new Date("2026-01-14"),
+      sprintForBudget({
         closedAt: new Date("2026-01-15"),
         frozenPlannedPoints: 20,
         frozenEarnedPoints: 20,
         frozenActualValue: 18,
-        tasks: [{ storyPoints: 999, pctComplete: 0, actualHours: 0, competencyMultiplier: 1, manDayRate: 100 }], // since-changed — must be ignored
-      },
+        frozenEntries: [contribution({ storyPoints: 20, pctComplete: 1 })],
+        liveEntries: [contribution({ storyPoints: 999, pctComplete: 0 })], // since-changed — must be ignored
+      }),
     ];
     const result = budgetEntriesFromSprints(sprints, 20);
     expect(result[0].pctPlannedComplete).toBe(1);
@@ -230,22 +315,16 @@ describe("budgetEntriesFromSprints", () => {
 
   it("cumulative planned/earned accumulate across sprints — no dedup needed, a task belongs to one sprint at a time", () => {
     const sprints = [
-      {
-        endDate: new Date("2026-01-14"),
+      sprintForBudget({
         closedAt: new Date("2026-01-15"),
         frozenPlannedPoints: 10,
         frozenEarnedPoints: 10,
         frozenActualValue: 8,
-        tasks: [],
-      },
-      {
+      }),
+      sprintForBudget({
         endDate: new Date("2026-01-28"),
-        closedAt: null,
-        frozenPlannedPoints: null,
-        frozenEarnedPoints: null,
-        frozenActualValue: null,
-        tasks: [{ storyPoints: 10, pctComplete: 1, actualHours: 80, competencyMultiplier: 1, manDayRate: 100 }],
-      },
+        liveEntries: [contribution({ storyPoints: 10, pctComplete: 1 })],
+      }),
     ];
     const result = budgetEntriesFromSprints(sprints, 20);
     expect(result[0].pctPlannedComplete).toBeCloseTo(0.5); // 10 / 20
@@ -255,39 +334,44 @@ describe("budgetEntriesFromSprints", () => {
 
   it("actualCost is that sprint's own spend only, not cumulative", () => {
     const sprints = [
-      {
-        endDate: new Date("2026-01-14"),
-        closedAt: null,
-        frozenPlannedPoints: null,
-        frozenEarnedPoints: null,
-        frozenActualValue: null,
-        tasks: [{ storyPoints: 10, pctComplete: 1, actualHours: 40, competencyMultiplier: 1, manDayRate: 100 }], // 5 md x 100
-      },
-      {
-        endDate: new Date("2026-01-28"),
-        closedAt: null,
-        frozenPlannedPoints: null,
-        frozenEarnedPoints: null,
-        frozenActualValue: null,
-        tasks: [{ storyPoints: 5, pctComplete: 1, actualHours: 16, competencyMultiplier: 1, manDayRate: 100 }], // 2 md x 100
-      },
+      sprintForBudget({ liveEntries: [contribution({ storyPoints: 10, pctComplete: 1, sprintOwnHours: 40, manDayRate: 100 })] }), // 5 md x 100
+      sprintForBudget({ endDate: new Date("2026-01-28"), liveEntries: [contribution({ storyPoints: 5, pctComplete: 1, sprintOwnHours: 16, manDayRate: 100 })] }), // 2 md x 100
     ];
     const result = budgetEntriesFromSprints(sprints, 15);
     expect(result[0].actualCost).toBe(500);
     expect(result[1].actualCost).toBe(200); // not 700 — sprint 2 only spent 200 of its own
   });
 
-  it("plannedStoryPoints = 0 doesn't divide by zero", () => {
+  it("a closed sprint's actualCost comes from the frozen snapshot, not the live (possibly rate-changed) tasks", () => {
     const sprints = [
-      {
-        endDate: new Date("2026-01-14"),
-        closedAt: null,
-        frozenPlannedPoints: null,
-        frozenEarnedPoints: null,
-        frozenActualValue: null,
-        tasks: [{ storyPoints: 10, pctComplete: 1, actualHours: 40, competencyMultiplier: 1, manDayRate: 100 }],
-      },
+      sprintForBudget({
+        closedAt: new Date("2026-01-15"),
+        frozenPlannedPoints: 10,
+        frozenEarnedPoints: 10,
+        frozenActualValue: 5,
+        frozenEntries: [contribution({ storyPoints: 10, pctComplete: 1, sprintOwnHours: 40, manDayRate: 100 })], // frozen at 5 md x 100 = 500
+        liveEntries: [contribution({ storyPoints: 10, pctComplete: 1, sprintOwnHours: 40, manDayRate: 250 })], // rate since raised — must be ignored
+      }),
     ];
+    const result = budgetEntriesFromSprints(sprints, 10);
+    expect(result[0].actualCost).toBe(500);
+  });
+
+  it("an open sprint's totals include a task that departed it mid-flight, not just its still-live tasks", () => {
+    const sprints = [
+      sprintForBudget({
+        liveEntries: [contribution({ taskId: "still-here", storyPoints: 5, pctComplete: 1, sprintOwnHours: 8, manDayRate: 100 })],
+        departedEntries: [contribution({ taskId: "moved-away", storyPoints: 10, pctComplete: 1, sprintOwnHours: 40, manDayRate: 100 })],
+      }),
+    ];
+    const result = budgetEntriesFromSprints(sprints, 15);
+    expect(result[0].pctPlannedComplete).toBeCloseTo(1); // (5 + 10) / 15 — the departed task still counts
+    expect(result[0].pctActualComplete).toBeCloseTo(1);
+    expect(result[0].actualCost).toBe(600); // (8+40)/8 md x 100
+  });
+
+  it("plannedStoryPoints = 0 doesn't divide by zero", () => {
+    const sprints = [sprintForBudget({ liveEntries: [contribution({ storyPoints: 10, pctComplete: 1 })] })];
     const result = budgetEntriesFromSprints(sprints, 0);
     expect(result[0].pctPlannedComplete).toBe(0);
     expect(result[0].pctActualComplete).toBe(0);

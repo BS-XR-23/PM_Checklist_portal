@@ -5,7 +5,12 @@ import * as XLSX from "xlsx";
 import { prisma } from "@/lib/prisma";
 import { parseDateInput, normalizeTaskTitle } from "@/lib/format";
 import { requireModuleWrite, requireUser, writeAudit, type CurrentUser } from "@/lib/rbac";
-import { wbsPlannedValue, wbsActualValue, sprintEarnedValue, manDaysFromHours } from "@/lib/calculations";
+import {
+  liveSprintContribution,
+  parseSprintContributions,
+  sprintTotalsFromContributions,
+  type SprintTaskContribution,
+} from "@/lib/calculations";
 
 /**
  * Reopening a closed sprint — the one sprint action still restricted to the
@@ -102,14 +107,17 @@ export async function deleteWbsTask(id: string, _projectId: string) {
 
   // No DB-level Restrict backs this up (that existed via WbsWeekEntry,
   // which no longer exists) — this app-level check is now the only thing
-  // protecting a closed sprint's frozen PV/EV/AV from losing the task that
-  // explains it. A task still sitting in an open sprint hasn't fed any
-  // frozen number yet, so deleting it is safe (and fully audited below).
+  // protecting a sprint's PV/EV/AV from losing the task that explains it.
+  // Blanket "must be uncommitted first" regardless of open/closed: deleting
+  // a task still committed to an *open* sprint used to be allowed and would
+  // silently erase its contribution with zero trace anywhere (worse than
+  // moving it, since the task itself stops existing) — uncommitting first
+  // (assignTaskToSprint) snapshots that contribution into the sprint's
+  // departedTaskSnapshot before the task is gone, so the sprint keeps it.
   if (existing.sprintId) {
     const sprint = await prisma.sprint.findUnique({ where: { id: existing.sprintId } });
-    if (sprint?.closedAt) {
-      throw new Error(`This task is committed to the closed sprint "${sprint.name}" — it can't be deleted.`);
-    }
+    const closedNote = sprint?.closedAt ? " (closed — ask an Admin to reopen it first)" : "";
+    throw new Error(`This task is committed to sprint "${sprint?.name ?? "?"}"${closedNote} — remove it from the sprint before deleting it.`);
   }
 
   await prisma.wbsTask.delete({ where: { id } });
@@ -418,27 +426,40 @@ export async function updateSprint(
  * keeps the "which tasks earned this" list just as frozen as the numbers
  * it explains. Closing is final for everyone except an Admin, who can undo
  * it via reopenSprint() below.
+ *
+ * Frozen totals are computed over *every* task that ever contributed to
+ * this sprint while it was open — its still-live tasks, unioned with
+ * departedTaskSnapshot (anything moved elsewhere or uncommitted mid-flight,
+ * see assignTaskToSprint) — not just whatever happens to still be
+ * committed at the moment of closing. For a sprint with no departures
+ * (the common case) this is exactly the same computation as before: the
+ * union is just the live tasks, and sprintOwnHours(actualHours, 0) ==
+ * actualHours for a task whose sprintEntryHours baseline was never reset.
  */
 export async function closeSprint(id: string, _projectId: string) {
   const existing = await prisma.sprint.findUniqueOrThrow({
     where: { id },
-    include: { tasks: true },
+    include: { tasks: { include: { person: { include: { roleRate: true } } } } },
   });
   const user = await requireModuleWrite(existing.projectId, "DELIVERY");
 
   if (existing.closedAt) throw new Error("This sprint is already closed.");
 
-  const plannedValue = wbsPlannedValue(existing.tasks.map((t) => ({ points: t.storyPoints })));
-  const earnedValue = sprintEarnedValue(existing.tasks.map((t) => ({ points: t.storyPoints, pctComplete: t.pctComplete })));
-  const actualValue = wbsActualValue(
-    existing.tasks.map((t) => ({ actualManDays: manDaysFromHours(t.actualHours), competencyMultiplier: t.competencyMultiplier }))
-  );
-  const taskSnapshot = existing.tasks.map((t) => ({
-    taskId: t.id,
-    wbsNumber: t.wbsNumber,
-    title: t.title,
-    storyPoints: t.storyPoints,
-    pctComplete: t.pctComplete,
+  const entries: SprintTaskContribution[] = [
+    ...existing.tasks.map(liveSprintContribution),
+    ...parseSprintContributions(existing.departedTaskSnapshot),
+  ];
+  const { plannedValue, earnedValue, actualValue } = sprintTotalsFromContributions(entries);
+  const taskSnapshot = entries.map((e) => ({
+    taskId: e.taskId,
+    wbsNumber: e.wbsNumber,
+    title: e.title,
+    storyPoints: e.storyPoints,
+    pctComplete: e.pctComplete,
+    sprintOwnHours: e.sprintOwnHours,
+    competencyMultiplier: e.competencyMultiplier,
+    manDayRate: e.manDayRate,
+    roleName: e.roleName,
   }));
 
   await prisma.sprint.update({
@@ -530,27 +551,49 @@ export async function deleteSprint(id: string, _projectId: string) {
 /**
  * Two independent parent chains (task→project, sprint→project) must both be
  * verified when committing into a sprint — never trust the caller's
- * projectId. sprintId: null uncommits the task instead: no second id is
- * supplied, but the task's *current* sprint (if any) still needs a
- * closed-sprint check — a task can't silently be pulled out of a closed
- * sprint's frozen membership either, matching the same "closed = immutable
- * until an Admin reopenSprint()s it" rule enforced everywhere else on a
- * sprint. No role-based exception here anymore: an Admin who needs to
- * detach a task from a closed sprint reopens it first (via reopenSprint),
- * same as everyone else. Doesn't touch the sprint's frozen PV/EV/AV/
- * snapshot, which stay a permanent historical record regardless.
+ * projectId. sprintId: null uncommits the task instead.
+ *
+ * Whichever sprint currently holds this task (if any) needs the same
+ * protection on the way out, whether it's being uncommitted to the backlog
+ * or moved straight to a different sprint: a closed sprint can't be touched
+ * at all without an Admin reopening it first (detachFromCurrentSprint
+ * throws), and an *open* one must not silently lose this task's
+ * contribution the instant it leaves — so its current points/pctComplete/
+ * actual-hours-so-far/rate get snapshotted into that sprint's
+ * departedTaskSnapshot before the task goes. Without this, an open
+ * sprint's live PV/EV/AV would just recompute over whatever's left, with
+ * zero record the task was ever there.
+ *
+ * The destination sprint (when committing in) also gets a fresh
+ * sprintEntryHours baseline — actualHours is lifetime-cumulative, so
+ * without this the destination would immediately inherit the task's whole
+ * history of logged hours instead of starting at 0 for its own tracking.
  */
 export async function assignTaskToSprint(taskId: string, sprintId: string | null, _projectId: string) {
-  const task = await prisma.wbsTask.findUniqueOrThrow({ where: { id: taskId } });
+  const task = await prisma.wbsTask.findUniqueOrThrow({
+    where: { id: taskId },
+    include: { person: { include: { roleRate: true } } },
+  });
+
+  if (sprintId === task.sprintId) return; // already exactly here — nothing to do
+
+  async function detachFromCurrentSprint() {
+    if (!task.sprintId) return;
+    const currentSprint = await prisma.sprint.findUniqueOrThrow({ where: { id: task.sprintId } });
+    if (currentSprint.closedAt) {
+      throw new Error(`This task's sprint "${currentSprint.name}" is closed — ask an Admin to reopen it before removing tasks.`);
+    }
+    const departure = liveSprintContribution(task);
+    const survivors = parseSprintContributions(currentSprint.departedTaskSnapshot).filter((d) => d.taskId !== taskId);
+    await prisma.sprint.update({
+      where: { id: currentSprint.id },
+      data: { departedTaskSnapshot: [...survivors, departure] },
+    });
+  }
 
   if (sprintId === null) {
     const user = await requireModuleWrite(task.projectId, "DELIVERY");
-    if (task.sprintId) {
-      const currentSprint = await prisma.sprint.findUnique({ where: { id: task.sprintId } });
-      if (currentSprint?.closedAt) {
-        throw new Error(`This task's sprint "${currentSprint.name}" is closed — ask an Admin to reopen it before removing tasks.`);
-      }
-    }
+    await detachFromCurrentSprint();
     await prisma.wbsTask.update({ where: { id: taskId }, data: { sprintId: null } });
     await writeAudit({
       actor: user,
@@ -573,7 +616,18 @@ export async function assignTaskToSprint(taskId: string, sprintId: string | null
   }
   const user = await requireModuleWrite(task.projectId, "DELIVERY");
 
-  await prisma.wbsTask.update({ where: { id: taskId }, data: { sprintId } });
+  await detachFromCurrentSprint();
+
+  // Returning to a sprint it previously departed while this task sat
+  // elsewhere — drop that stale entry, since the task's live row covers it
+  // again now and keeping both would double-count its contribution.
+  const destinationDepartures = parseSprintContributions(sprint.departedTaskSnapshot);
+  const withoutThisTask = destinationDepartures.filter((d) => d.taskId !== taskId);
+  if (withoutThisTask.length !== destinationDepartures.length) {
+    await prisma.sprint.update({ where: { id: sprintId }, data: { departedTaskSnapshot: withoutThisTask } });
+  }
+
+  await prisma.wbsTask.update({ where: { id: taskId }, data: { sprintId, sprintEntryHours: task.actualHours } });
 
   await writeAudit({
     actor: user,

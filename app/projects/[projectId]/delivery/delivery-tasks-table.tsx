@@ -29,13 +29,19 @@ export type SprintOption = { id: string; name: string; closedAt: Date | null };
 const PAGE_SIZES = [10, 25, 50] as const;
 type SortKey = "wbsNumber" | "storyPoints" | "done" | "remaining";
 
-// Committing a task to a sprint or logging hours against it is evidence
-// someone has started the work, even before pctComplete is nudged up — so
-// those flip the status out of Not Started the same way a nonzero
-// pctComplete does.
-function taskStatusKey(t: Pick<WbsTaskData, "pctComplete" | "actualHours" | "sprintId">): "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED" {
+// Committing a task to a sprint is evidence someone has started the work,
+// even before pctComplete is nudged up — so that alone flips the status
+// out of Not Started. Completion is a lifetime property (once done, always
+// done, whichever sprint it happened in) and wins regardless. But
+// pctComplete/actualHours alone, with no sprintId, must NOT read as
+// in-progress: a task uncommitted back to the backlog keeps those fields
+// as leftover history from its last sprint (actualHours is lifetime-
+// cumulative on purpose — see sprintOwnHours in lib/calculations.ts), and
+// without the sprintId check here it would wrongly still show as active
+// work while sitting untracked in the backlog.
+function taskStatusKey(t: Pick<WbsTaskData, "pctComplete" | "sprintId">): "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED" {
   if (t.pctComplete >= 1) return "COMPLETED";
-  if (t.pctComplete > 0 || t.actualHours > 0 || t.sprintId) return "IN_PROGRESS";
+  if (t.sprintId) return "IN_PROGRESS";
   return "NOT_STARTED";
 }
 

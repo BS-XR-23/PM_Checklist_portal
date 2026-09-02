@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireModuleAccess, requireUser } from "@/lib/rbac";
 import { compareWbsNumbers } from "@/lib/format";
-import { wbsPlannedValue, wbsActualValue, sprintEarnedValue, manDaysFromHours } from "@/lib/calculations";
+import { liveSprintContribution, parseSprintContributions, sprintTotalsFromContributions, sprintOwnHours } from "@/lib/calculations";
 import { SubNav } from "@/components/ui/sub-nav";
 import { StatTile } from "@/components/ui/stat-tile";
 import { IconLayers, IconClock, IconCheckCircle, IconClipboardList } from "@/components/layout/icons";
@@ -26,7 +26,7 @@ export default async function DeliverySprintsPage({ params }: { params: { projec
       where: { projectId: params.projectId },
       orderBy: { createdAt: "asc" },
       include: {
-        tasks: { orderBy: { createdAt: "asc" } },
+        tasks: { orderBy: { createdAt: "asc" }, include: { person: { include: { roleRate: true } } } },
         allocations: { include: { person: { include: { competency: true } } }, orderBy: { createdAt: "asc" } },
       },
     }),
@@ -62,18 +62,18 @@ export default async function DeliverySprintsPage({ params }: { params: { projec
   }));
 
   // Open sprints: PV/EV/AV computed live from current WbsTask state (0/100
-  // rule for EV — see sprintEarnedValue). Closed sprints read their
-  // permanent frozen* snapshot (including frozenTaskSnapshot, the
-  // drill-down list) instead of recomputing — see closeSprint in
-  // delivery-actions.ts for why.
+  // rule for EV — see sprintEarnedValue), unioned with departedTaskSnapshot
+  // so a task moved elsewhere or uncommitted mid-flight doesn't silently
+  // drop out of the totals it already earned here (see assignTaskToSprint).
+  // Closed sprints read their permanent frozen* snapshot (including
+  // frozenTaskSnapshot, the drill-down list) instead of recomputing — see
+  // closeSprint in delivery-actions.ts for why.
   const sprintSummaries: SprintSummaryData[] = sprints.map((s) => {
-    const pv = s.closedAt ? s.frozenPlannedPoints ?? 0 : wbsPlannedValue(s.tasks.map((t) => ({ points: t.storyPoints })));
-    const ev = s.closedAt
-      ? s.frozenEarnedPoints ?? 0
-      : sprintEarnedValue(s.tasks.map((t) => ({ points: t.storyPoints, pctComplete: t.pctComplete })));
-    const av = s.closedAt
-      ? s.frozenActualValue ?? 0
-      : wbsActualValue(s.tasks.map((t) => ({ actualManDays: manDaysFromHours(t.actualHours), competencyMultiplier: t.competencyMultiplier })));
+    const departedEntries = parseSprintContributions(s.departedTaskSnapshot);
+    const liveEntries = s.tasks.map(liveSprintContribution);
+    const { plannedValue: pv, earnedValue: ev, actualValue: av } = s.closedAt
+      ? { plannedValue: s.frozenPlannedPoints ?? 0, earnedValue: s.frozenEarnedPoints ?? 0, actualValue: s.frozenActualValue ?? 0 }
+      : sprintTotalsFromContributions([...liveEntries, ...departedEntries]);
 
     // Same natural WBS# sort as the Tasks tab, not commit order — a PM
     // scanning a sprint's drill-down expects it grouped the same way.
@@ -85,10 +85,24 @@ export default async function DeliverySprintsPage({ params }: { params: { projec
         title: t.title,
         storyPoints: t.storyPoints,
         pctComplete: t.pctComplete,
-        actualHours: t.actualHours,
+        // Sprint-scoped, not the task's lifetime total (that's the Task
+        // tab's job) — see sprintOwnHours in lib/calculations.ts. Paired
+        // with sprintEntryHours so the row's edit can translate back to
+        // the absolute value actually stored on WbsTask.
+        actualHours: sprintOwnHours(t.actualHours, t.sprintEntryHours),
+        sprintEntryHours: t.sprintEntryHours,
         personId: t.personId,
         personName: t.personName,
       }));
+
+    // Tasks that left this (still-open) sprint mid-flight — shown as a
+    // read-only tail below the live rows so a PM can see the sprint still
+    // accounts for them, not just its live total. Closed sprints don't
+    // need this separately: their departures are already folded into
+    // frozenTaskSnapshot at close time.
+    const departedTasks = s.closedAt
+      ? []
+      : [...departedEntries].sort((a, b) => compareWbsNumbers(a.wbsNumber, b.wbsNumber));
 
     const frozenTasks = Array.isArray(s.frozenTaskSnapshot)
       ? [...(s.frozenTaskSnapshot as unknown as FrozenTaskSnapshotEntry[])].sort((a, b) => compareWbsNumbers(a.wbsNumber, b.wbsNumber))
@@ -103,7 +117,20 @@ export default async function DeliverySprintsPage({ params }: { params: { projec
       jiraHours: a.jiraHours,
     }));
 
-    return { id: s.id, name: s.name, startDate: s.startDate, endDate: s.endDate, closedAt: s.closedAt, pv, ev, av, tasks, frozenTasks, allocations };
+    return {
+      id: s.id,
+      name: s.name,
+      startDate: s.startDate,
+      endDate: s.endDate,
+      closedAt: s.closedAt,
+      pv,
+      ev,
+      av,
+      tasks,
+      departedTasks,
+      frozenTasks,
+      allocations,
+    };
   });
 
   return (

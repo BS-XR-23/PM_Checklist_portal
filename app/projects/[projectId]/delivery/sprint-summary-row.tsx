@@ -67,7 +67,10 @@ function PersonAvatar({ name }: { name: string | null }) {
 }
 
 // A task committed to an OPEN sprint — tracked directly (no weekly rows),
-// editable inline below.
+// editable inline below. actualHours here is already sprint-scoped (see
+// sprintOwnHours in lib/calculations.ts), not the task's lifetime total —
+// sprintEntryHours is carried alongside purely so an edit can be
+// translated back to the absolute value actually stored on WbsTask.
 export type SprintTaskDrillDown = {
   id: string;
   wbsNumber: string;
@@ -75,8 +78,23 @@ export type SprintTaskDrillDown = {
   storyPoints: number;
   pctComplete: number;
   actualHours: number;
+  sprintEntryHours: number;
   personId: string | null;
   personName: string | null;
+};
+
+// A task detached from this (still-open) sprint mid-flight — moved to
+// another sprint, or uncommitted back to the backlog — while this one was
+// still open. Frozen at the moment it left (see assignTaskToSprint), shown
+// read-only below the live rows so the sprint visibly still accounts for
+// it instead of just silently recomputing over what's left.
+export type DepartedTaskEntry = {
+  taskId: string;
+  wbsNumber: string;
+  title: string;
+  storyPoints: number;
+  pctComplete: number;
+  sprintOwnHours: number;
 };
 
 // One row of a CLOSED sprint's frozenTaskSnapshot — permanent record of
@@ -119,6 +137,7 @@ export type SprintSummaryData = {
   ev: number;
   av: number;
   tasks: SprintTaskDrillDown[]; // live — only used while open
+  departedTasks: DepartedTaskEntry[]; // tasks that left while open — see assignTaskToSprint; empty once closed (folded into frozenTasks)
   frozenTasks: FrozenTaskSnapshotEntry[]; // from frozenTaskSnapshot — only used once closed
   allocations: SprintAllocationData[];
 };
@@ -501,7 +520,11 @@ export function SprintSummaryRow({
                             </td>
                             <td className="py-2 px-3 min-w-[90px]">
                               {editable ? (
-                                <InlineNumber value={t.actualHours} step={0.5} onSave={(v) => updateTaskProgress(t.id, projectId, { actualHours: v ?? 0 })} />
+                                <InlineNumber
+                                  value={t.actualHours}
+                                  step={0.5}
+                                  onSave={(v) => updateTaskProgress(t.id, projectId, { actualHours: t.sprintEntryHours + (v ?? 0) })}
+                                />
                               ) : (
                                 <span className="text-slate-600">{t.actualHours}</span>
                               )}
@@ -535,7 +558,29 @@ export function SprintSummaryRow({
                             )}
                           </tr>
                         ))}
-                    {(closed ? sprint.frozenTasks.length : sprint.tasks.length) === 0 && (
+                    {!closed &&
+                      sprint.departedTasks.map((t) => (
+                        <tr key={`departed-${t.taskId}`} className="border-t border-slate-100 bg-slate-50/50 text-slate-400" title="Moved to another sprint (or back to the backlog) while this sprint was open — still counted in its totals">
+                          <td className="py-2 px-3">{t.wbsNumber || "—"}</td>
+                          <td className="py-2 px-3">
+                            <div className="flex items-center gap-1.5">
+                              <span className="truncate">{t.title}</span>
+                              <span className="inline-flex shrink-0 items-center rounded-full bg-slate-200 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-500">
+                                Moved
+                              </span>
+                            </div>
+                          </td>
+                          <td className="py-2 px-3">{t.storyPoints}</td>
+                          <td className="py-2 px-3">{Math.round(t.pctComplete * 100)}%</td>
+                          <td className="py-2 px-3">{t.sprintOwnHours}</td>
+                          <td className="py-2 px-3">—</td>
+                          <td className="py-2 px-3">
+                            <StatusPill pctComplete={t.pctComplete} />
+                          </td>
+                          {editable && <td className="py-2 px-3" />}
+                        </tr>
+                      ))}
+                    {(closed ? sprint.frozenTasks.length : sprint.tasks.length + sprint.departedTasks.length) === 0 && (
                       <tr>
                         <td colSpan={taskColCount} className="py-3 px-3 text-slate-400">
                           No tasks committed to this sprint {closed ? "when it closed" : "yet — add one below"}.

@@ -129,13 +129,144 @@ export function manDaysFromHours(hours: number): number {
   return hours / HOURS_PER_MAN_DAY;
 }
 
+/**
+ * actualHours is lifetime-cumulative on WbsTask (the Task tab always shows
+ * it in full) — a sprint's own Actual Value/cost must only count hours
+ * logged *since* the task joined its current sprint, or a task moved
+ * mid-flight would bring its whole history with it and the new sprint's AV
+ * would jump the instant it landed. sprintEntryHours is the actualHours
+ * baseline snapshotted at that commit (see assignTaskToSprint in
+ * delivery-actions.ts). Clamped at 0: a PM correcting a typo downward in
+ * actualHours shouldn't produce a negative "hours this sprint".
+ */
+export function sprintOwnHours(actualHours: number, sprintEntryHours: number): number {
+  return Math.max(0, actualHours - sprintEntryHours);
+}
+
+/**
+ * One task's frozen contribution to a specific sprint — the shape used for
+ * both `Sprint.departedTaskSnapshot` (a task detached from this sprint
+ * while it was still open) and `Sprint.frozenTaskSnapshot` (every task's
+ * final contribution once the sprint closes, live ones and departed ones
+ * alike — see closeSprint()). sprintOwnHours/competencyMultiplier/
+ * manDayRate/roleName are snapshotted at the moment of capture so a later
+ * rate change or reassignment can never retroactively rewrite what a
+ * departed or closed sprint already reported.
+ */
+export type SprintTaskContribution = {
+  taskId: string;
+  wbsNumber: string;
+  title: string;
+  storyPoints: number;
+  pctComplete: number;
+  sprintOwnHours: number;
+  competencyMultiplier: number;
+  manDayRate: number;
+  roleName: string | null;
+};
+
+/** Builds a contribution entry from a *live* task still committed to the sprint in question. */
+export function liveSprintContribution(t: {
+  id: string;
+  wbsNumber: string;
+  title: string;
+  storyPoints: number;
+  pctComplete: number;
+  actualHours: number;
+  sprintEntryHours: number;
+  competencyMultiplier: number;
+  person?: { roleRate?: { manDayRate: number; roleName: string } | null } | null;
+}): SprintTaskContribution {
+  return {
+    taskId: t.id,
+    wbsNumber: t.wbsNumber,
+    title: t.title,
+    storyPoints: t.storyPoints,
+    pctComplete: t.pctComplete,
+    sprintOwnHours: sprintOwnHours(t.actualHours, t.sprintEntryHours),
+    competencyMultiplier: t.competencyMultiplier,
+    manDayRate: t.person?.roleRate?.manDayRate ?? 0,
+    roleName: t.person?.roleRate?.roleName ?? null,
+  };
+}
+
+/**
+ * Tolerant JSON -> SprintTaskContribution[] parse for departedTaskSnapshot/
+ * frozenTaskSnapshot — both are Json columns, and frozenTaskSnapshot in
+ * particular may pre-date this shape (rows closed before sprintOwnHours/
+ * manDayRate/roleName existed). Missing fields default to 0/null rather
+ * than throwing, so an old closed sprint keeps rendering instead of
+ * crashing the page.
+ */
+export function parseSprintContributions(value: unknown): SprintTaskContribution[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((raw) => {
+    const r = raw as Partial<SprintTaskContribution> & Record<string, unknown>;
+    return {
+      taskId: String(r.taskId ?? ""),
+      wbsNumber: String(r.wbsNumber ?? ""),
+      title: String(r.title ?? ""),
+      storyPoints: Number(r.storyPoints ?? 0),
+      pctComplete: Number(r.pctComplete ?? 0),
+      sprintOwnHours: Number(r.sprintOwnHours ?? 0),
+      competencyMultiplier: Number(r.competencyMultiplier ?? 1),
+      manDayRate: Number(r.manDayRate ?? 0),
+      roleName: typeof r.roleName === "string" ? r.roleName : null,
+    };
+  });
+}
+
+/**
+ * PV/EV/AV/cost from a unified list of contribution entries — used
+ * identically whether the entries are all-live (an open sprint with no
+ * departures, the common case), all-frozen (a closed sprint), or a mix of
+ * live + departedTaskSnapshot (an open sprint that's lost a task mid-
+ * flight). One function so those three call sites (Sprint page, Budget
+ * Tracker, closeSprint) can't compute this differently from each other.
+ */
+export function sprintTotalsFromContributions(entries: SprintTaskContribution[]): {
+  plannedValue: number;
+  earnedValue: number;
+  actualValue: number;
+  actualCost: number;
+} {
+  const plannedValue = wbsPlannedValue(entries.map((e) => ({ points: e.storyPoints })));
+  const earnedValue = sprintEarnedValue(entries.map((e) => ({ points: e.storyPoints, pctComplete: e.pctComplete })));
+  const actualValue = wbsActualValue(
+    entries.map((e) => ({ actualManDays: manDaysFromHours(e.sprintOwnHours), competencyMultiplier: e.competencyMultiplier }))
+  );
+  const actualCost = entries.reduce((sum, e) => sum + manDaysFromHours(e.sprintOwnHours) * e.manDayRate, 0);
+  return { plannedValue, earnedValue, actualValue, actualCost };
+}
+
+export type RoleBreakdownEntry = { roleName: string; manDaysEquivalent: number; manDayRate: number; cost: number };
+
+/** Budget Tracker's per-role cost table, from the same unified contribution list as sprintTotalsFromContributions. */
+export function roleBreakdownFromContributions(entries: SprintTaskContribution[]): RoleBreakdownEntry[] {
+  const groups = new Map<string, RoleBreakdownEntry>();
+  for (const e of entries) {
+    const roleName = e.roleName ?? "Unassigned / No Rate Role";
+    const manDaysEquivalent = manDaysFromHours(e.sprintOwnHours);
+    const existing = groups.get(roleName) ?? { roleName, manDaysEquivalent: 0, manDayRate: e.manDayRate, cost: 0 };
+    existing.manDaysEquivalent += manDaysEquivalent;
+    existing.cost += manDaysEquivalent * e.manDayRate;
+    groups.set(roleName, existing);
+  }
+  return Array.from(groups.values()).filter((g) => g.manDaysEquivalent > 0);
+}
+
 export type SprintForBudget = {
   endDate: Date;
   closedAt: Date | null;
   frozenPlannedPoints: number | null;
   frozenEarnedPoints: number | null;
   frozenActualValue: number | null;
-  tasks: { storyPoints: number; pctComplete: number; actualHours: number; competencyMultiplier: number; manDayRate: number }[];
+  /** Parsed frozenTaskSnapshot — only meaningful (and only read) when closedAt is set. */
+  frozenEntries: SprintTaskContribution[];
+  /** Live tasks still committed to this sprint right now. */
+  liveEntries: SprintTaskContribution[];
+  /** Tasks detached from this sprint while it was open — parsed departedTaskSnapshot. */
+  departedEntries: SprintTaskContribution[];
 };
 
 /**
@@ -152,12 +283,18 @@ export function toSprintsForBudget(
     frozenPlannedPoints: number | null;
     frozenEarnedPoints: number | null;
     frozenActualValue: number | null;
+    frozenTaskSnapshot: unknown;
+    departedTaskSnapshot: unknown;
     tasks: {
+      id: string;
+      wbsNumber: string;
+      title: string;
       storyPoints: number;
       pctComplete: number;
       actualHours: number;
+      sprintEntryHours: number;
       competencyMultiplier: number;
-      person: { roleRate: { manDayRate: number } | null } | null;
+      person: { roleRate: { manDayRate: number; roleName: string } | null } | null;
     }[];
   }[]
 ): SprintForBudget[] {
@@ -167,13 +304,9 @@ export function toSprintsForBudget(
     frozenPlannedPoints: s.frozenPlannedPoints,
     frozenEarnedPoints: s.frozenEarnedPoints,
     frozenActualValue: s.frozenActualValue,
-    tasks: s.tasks.map((t) => ({
-      storyPoints: t.storyPoints,
-      pctComplete: t.pctComplete,
-      actualHours: t.actualHours,
-      competencyMultiplier: t.competencyMultiplier,
-      manDayRate: t.person?.roleRate?.manDayRate ?? 0,
-    })),
+    frozenEntries: parseSprintContributions(s.frozenTaskSnapshot),
+    liveEntries: s.tasks.map(liveSprintContribution),
+    departedEntries: parseSprintContributions(s.departedTaskSnapshot),
   }));
 }
 
@@ -182,13 +315,15 @@ export function toSprintsForBudget(
  * from Delivery's Sprint tracking — no separate BudgetEntry data entry.
  * `sprints` must be pre-sorted ascending by startDate (this walks a running
  * cumulative total, so order matters). One data point per sprint — closed
- * sprints read their permanent frozen* snapshot directly; the current open
- * sprint computes live via wbsPlannedValue/sprintEarnedValue, the same
- * functions Sprint Summary's own page uses. No dedup step is needed here
+ * sprints read their permanent frozen* snapshot/frozenEntries directly; an
+ * open sprint computes live from its liveEntries + departedEntries (a task
+ * detached from it while open still counts — see Sprint.departedTaskSnapshot),
+ * the same union closeSprint() itself freezes. No dedup step is needed here
  * (unlike the old weekly version): a task belongs to at most one sprint at
  * a time, so it's never double-counted across sprints the way it could be
  * double-counted across weeks. actualCost is that sprint's own spend only
- * (not cumulative), matching the original semantics.
+ * (not cumulative), matching the original semantics — and, like pv/ev, is
+ * frozen for a closed sprint rather than recomputed from live rates.
  */
 export function budgetEntriesFromSprints(
   sprints: SprintForBudget[],
@@ -198,11 +333,12 @@ export function budgetEntriesFromSprints(
   let cumulativeEarned = 0;
 
   return sprints.map((s) => {
-    const pv = s.closedAt ? s.frozenPlannedPoints ?? 0 : wbsPlannedValue(s.tasks.map((t) => ({ points: t.storyPoints })));
-    const ev = s.closedAt
-      ? s.frozenEarnedPoints ?? 0
-      : sprintEarnedValue(s.tasks.map((t) => ({ points: t.storyPoints, pctComplete: t.pctComplete })));
-    const actualCost = s.tasks.reduce((sum, t) => sum + manDaysFromHours(t.actualHours) * t.manDayRate, 0);
+    const entries = s.closedAt ? s.frozenEntries : [...s.liveEntries, ...s.departedEntries];
+    const totals = sprintTotalsFromContributions(entries);
+
+    const pv = s.closedAt ? s.frozenPlannedPoints ?? 0 : totals.plannedValue;
+    const ev = s.closedAt ? s.frozenEarnedPoints ?? 0 : totals.earnedValue;
+    const actualCost = totals.actualCost;
 
     cumulativePlanned += pv;
     cumulativeEarned += ev;

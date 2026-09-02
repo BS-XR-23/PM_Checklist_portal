@@ -160,7 +160,7 @@ describe("Delivery isolation boundary", () => {
     await prisma.sprint.delete({ where: { id: sprint.id } });
   });
 
-  it("deleteWbsTask is rejected once the task is committed to a closed sprint", async () => {
+  it("deleteWbsTask is rejected while the task is committed to any sprint, open or closed — it must be uncommitted first", async () => {
     const { createWbsTask, createSprint, assignTaskToSprint, closeSprint, deleteWbsTask } = await import(
       "@/app/projects/[projectId]/delivery/delivery-actions"
     );
@@ -173,15 +173,22 @@ describe("Delivery isolation boundary", () => {
     await assignTaskToSprint(task.id, sprint.id, projectA.id);
     await closeSprint(sprint.id, projectA.id);
 
-    await expect(deleteWbsTask(task.id, projectA.id)).rejects.toThrow(/closed sprint/);
+    await expect(deleteWbsTask(task.id, projectA.id)).rejects.toThrow(/sprint/);
     expect(await prisma.wbsTask.findUnique({ where: { id: task.id } })).not.toBeNull();
 
-    // A task still in an OPEN sprint has fed nothing frozen — deleting it is safe.
+    // A task still committed to an OPEN sprint used to be silently
+    // deletable — deleting it would erase its contribution to that sprint
+    // with zero trace anywhere. Now it must be uncommitted first, same as
+    // for a closed sprint, so assignTaskToSprint's departure-snapshot path
+    // runs before the task disappears.
     await createSprint(projectA.id, "[TEST] Sprint 1e", "2026-02-01", "2026-02-14");
     const openSprint = await prisma.sprint.findFirstOrThrow({ where: { name: "[TEST] Sprint 1e" } });
     await createWbsTask(projectA.id);
     const task2 = await prisma.wbsTask.findFirstOrThrow({ where: { projectId: projectA.id }, orderBy: { createdAt: "desc" } });
     await assignTaskToSprint(task2.id, openSprint.id, projectA.id);
+    await expect(deleteWbsTask(task2.id, projectA.id)).rejects.toThrow(/sprint/);
+
+    await assignTaskToSprint(task2.id, null, projectA.id);
     await deleteWbsTask(task2.id, projectA.id);
     expect(await prisma.wbsTask.findUnique({ where: { id: task2.id } })).toBeNull();
 
@@ -413,6 +420,122 @@ describe("Delivery isolation boundary", () => {
 
     await prisma.wbsTask.delete({ where: { id: task.id } });
     await prisma.sprint.delete({ where: { id: sprint.id } });
+  });
+
+  it("assignTaskToSprint: moving a task to a new sprint resets its actual-hours baseline, but the Task tab's raw actualHours stays the full lifetime total", async () => {
+    const { createSprint, createWbsTask, assignTaskToSprint, updateTaskProgress } = await import(
+      "@/app/projects/[projectId]/delivery/delivery-actions"
+    );
+
+    actAs(pmAUserId);
+    await createSprint(projectA.id, "[TEST] Sprint 6a", "2026-08-01", "2026-08-14");
+    const sprint1 = await prisma.sprint.findFirstOrThrow({ where: { name: "[TEST] Sprint 6a" } });
+    await createSprint(projectA.id, "[TEST] Sprint 6b", "2026-08-15", "2026-08-28");
+    const sprint2 = await prisma.sprint.findFirstOrThrow({ where: { name: "[TEST] Sprint 6b" } });
+
+    await createWbsTask(projectA.id);
+    const task = await prisma.wbsTask.findFirstOrThrow({ where: { projectId: projectA.id }, orderBy: { createdAt: "desc" } });
+    await assignTaskToSprint(task.id, sprint1.id, projectA.id);
+    await updateTaskProgress(task.id, projectA.id, { actualHours: 20 });
+
+    await assignTaskToSprint(task.id, sprint2.id, projectA.id);
+    let current = await prisma.wbsTask.findUniqueOrThrow({ where: { id: task.id } });
+    // Baseline reset to the lifetime total at the moment of commit — sprint 2 starts crediting 0 additional hours.
+    expect(current.sprintEntryHours).toBe(20);
+    // The Task tab's field is untouched — still the full lifetime total.
+    expect(current.actualHours).toBe(20);
+
+    // PM logs 8 hours of work *within sprint 2* — the UI translates that
+    // sprint-scoped "8" back into an absolute actualHours write.
+    await updateTaskProgress(task.id, projectA.id, { actualHours: current.sprintEntryHours + 8 });
+    current = await prisma.wbsTask.findUniqueOrThrow({ where: { id: task.id } });
+    expect(current.actualHours).toBe(28); // full lifetime total, Task tab shows this
+    expect(current.actualHours - current.sprintEntryHours).toBe(8); // sprint 2's own contribution
+
+    await prisma.wbsTask.delete({ where: { id: task.id } });
+    await prisma.sprint.deleteMany({ where: { id: { in: [sprint1.id, sprint2.id] } } });
+  });
+
+  it("assignTaskToSprint: moving a task out of an open sprint snapshots its contribution into departedTaskSnapshot instead of silently losing it", async () => {
+    const { createSprint, createWbsTask, updateWbsTask, assignTaskToSprint, updateTaskProgress } = await import(
+      "@/app/projects/[projectId]/delivery/delivery-actions"
+    );
+
+    actAs(pmAUserId);
+    await createSprint(projectA.id, "[TEST] Sprint 7a", "2026-09-01", "2026-09-14");
+    const sprint1 = await prisma.sprint.findFirstOrThrow({ where: { name: "[TEST] Sprint 7a" } });
+    await createSprint(projectA.id, "[TEST] Sprint 7b", "2026-09-15", "2026-09-28");
+    const sprint2 = await prisma.sprint.findFirstOrThrow({ where: { name: "[TEST] Sprint 7b" } });
+
+    await createWbsTask(projectA.id);
+    const task = await prisma.wbsTask.findFirstOrThrow({ where: { projectId: projectA.id }, orderBy: { createdAt: "desc" } });
+    await updateWbsTask(task.id, projectA.id, { storyPoints: 10 });
+    await assignTaskToSprint(task.id, sprint1.id, projectA.id);
+    await updateTaskProgress(task.id, projectA.id, { pctComplete: 1, actualHours: 16 });
+
+    await assignTaskToSprint(task.id, sprint2.id, projectA.id);
+
+    const sprint1AfterMove = await prisma.sprint.findUniqueOrThrow({ where: { id: sprint1.id } });
+    const departures = sprint1AfterMove.departedTaskSnapshot as unknown as { taskId: string; storyPoints: number; pctComplete: number; sprintOwnHours: number }[];
+    expect(departures).toHaveLength(1);
+    expect(departures[0]).toMatchObject({ taskId: task.id, storyPoints: 10, pctComplete: 1, sprintOwnHours: 16 });
+
+    // Sprint 1's own live tasks are now empty — its historical contribution
+    // survives only via departedTaskSnapshot, exactly what the page loader unions in.
+    expect(await prisma.wbsTask.count({ where: { sprintId: sprint1.id } })).toBe(0);
+
+    // Uncommitting to the backlog (not just moving to another sprint) is the same protection.
+    await assignTaskToSprint(task.id, null, projectA.id);
+    const sprint2AfterUncommit = await prisma.sprint.findUniqueOrThrow({ where: { id: sprint2.id } });
+    const sprint2Departures = sprint2AfterUncommit.departedTaskSnapshot as unknown as { taskId: string }[];
+    expect(sprint2Departures.map((d) => d.taskId)).toContain(task.id);
+
+    // Returning to sprint 1 drops its stale departure entry — the live row covers it again, avoiding double-count.
+    await assignTaskToSprint(task.id, sprint1.id, projectA.id);
+    const sprint1AfterReturn = await prisma.sprint.findUniqueOrThrow({ where: { id: sprint1.id } });
+    const sprint1DeparturesAfterReturn = sprint1AfterReturn.departedTaskSnapshot as unknown as { taskId: string }[];
+    expect(sprint1DeparturesAfterReturn.map((d) => d.taskId)).not.toContain(task.id);
+
+    await prisma.wbsTask.delete({ where: { id: task.id } });
+    await prisma.sprint.deleteMany({ where: { id: { in: [sprint1.id, sprint2.id] } } });
+  });
+
+  it("closeSprint's frozen PV/EV/AV include a task that departed this sprint mid-flight, not just its still-live tasks", async () => {
+    const { createSprint, createWbsTask, updateWbsTask, assignTaskToSprint, updateTaskProgress, closeSprint } = await import(
+      "@/app/projects/[projectId]/delivery/delivery-actions"
+    );
+
+    actAs(pmAUserId);
+    await createSprint(projectA.id, "[TEST] Sprint 8a", "2026-10-01", "2026-10-14");
+    const sprint1 = await prisma.sprint.findFirstOrThrow({ where: { name: "[TEST] Sprint 8a" } });
+    await createSprint(projectA.id, "[TEST] Sprint 8b", "2026-10-15", "2026-10-28");
+    const sprint2 = await prisma.sprint.findFirstOrThrow({ where: { name: "[TEST] Sprint 8b" } });
+
+    await createWbsTask(projectA.id);
+    const departedTask = await prisma.wbsTask.findFirstOrThrow({ where: { projectId: projectA.id }, orderBy: { createdAt: "desc" } });
+    await updateWbsTask(departedTask.id, projectA.id, { storyPoints: 10 });
+    await assignTaskToSprint(departedTask.id, sprint1.id, projectA.id);
+    await updateTaskProgress(departedTask.id, projectA.id, { pctComplete: 1, actualHours: 8 });
+    await assignTaskToSprint(departedTask.id, sprint2.id, projectA.id); // leaves sprint1 while it's still open
+
+    await createWbsTask(projectA.id);
+    const stillHereTask = await prisma.wbsTask.findFirstOrThrow({ where: { projectId: projectA.id }, orderBy: { createdAt: "desc" } });
+    await updateWbsTask(stillHereTask.id, projectA.id, { storyPoints: 5 });
+    await assignTaskToSprint(stillHereTask.id, sprint1.id, projectA.id);
+    await updateTaskProgress(stillHereTask.id, projectA.id, { pctComplete: 1, actualHours: 8 });
+
+    await closeSprint(sprint1.id, projectA.id);
+    const closed = await prisma.sprint.findUniqueOrThrow({ where: { id: sprint1.id } });
+    // PV/EV must include the departed task's points (10 + 5), not just the still-live one (5).
+    expect(closed.frozenPlannedPoints).toBe(15);
+    expect(closed.frozenEarnedPoints).toBe(15);
+    expect(closed.frozenActualValue).toBeCloseTo(2); // (8+8)/8 man-days x 1 (no competency assigned)
+
+    const snapshot = closed.frozenTaskSnapshot as unknown as { taskId: string }[];
+    expect(snapshot.map((t) => t.taskId).sort()).toEqual([departedTask.id, stillHereTask.id].sort());
+
+    await prisma.wbsTask.deleteMany({ where: { id: { in: [departedTask.id, stillHereTask.id] } } });
+    await prisma.sprint.deleteMany({ where: { id: { in: [sprint1.id, sprint2.id] } } });
   });
 
   it("guessed-ID: PM-A cannot create a Sprint on Project B, or touch a Sprint belonging to Project B", async () => {
