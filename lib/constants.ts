@@ -53,6 +53,9 @@ export const CR_SIGNOFF_STATUSES = ["Pending", "Signed", "Email Acknowledgement"
 export const CR_WBS_UPDATED = ["Yes", "No"] as const;
 export const CR_STATUSES = ["Proposed", "Approved", "In Progress", "Completed", "Rejected"] as const;
 
+export const DEPENDENCY_PRIORITIES = ["Low", "Medium", "High", "Extreme"] as const;
+export const DEPENDENCY_STATUSES = ["Due", "Done", "Blocked"] as const;
+
 // Resourcing / engagement intensity. Stored as a 0-100 percentage so the
 // overload sum-threshold below is plain arithmetic; the UI offers these as
 // Low/Med/High presets plus free numeric entry.

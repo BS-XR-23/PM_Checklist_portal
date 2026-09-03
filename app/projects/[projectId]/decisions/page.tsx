@@ -33,7 +33,15 @@ export default async function DecisionLogPage({ params }: { params: { projectId:
           <h2 className="text-base font-semibold text-slate-900">Decision Log</h2>
           <p className="text-sm text-slate-500">What was decided, when, and why — a permanent record so it doesn&apos;t get re-litigated later.</p>
         </div>
-        {canWrite && <AddDecisionButton projectId={params.projectId} />}
+        <div className="flex items-center gap-2 shrink-0">
+          <a
+            href={`/api/projects/${params.projectId}/decisions/export`}
+            className="rounded-md border border-slate-300 text-slate-700 text-sm font-medium px-4 py-2 hover:bg-slate-50"
+          >
+            Export .xlsx
+          </a>
+          {canWrite && <AddDecisionButton projectId={params.projectId} />}
+        </div>
       </div>
 
       <div className="space-y-3">

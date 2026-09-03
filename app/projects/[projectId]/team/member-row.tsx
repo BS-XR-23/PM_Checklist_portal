@@ -23,6 +23,7 @@ const ALL_MODULES: ModuleName[] = [
   "DECISION_LOG",
   "ACTION_ITEMS",
   "DELIVERY",
+  "DEPENDENCIES",
 ];
 
 const ACCESS_LEVELS: AccessLevel[] = ["NONE", "READ_LIMITED", "READ_FULL", "WRITE"];

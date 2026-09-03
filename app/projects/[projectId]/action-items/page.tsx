@@ -33,7 +33,15 @@ export default async function ActionItemsPage({ params }: { params: { projectId:
           <h2 className="text-base font-semibold text-slate-900">Action Items</h2>
           <p className="text-sm text-slate-500">Small follow-ups with an owner and a due date — too lightweight for the Checklist, still too easy to forget.</p>
         </div>
-        {canWrite && <AddActionItemButton projectId={params.projectId} />}
+        <div className="flex items-center gap-2 shrink-0">
+          <a
+            href={`/api/projects/${params.projectId}/action-items/export`}
+            className="rounded-md border border-slate-300 text-slate-700 text-sm font-medium px-4 py-2 hover:bg-slate-50"
+          >
+            Export .xlsx
+          </a>
+          {canWrite && <AddActionItemButton projectId={params.projectId} />}
+        </div>
       </div>
 
       <div className="space-y-3">

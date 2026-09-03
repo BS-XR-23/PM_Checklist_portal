@@ -48,6 +48,7 @@ export default async function ProjectLayout({
   if (moduleAccess.RISK_REGISTER !== "NONE" || moduleAccess.CR_LOG !== "NONE") {
     visibleTabs.push({ href: "/risks", label: "Risk & CR", matchHrefs: ["/change-requests"] });
   }
+  if (moduleAccess.DEPENDENCIES !== "NONE") visibleTabs.push({ href: "/dependencies", label: "Dependencies" });
   if (moduleAccess.BUDGET_TRACKER !== "NONE") visibleTabs.push({ href: "/budget", label: "Budget Tracker" });
   if (moduleAccess.DELIVERY !== "NONE") visibleTabs.push({ href: "/delivery", label: "Delivery", matchHrefs: ["/delivery/tasks"] });
   if (moduleAccess.PM_PLAN !== "NONE") visibleTabs.push({ href: "/pm-plan", label: "PM Plan" });

@@ -40,7 +40,15 @@ export default async function CrLogPage({ params }: { params: { projectId: strin
             (Planning stage).
           </p>
         </div>
-        {canWrite && <AddCrButton projectId={params.projectId} />}
+        <div className="flex items-center gap-2 shrink-0">
+          <a
+            href={`/api/projects/${params.projectId}/change-requests/export`}
+            className="rounded-md border border-slate-300 text-slate-700 text-sm font-medium px-4 py-2 hover:bg-slate-50"
+          >
+            Export .xlsx
+          </a>
+          {canWrite && <AddCrButton projectId={params.projectId} />}
+        </div>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">

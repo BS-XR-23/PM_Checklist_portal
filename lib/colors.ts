@@ -39,6 +39,21 @@ export function riskScoreSeverity(score: number): keyof typeof RISK_SEVERITY_COL
   return "low";
 }
 
+// Dependency Tracker priority/status pills — same traffic-light idea as
+// Risk severity, extended with an "Extreme" tier above High.
+export const DEPENDENCY_PRIORITY_COLORS = {
+  Low: { bg: "#C6E0B4", text: "#2C5F2D" },
+  Medium: { bg: "#FFE699", text: "#7A5B00" },
+  High: { bg: "#F4B183", text: "#8A3B00" },
+  Extreme: { bg: "#FF7C80", text: "#7A0000" },
+};
+
+export const DEPENDENCY_STATUS_COLORS = {
+  Due: { bg: "#FFE699", text: "#7A5B00" },
+  Done: { bg: "#C6E0B4", text: "#2C5F2D" },
+  Blocked: { bg: "#FF7C80", text: "#7A0000" },
+};
+
 // Budget Tracker H9:I28 CF: <1.0 unfavorable, >=1.0 favorable — the >=1.0
 // cutoff for "favorable" (green) is unchanged from that spec. Below 1.0, the
 // spreadsheet's flat "unfavorable" is split into two: a value close to 1.0

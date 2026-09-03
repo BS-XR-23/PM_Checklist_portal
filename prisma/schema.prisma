@@ -29,6 +29,7 @@ enum ModuleName {
   DECISION_LOG
   ACTION_ITEMS
   DELIVERY
+  DEPENDENCIES
 }
 
 enum AccessLevel {
@@ -90,6 +91,7 @@ model Project {
   wbsTasks          WbsTask[]
   sprints           Sprint[]
   programOversights ProgramOversight[]
+  dependencies      DependencyItem[]
 }
 
 /// Organizational-only mapping of which projects a PROGRAM_MANAGER oversees.
@@ -284,6 +286,28 @@ model ActionItem {
   dueDate       DateTime?
   status        String    @default("Open") // "Open" | "Done"
   notes         String?
+
+  @@index([projectId])
+}
+
+/// Things this project is waiting on from the client, another internal
+/// team, or a third-party company (assets, access, sign-off) before work
+/// can proceed — distinct from RiskItem (a risk to the project) and
+/// ActionItem (an internal follow-up): a dependency is owned by someone
+/// outside the delivery team's control.
+model DependencyItem {
+  id              String    @id @default(cuid())
+  projectId       String
+  project         Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  order           Int       @default(0)
+  category        String?
+  description     String
+  preferredFormat String?
+  responsible     String? // free-text org/party name, e.g. "Khalifa Fund" or "Brain Station" — not a Person, since these are organizations, not individuals
+  priority        String    @default("Medium")
+  expectedDate    DateTime?
+  status          String    @default("Due") // "Due" | "Done"
+  notes           String?
 
   @@index([projectId])
 }
