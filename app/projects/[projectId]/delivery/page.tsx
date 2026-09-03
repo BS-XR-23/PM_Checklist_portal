@@ -151,7 +151,15 @@ export default async function DeliverySprintsPage({ params }: { params: { projec
             a sprint to freeze its PV/EV/AV permanently once it ends. New tasks are defined on the Tasks tab.
           </p>
         </div>
-        {canWrite && <AddSprintModal projectId={params.projectId} suggestedName={`Sprint ${sprints.length + 1}`} />}
+        <div className="flex items-center gap-2 shrink-0">
+          <a
+            href={`/api/projects/${params.projectId}/delivery/export`}
+            className="rounded-md border border-slate-300 text-slate-700 text-sm font-medium px-4 py-2 hover:bg-slate-50"
+          >
+            Export .xlsx
+          </a>
+          {canWrite && <AddSprintModal projectId={params.projectId} suggestedName={`Sprint ${sprints.length + 1}`} />}
+        </div>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">

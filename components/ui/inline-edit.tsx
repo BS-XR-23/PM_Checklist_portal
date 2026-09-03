@@ -40,10 +40,16 @@ export function InlineText({
   value,
   onSave,
   placeholder,
+  className,
 }: {
   value: string;
   onSave: (value: string) => Promise<void>;
   placeholder?: string;
+  // Override for the compact (at-rest) input's classes — lets a call site
+  // sit this inside its own styled chip (icon + colored background, e.g.
+  // the Dependencies table's Category cell) instead of the default bordered
+  // box, without changing that default for every other field built on this.
+  className?: string;
 }) {
   const [draft, setDraft] = useState(value);
   const [pending, startTransition] = useTransition();
@@ -60,7 +66,7 @@ export function InlineText({
       <input
         ref={inputRef}
         type="text"
-        className={cellClass}
+        className={className ?? cellClass}
         value={draft}
         title={draft}
         placeholder={placeholder}

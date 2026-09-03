@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireModuleAccess } from "@/lib/rbac";
 import { IconClock, IconCheckCircle, IconAlertTriangle, IconClipboardList } from "@/components/layout/icons";
+import { InfoTooltip } from "@/components/ui/info-tooltip";
 import { AddDependencyButton } from "./add-dependency-button";
 import { DependencyTable } from "./dependency-table";
 
@@ -58,8 +59,11 @@ export default async function DependenciesPage({ params }: { params: { projectId
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-base font-semibold text-slate-900">Dependency Tracker</h2>
-          <p className="text-sm text-slate-500">What this project is waiting on from the client, another team, or a third party.</p>
+          <h2 className="flex items-center gap-1.5 text-base font-semibold text-slate-900">
+            Dependency Tracker
+            <InfoTooltip text="Due = waiting, on track. Blocked = stuck on something outside the delivery team's control. Done = received. Expected Date drives the days-remaining countdown in the table." />
+          </h2>
+          <p className="text-sm text-slate-500">Track items or approvals this project is waiting on from external teams or third parties.</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <a
@@ -73,7 +77,7 @@ export default async function DependenciesPage({ params }: { params: { projectId
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <DependencyStatCard label="Total" value={String(total)} icon={<IconClipboardList />} iconWrapClass="bg-blue-50 text-blue-600" />
+        <DependencyStatCard label="Total Dependencies" value={String(total)} icon={<IconClipboardList />} iconWrapClass="bg-blue-50 text-blue-600" />
         <DependencyStatCard
           label="Due"
           value={String(dueCount)}
