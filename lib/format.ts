@@ -12,6 +12,13 @@ export function formatDate(value: Date | string | null): string {
   return d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
 }
 
+/** Date + time, e.g. "Aug 24, 2026, 11:30 AM" — for "last updated" style timestamps. */
+export function formatDateTime(value: Date | string | null): string {
+  if (!value) return "—";
+  const d = typeof value === "string" ? new Date(value) : value;
+  return d.toLocaleString("en-US", { year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
 /** No year — for tight spaces (card stat chips) where the full formatDate() truncates. Pair with a title="" tooltip for the exact date. */
 export function formatShortDate(value: Date | string | null): string {
   if (!value) return "—";

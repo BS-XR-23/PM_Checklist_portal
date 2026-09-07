@@ -479,6 +479,7 @@ model PMPlan {
   preparedBy String?
   planDate   DateTime?
   version    String    @default("1.0")
+  updatedAt  DateTime  @default(now()) @updatedAt
   rationale  String?
 
   charterObjective       String?
@@ -517,6 +518,22 @@ model PMPlan {
   stakeholders StakeholderRow[]
   commsRows    CommsRow[]
   raciRows     RaciRow[]
+  links        PmPlanLink[]
+}
+
+/// One optional reference link per scalar PMPlan field — kept as a side
+/// table rather than a `<field>Link` column per field, since only a subset
+/// of PMPlan's ~29 fields actually gets this (the long-form ones where the
+/// real detail usually lives in an external doc). `field` is one of
+/// PmPlanScalarField (lib side, not DB-enforced) — see pmplan-actions.ts.
+model PmPlanLink {
+  id       String @id @default(cuid())
+  pmPlanId String
+  pmPlan   PMPlan @relation(fields: [pmPlanId], references: [id], onDelete: Cascade)
+  field    String
+  url      String
+
+  @@unique([pmPlanId, field])
 }
 
 model StakeholderRow {

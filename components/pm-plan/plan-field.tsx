@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { updatePmPlanField, type PmPlanScalarField } from "@/app/projects/[projectId]/pm-plan/pmplan-actions";
+import { updatePmPlanField, updatePmPlanFieldLink, type PmPlanScalarField, type PmPlanLinkableField } from "@/app/projects/[projectId]/pm-plan/pmplan-actions";
+import { FieldLinkEditor } from "./field-link-editor";
 
 export function PlanField({
   pmPlanId,
@@ -10,6 +11,8 @@ export function PlanField({
   label,
   value,
   multiline = true,
+  linkField,
+  linkUrl,
 }: {
   pmPlanId: string;
   projectId: string;
@@ -17,6 +20,9 @@ export function PlanField({
   label: string;
   value: string;
   multiline?: boolean;
+  /** Omit for fields that don't get a reference-link affordance (see PmPlanLinkableField). */
+  linkField?: PmPlanLinkableField;
+  linkUrl?: string | null;
 }) {
   const [draft, setDraft] = useState(value);
   const [pending, startTransition] = useTransition();
@@ -47,6 +53,7 @@ export function PlanField({
           onBlur={save}
         />
       )}
+      {linkField && <FieldLinkEditor url={linkUrl} onSave={(url) => updatePmPlanFieldLink(pmPlanId, projectId, linkField, url)} />}
     </div>
   );
 }

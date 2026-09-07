@@ -50,6 +50,50 @@ export type PmPlanScalarField =
   | "deployMonitoring"
   | "escalationPath";
 
+// The subset of PmPlanScalarField that gets an optional reference-link
+// affordance in the UI — the long-form fields where the real detail usually
+// lives in an external doc (a SOW, a runbook, a Jira board). Deliberately
+// not every field: short factual ones (Version, Cadence, Approach, ...)
+// gain nothing from a link and it would just be unused clutter there.
+export type PmPlanLinkableField =
+  | "rationale"
+  | "charterScopeIn"
+  | "charterScopeOut"
+  | "charterSuccessCriteria"
+  | "charterTimeline"
+  | "methodCeremonies"
+  | "methodChangeMgmt"
+  | "testEntryCriteria"
+  | "testExitCriteria"
+  | "testDefectMgmt"
+  | "testUatProcess"
+  | "testDeliverables"
+  | "deploySteps"
+  | "deployRollback"
+  | "deployGoliveChecklist"
+  | "deployMonitoring"
+  | "escalationPath";
+
+export async function updatePmPlanFieldLink(pmPlanId: string, projectId: string, field: PmPlanLinkableField, url: string) {
+  // Guessed-ID fix: authorize against the plan's real project.
+  const { user, projectId: realProjectId } = await authorizeByPmPlanId(pmPlanId);
+  const trimmed = url.trim();
+
+  if (trimmed === "") {
+    await prisma.pmPlanLink.deleteMany({ where: { pmPlanId, field } });
+  } else {
+    await prisma.pmPlanLink.upsert({
+      where: { pmPlanId_field: { pmPlanId, field } },
+      create: { pmPlanId, field, url: trimmed },
+      update: { url: trimmed },
+    });
+  }
+
+  await writeAudit({ actor: user, projectId: realProjectId, action: "update", entityType: "PmPlanLink", summary: `${trimmed ? "Set" : "Removed"} reference link for "${field}"` });
+
+  revalidatePmPlan(realProjectId);
+}
+
 export async function updatePmPlanField(pmPlanId: string, projectId: string, field: PmPlanScalarField, value: string) {
   // Guessed-ID fix: authorize against the plan's real project.
   const { user, projectId: realProjectId } = await authorizeByPmPlanId(pmPlanId);
