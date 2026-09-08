@@ -63,6 +63,17 @@ export const REMINDER_SOURCE_STYLE = {
   PRESALES_ACTION_ITEM: { bg: "#FEF3C7", text: "#92400E", label: "Presales Action" },
 };
 
+// Portfolio "Needs Management Attention" issue chips — a 4-tier severity
+// scale (distinct from the 3-tier Risk Register probability/impact scale
+// above), since a single project's attention card mixes several kinds of
+// issues that aren't all equally urgent.
+export const ATTENTION_SEVERITY_COLORS = {
+  Critical: { bg: "#FF7C80", text: "#7A0000" },
+  High: { bg: "#F4B183", text: "#8A3B00" },
+  Medium: { bg: "#FFE699", text: "#7A5B00" },
+  Low: { bg: "#E2E8F0", text: "#475569" },
+};
+
 // Budget Tracker H9:I28 CF: <1.0 unfavorable, >=1.0 favorable — the >=1.0
 // cutoff for "favorable" (green) is unchanged from that spec. Below 1.0, the
 // spreadsheet's flat "unfavorable" is split into two: a value close to 1.0
