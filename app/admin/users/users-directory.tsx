@@ -116,7 +116,7 @@ export function RoleGroupSection({
                     </td>
                     <td className="px-4 py-3.5">
                       {canEdit ? (
-                        <UserActionsMenu userId={u.id} currentRole={u.role} isActive={u.isActive} isSelf={isSelf} />
+                        <UserActionsMenu userId={u.id} email={u.email} currentRole={u.role} isActive={u.isActive} isSelf={isSelf} />
                       ) : (
                         <Link href={`/admin/users/${u.id}/access`} className="text-xs font-medium text-blue-600 hover:text-blue-800 hover:underline">
                           View access

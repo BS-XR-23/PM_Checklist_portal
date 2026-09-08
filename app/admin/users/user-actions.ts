@@ -260,6 +260,61 @@ export async function getDeactivationImpact(userId: string): Promise<{
   };
 }
 
+/**
+ * Whether a user can be permanently removed rather than just deactivated.
+ * AuditLog.actorId, EscalationItem.createdById, and PresalesProject.createdBy
+ * all reference User with no cascade (Restrict) — deliberately, since those
+ * are supposed to be a permanent "who did this" record. So a real delete is
+ * only offered for an account with none of the three: a mistake/duplicate
+ * signup, not a real contributor. Anyone else stays on Deactivate.
+ */
+export async function getDeletionEligibility(userId: string): Promise<{
+  eligible: boolean;
+  auditLogCount: number;
+  escalationCount: number;
+  presalesProjectCount: number;
+}> {
+  await requireAdmin();
+
+  const [auditLogCount, escalationCount, presalesProjectCount] = await Promise.all([
+    prisma.auditLog.count({ where: { actorId: userId } }),
+    prisma.escalationItem.count({ where: { createdById: userId } }),
+    prisma.presalesProject.count({ where: { createdById: userId } }),
+  ]);
+
+  return {
+    eligible: auditLogCount === 0 && escalationCount === 0 && presalesProjectCount === 0,
+    auditLogCount,
+    escalationCount,
+    presalesProjectCount,
+  };
+}
+
+export async function deleteUser(userId: string) {
+  const admin = await requireAdmin();
+  if (userId === admin.id) {
+    throw new Error("You can't delete your own account.");
+  }
+
+  const existing = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
+
+  // Re-check server-side rather than trusting the client's last-seen
+  // eligibility result — this is irreversible, unlike deactivate.
+  const eligibility = await getDeletionEligibility(userId);
+  if (!eligibility.eligible) {
+    throw new Error("This account has activity history and can't be permanently deleted. Deactivate it instead.");
+  }
+
+  // Written with the admin as actor before the row is gone — entityId is a
+  // plain string column here, not a foreign key, so it stays valid (and
+  // meaningful) after the user it names no longer exists.
+  await writeAudit({ actor: admin, action: "delete", entityType: "User", entityId: userId, summary: `Deleted user ${existing.email}` });
+
+  await prisma.user.delete({ where: { id: userId } });
+
+  revalidatePath("/admin/users");
+}
+
 export async function updateUserRole(userId: string, role: Role) {
   const admin = await requireAdmin();
 
