@@ -54,6 +54,15 @@ export const DEPENDENCY_STATUS_COLORS = {
   Blocked: { bg: "#FF7C80", text: "#7A0000" },
 };
 
+// Reminders page — one tag color per ReminderItem source (lib/notifications.ts),
+// so a mixed list of checklist/action-item/presales rows reads at a glance.
+export const REMINDER_SOURCE_STYLE = {
+  CHECKLIST: { bg: "#DBEAFE", text: "#1D4ED8", label: "Checklist" },
+  ACTION_ITEM: { bg: "#EDE9FE", text: "#6D28D9", label: "Action Item" },
+  PRESALES_OPPORTUNITY: { bg: "#FEF3C7", text: "#92400E", label: "Presales" },
+  PRESALES_ACTION_ITEM: { bg: "#FEF3C7", text: "#92400E", label: "Presales Action" },
+};
+
 // Budget Tracker H9:I28 CF: <1.0 unfavorable, >=1.0 favorable — the >=1.0
 // cutoff for "favorable" (green) is unchanged from that spec. Below 1.0, the
 // spreadsheet's flat "unfavorable" is split into two: a value close to 1.0

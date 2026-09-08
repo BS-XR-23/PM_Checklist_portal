@@ -1,12 +1,19 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { requireUser } from "@/lib/rbac";
-import { getReminderItems } from "@/lib/notifications";
-import { RISK_SEVERITY_COLORS } from "@/lib/colors";
-import { formatDate } from "@/lib/format";
+import { getReminderItems, getReminderTrend } from "@/lib/notifications";
 import { AppShell } from "@/components/layout/app-shell";
+import { HeaderBar } from "@/components/ui/header-bar";
+import { StatTile } from "@/components/ui/stat-tile";
+import { IconBell, IconAlertTriangle, IconClock, IconGrid } from "@/components/layout/icons";
+import { ReminderFilters } from "./reminder-filters";
 
 export const dynamic = "force-dynamic";
+
+function trend(delta: number) {
+  if (delta === 0) return <span className="text-slate-400">No change since last week</span>;
+  const good = delta < 0;
+  return <span className={good ? "text-emerald-600" : "text-rose-600"}>{delta < 0 ? "↓" : "↑"} {Math.abs(delta)} since last week</span>;
+}
 
 export default async function NotificationsPage() {
   const user = await requireUser();
@@ -18,50 +25,56 @@ export default async function NotificationsPage() {
     redirect("/projects");
   }
 
-  const items = await getReminderItems(user);
+  const [items, trendData] = await Promise.all([getReminderItems(user), getReminderTrend(user)]);
+  const overdueCount = items.filter((r) => r.band === "OVERDUE").length;
+  const dueSoonCount = items.filter((r) => r.band === "DUE_SOON").length;
+  // Presales reminders have no projectId — they're not a project's problem,
+  // so they're excluded from this count rather than counted as one.
+  const projectsAffected = new Set(items.map((r) => r.projectId).filter((id): id is string => !!id)).size;
 
   return (
     <AppShell user={user}>
-      <header className="border-b border-slate-200 bg-white px-4 sm:px-6 py-4">
-        <h1 className="text-lg font-semibold text-slate-900">Reminders</h1>
-        <p className="text-sm text-slate-500">
-          Checklist items, action items, and presales opportunities that are overdue or due within the next 7 days.
-        </p>
-      </header>
+      <HeaderBar
+        title="Reminders"
+        subtitle="Track your pending checklist items, action items, and presales opportunities — organized by project."
+        activityHref={user.role === "ADMIN" ? "/admin/audit-log" : undefined}
+      />
 
-      <main className="max-w-3xl mx-auto p-4 sm:p-6 space-y-2">
-        {items.length === 0 ? (
-          <p className="text-sm text-slate-500">Nothing overdue or due soon — you&apos;re caught up.</p>
-        ) : (
-          <div className="rounded-lg border border-slate-200 bg-white divide-y divide-slate-50">
-            {items.map((r, i) => {
-              const color = r.band === "OVERDUE" ? RISK_SEVERITY_COLORS.high : RISK_SEVERITY_COLORS.medium;
-              const dateLabel =
-                r.source === "ACTION_ITEM" || r.source === "PRESALES_ACTION_ITEM" ? "Due" : r.source === "PRESALES_OPPORTUNITY" ? "Expected" : "Planned";
-              return (
-                <Link
-                  key={i}
-                  href={r.href}
-                  prefetch={false}
-                  className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-slate-50"
-                >
-                  <div className="min-w-0">
-                    <p className="text-sm text-slate-800 truncate">{r.itemText}</p>
-                    <p className="text-xs text-slate-400">
-                      {r.contextLabel} · {r.context} · {dateLabel} {formatDate(r.plannedDate)}
-                    </p>
-                  </div>
-                  <span
-                    className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium shrink-0"
-                    style={{ backgroundColor: color.bg, color: color.text }}
-                  >
-                    {r.band === "OVERDUE" ? "Overdue" : "Due Soon"}
-                  </span>
-                </Link>
-              );
-            })}
-          </div>
-        )}
+      <main className="max-w-6xl mx-auto p-4 sm:p-6 space-y-6">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <StatTile
+            icon={<IconBell />}
+            iconWrapClass="bg-blue-50 text-blue-600"
+            label="Total Reminders"
+            value={String(items.length)}
+            subtitle={trend(trendData.totalDelta)}
+          />
+          <StatTile
+            icon={<IconAlertTriangle />}
+            iconWrapClass="bg-rose-50 text-rose-600"
+            label="Overdue"
+            value={String(overdueCount)}
+            valueColor="#C00000"
+            subtitle={trend(trendData.overdueDelta)}
+          />
+          <StatTile
+            icon={<IconClock />}
+            iconWrapClass="bg-amber-50 text-amber-600"
+            label="Due Soon"
+            value={String(dueSoonCount)}
+            valueColor="#7A5B00"
+            subtitle={trend(trendData.dueSoonDelta)}
+          />
+          <StatTile
+            icon={<IconGrid />}
+            iconWrapClass="bg-violet-50 text-violet-600"
+            label="Projects Affected"
+            value={String(projectsAffected)}
+            subtitle={`Across ${projectsAffected} project${projectsAffected === 1 ? "" : "s"}`}
+          />
+        </div>
+
+        <ReminderFilters items={items} />
       </main>
     </AppShell>
   );
