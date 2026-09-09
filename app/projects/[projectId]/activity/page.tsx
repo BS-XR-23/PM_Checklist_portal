@@ -36,6 +36,7 @@ export default async function ActivityPage({ params }: { params: { projectId: st
           summary: l.summary,
           isOverride: l.isOverride,
           createdAt: l.createdAt,
+          diff: l.diff,
         }))}
       />
     </div>

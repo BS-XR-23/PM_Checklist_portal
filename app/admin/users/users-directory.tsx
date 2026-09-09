@@ -17,6 +17,10 @@ export type UserRow = {
   role: Role;
   isActive: boolean;
   personName: string | null;
+  // Only populated for archived (inactive) users, and only when the viewer
+  // can edit — answers the question someone lands on the Archived tab to
+  // ask ("can this actually be cleaned up?") without opening the menu.
+  deletionBlocked?: { auditLogCount: number; escalationCount: number; presalesProjectCount: number } | null;
 };
 
 export type RoleGroupData = {
@@ -75,7 +79,7 @@ export function RoleGroupSection({
               {group.users.map((u) => {
                 const isSelf = u.id === currentUserId;
                 return (
-                  <tr key={u.id} className={`border-t border-slate-100 ${u.isActive ? "" : "opacity-50"}`}>
+                  <tr key={u.id} className="border-t border-slate-100">
                     <td className="px-4 py-3.5">
                       <div className="flex items-center gap-2.5">
                         <span
@@ -113,6 +117,13 @@ export function RoleGroupSection({
                     <td className="px-4 py-3.5">{canEdit ? <ResetPasswordButton userId={u.id} /> : <span className="text-slate-300">—</span>}</td>
                     <td className="px-4 py-3.5">
                       <UserActiveToggle isActive={u.isActive} />
+                      {!u.isActive && u.deletionBlocked && (
+                        <p className="mt-1 text-[11px] text-slate-400 max-w-[10rem]">
+                          {u.deletionBlocked.auditLogCount + u.deletionBlocked.escalationCount + u.deletionBlocked.presalesProjectCount > 0
+                            ? "Has history — can't be deleted"
+                            : "No activity — can be deleted"}
+                        </p>
+                      )}
                     </td>
                     <td className="px-4 py-3.5">
                       {canEdit ? (

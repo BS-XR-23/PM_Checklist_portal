@@ -100,11 +100,37 @@ export default async function AdminUsersPage() {
 
   const users = await prisma.user.findMany({ orderBy: { createdAt: "asc" }, include: { person: true } });
 
+  // Bulk-computed for the Archived tab's "can this be deleted?" note — three
+  // groupBy queries regardless of how many inactive users there are, rather
+  // than the per-user getDeletionEligibility() the delete-confirmation panel
+  // uses (fine for one user on demand, but N x 3 queries for a whole list).
+  const inactiveIds = canEdit ? users.filter((u) => !u.isActive).map((u) => u.id) : [];
+  const deletionBlockedById = new Map<string, { auditLogCount: number; escalationCount: number; presalesProjectCount: number }>();
+  if (inactiveIds.length > 0) {
+    const [auditCounts, escalationCounts, presalesCounts] = await Promise.all([
+      prisma.auditLog.groupBy({ by: ["actorId"], where: { actorId: { in: inactiveIds } }, _count: { _all: true } }),
+      prisma.escalationItem.groupBy({ by: ["createdById"], where: { createdById: { in: inactiveIds } }, _count: { _all: true } }),
+      prisma.presalesProject.groupBy({ by: ["createdById"], where: { createdById: { in: inactiveIds } }, _count: { _all: true } }),
+    ]);
+    for (const id of inactiveIds) deletionBlockedById.set(id, { auditLogCount: 0, escalationCount: 0, presalesProjectCount: 0 });
+    for (const row of auditCounts) deletionBlockedById.get(row.actorId)!.auditLogCount = row._count._all;
+    for (const row of escalationCounts) deletionBlockedById.get(row.createdById)!.escalationCount = row._count._all;
+    for (const row of presalesCounts) deletionBlockedById.get(row.createdById)!.presalesProjectCount = row._count._all;
+  }
+
   const groups: RoleGroupData[] = ROLE_GROUPS.map((g) => ({
     ...g,
     users: users
       .filter((u) => ROLES_BY_GROUP_KEY[g.key].includes(u.role))
-      .map((u) => ({ id: u.id, name: u.name, email: u.email, role: u.role, isActive: u.isActive, personName: u.person?.name ?? null })),
+      .map((u) => ({
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        role: u.role,
+        isActive: u.isActive,
+        personName: u.person?.name ?? null,
+        deletionBlocked: deletionBlockedById.get(u.id) ?? null,
+      })),
   }));
 
   const totalUsers = users.length;
@@ -118,7 +144,7 @@ export default async function AdminUsersPage() {
         <h3 className="text-sm font-semibold text-slate-900">User Overview</h3>
         <OverviewRow icon={<IconUsers />} iconWrapClass="bg-blue-50 text-blue-600" label="Total Users" value={totalUsers} />
         <OverviewRow icon={<IconUser />} iconWrapClass="bg-emerald-50 text-emerald-600" label="Active Users" value={activeUsers} />
-        <OverviewRow icon={<IconClock />} iconWrapClass="bg-slate-100 text-slate-500" label="Inactive Users" value={inactiveUsers} />
+        <OverviewRow icon={<IconClock />} iconWrapClass="bg-slate-100 text-slate-500" label="Archived Users" value={inactiveUsers} />
         <OverviewRow icon={<IconAlertCircle />} iconWrapClass="bg-amber-50 text-amber-600" label="Not Linked to a Person" value={unlinkedUsers} />
       </div>
 

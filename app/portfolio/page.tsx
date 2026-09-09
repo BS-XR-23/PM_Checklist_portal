@@ -14,7 +14,7 @@ import { SpiCpiChart } from "@/components/charts/spi-cpi-chart";
 import { IconLayers, IconClock, IconUsers, IconChart, IconDownload, IconAlertTriangle, IconDollar } from "@/components/layout/icons";
 import { PORTFOLIO_PROJECT_INCLUDE, buildPortfolioData, type PortfolioRow, type HealthIndex } from "@/lib/portfolio-data";
 import { PortfolioClient } from "./portfolio-table";
-import { RefreshButton } from "./refresh-button";
+import { RefreshButton } from "@/components/ui/refresh-button";
 
 export const dynamic = "force-dynamic";
 

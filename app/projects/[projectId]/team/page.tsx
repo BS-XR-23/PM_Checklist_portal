@@ -5,7 +5,7 @@ import { SubNav } from "@/components/ui/sub-nav";
 import { StatTile } from "@/components/ui/stat-tile";
 import { IconUsers, IconBadge, IconUserCheck, IconIdCard } from "@/components/layout/icons";
 import { AddMemberForm } from "./add-member-form";
-import { MemberRow } from "./member-row";
+import { MemberCard } from "./member-card";
 
 export default async function TeamPage({ params }: { params: { projectId: string } }) {
   const user = await requireUser();
@@ -44,43 +44,55 @@ export default async function TeamPage({ params }: { params: { projectId: string
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <StatTile icon={<IconUsers />} iconWrapClass="bg-violet-50 text-violet-600" label="Total Members" value={String(memberships.length)} />
-        <StatTile icon={<IconBadge />} iconWrapClass="bg-blue-50 text-blue-600" label="PM" value={String(pmCount)} />
-        <StatTile icon={<IconUserCheck />} iconWrapClass="bg-emerald-50 text-emerald-600" label="Client" value={String(clientCount)} />
-        <StatTile icon={<IconIdCard />} iconWrapClass="bg-amber-50 text-amber-600" label="Limited" value={String(limitedCount)} />
+        <StatTile
+          icon={<IconUsers />}
+          iconWrapClass="bg-violet-50 text-violet-600"
+          label="Total Members"
+          value={String(memberships.length)}
+          accentColor="#6D28D9"
+        />
+        <StatTile icon={<IconBadge />} iconWrapClass="bg-emerald-50 text-emerald-600" label="PM" value={String(pmCount)} accentColor="#065F46" />
+        <StatTile
+          icon={<IconUserCheck />}
+          iconWrapClass="bg-amber-50 text-amber-600"
+          label="Client"
+          value={String(clientCount)}
+          accentColor="#92400E"
+        />
+        <StatTile
+          icon={<IconIdCard />}
+          iconWrapClass="bg-indigo-50 text-indigo-600"
+          label="Limited"
+          value={String(limitedCount)}
+          accentColor="#4338CA"
+        />
       </div>
 
       {canEdit && <AddMemberForm projectId={params.projectId} />}
 
-      <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-xs text-slate-500 border-b border-slate-100 bg-slate-50">
-              <th className="px-3 py-2 font-medium">User</th>
-              <th className="px-3 py-2 font-medium w-28">Role</th>
-              <th className="px-3 py-2 font-medium">Module Permissions</th>
-              {canEdit && <th className="px-3 py-2 font-medium w-10">Actions</th>}
-            </tr>
-          </thead>
-          <tbody>
-            {memberships.map((m) => (
-              <MemberRow
-                key={m.id}
-                projectId={params.projectId}
-                canEdit={canEdit}
-                membership={{
-                  id: m.id,
-                  role: m.role,
-                  userName: m.user.name,
-                  userEmail: m.user.email,
-                  permissions: m.permissions.map((p) => ({ module: p.module, access: p.access })),
-                }}
-              />
-            ))}
-          </tbody>
-        </table>
-        {memberships.length === 0 && <p className="text-sm text-slate-400 p-4">No one has been assigned to this project yet.</p>}
-      </div>
+      {memberships.length === 0 ? (
+        <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">
+          <IconUsers className="mx-auto h-8 w-8 text-slate-300 mb-2" />
+          <p className="text-sm text-slate-400">No one has been assigned to this project yet.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {memberships.map((m) => (
+            <MemberCard
+              key={m.id}
+              projectId={params.projectId}
+              canEdit={canEdit}
+              membership={{
+                id: m.id,
+                role: m.role,
+                userName: m.user.name,
+                userEmail: m.user.email,
+                permissions: m.permissions.map((p) => ({ module: p.module, access: p.access })),
+              }}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

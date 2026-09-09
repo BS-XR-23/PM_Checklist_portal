@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { ReactNode } from "react";
+import clsx from "clsx";
 import { IconSearch } from "@/components/layout/icons";
 import { CreateUserForm } from "./create-user-form";
 import { ImportUsersButton } from "./import-users-button";
@@ -11,6 +12,31 @@ function matchesSearch(name: string, email: string, q: string): boolean {
   if (!q) return true;
   const s = q.toLowerCase();
   return name.toLowerCase().includes(s) || email.toLowerCase().includes(s);
+}
+
+type Tab = "ACTIVE" | "ARCHIVED";
+
+function TabButton({ label, count, active, onClick }: { label: string; count: number; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={clsx(
+        "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors whitespace-nowrap",
+        active ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-600 border-slate-200 hover:border-slate-400"
+      )}
+    >
+      {label}
+      <span
+        className={clsx(
+          "inline-flex items-center justify-center rounded-full px-1.5 min-w-[1.1rem] text-[10px] font-semibold",
+          active ? "bg-white/20 text-white" : "bg-slate-100 text-slate-500"
+        )}
+      >
+        {count}
+      </span>
+    </button>
+  );
 }
 
 // Search lives in the page header (next to the title), so its state has to
@@ -28,8 +54,16 @@ export function UsersPageClient({
   canEdit: boolean;
 }) {
   const [search, setSearch] = useState("");
+  const [tab, setTab] = useState<Tab>("ACTIVE");
 
-  const filteredGroups = groups.map((g) => ({
+  const activeCount = groups.reduce((n, g) => n + g.users.filter((u) => u.isActive).length, 0);
+  const archivedCount = groups.reduce((n, g) => n + g.users.filter((u) => !u.isActive).length, 0);
+
+  const tabGroups = groups.map((g) => ({
+    ...g,
+    users: g.users.filter((u) => (tab === "ACTIVE" ? u.isActive : !u.isActive)),
+  }));
+  const filteredGroups = tabGroups.map((g) => ({
     ...g,
     users: g.users.filter((u) => matchesSearch(u.name, u.email, search)),
   }));
@@ -60,10 +94,18 @@ export function UsersPageClient({
         <div className="grid grid-cols-1 xl:grid-cols-[1fr_280px] gap-6 items-start">
           <div className="space-y-4 min-w-0">
             {canEdit && <CreateUserForm />}
+            <div className="flex items-center gap-2">
+              <TabButton label="Active" count={activeCount} active={tab === "ACTIVE"} onClick={() => setTab("ACTIVE")} />
+              <TabButton label="Archived" count={archivedCount} active={tab === "ARCHIVED"} onClick={() => setTab("ARCHIVED")} />
+            </div>
             <div className="space-y-4">
               {!anyResults && (
                 <p className="text-sm text-slate-400 rounded-xl border border-slate-200 bg-white p-4">
-                  No users match &quot;{search}&quot;.
+                  {search
+                    ? `No users match "${search}".`
+                    : tab === "ARCHIVED"
+                      ? "No archived users — everyone here is active."
+                      : "No active users."}
                 </p>
               )}
               {filteredGroups.map((g) => (

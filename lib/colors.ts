@@ -1,3 +1,4 @@
+import type { AccessLevel, Role } from "@prisma/client";
 import type { ItemStatus } from "@/lib/constants";
 import { HIGH_INTENSITY_THRESHOLD_PCT } from "@/lib/constants";
 
@@ -143,3 +144,43 @@ export function tagPillStyle(s: string): { bg: string; text: string } {
   for (let i = 0; i < s.length; i++) hash = (hash * 31 + s.charCodeAt(i)) >>> 0;
   return TAG_PALETTE[hash % TAG_PALETTE.length];
 }
+
+// Team Access permission grid — AccessLevel is an ordinal scale (more
+// capability moving right), so this ramps in "weight" rather than using
+// unrelated categorical hues: gray (nothing) -> amber (partial) -> blue
+// (full read) -> green (full read/write, the most trusted grant). Reuses
+// the exact hex values already established for Not Started/In Progress/
+// Checklist-tag/Completed elsewhere, rather than inventing a new palette.
+export const ACCESS_LEVEL_COLORS: Record<AccessLevel, { bg: string; text: string; label: string }> = {
+  NONE: { bg: "#E2E8F0", text: "#475569", label: "No Access" },
+  READ_LIMITED: { bg: "#FFE699", text: "#7A5B00", label: "Read Limited" },
+  READ_FULL: { bg: "#DBEAFE", text: "#1D4ED8", label: "Read Full" },
+  WRITE: { bg: "#C6E0B4", text: "#2C5F2D", label: "Write" },
+};
+
+// Team Access role pills — PM/Client/Guest is a fixed 3-value set (unlike
+// the freeform tags tagPillStyle() hashes), so it gets deliberate colors
+// matching the same roles' avatar colors on the Users admin page instead of
+// an arbitrary hash — the same role reads as the same color everywhere.
+export const MEMBERSHIP_ROLE_COLORS: Partial<Record<Role, { bg: string; text: string }>> = {
+  PM: { bg: "#D1FAE5", text: "#065F46" },
+  CLIENT: { bg: "#FEF3C7", text: "#92400E" },
+  LIMITED: { bg: "#E0E7FF", text: "#4338CA" },
+};
+
+// Audit Log action pills — one color per verb, purely categorical rather
+// than a severity ramp: an "update" isn't a lesser risk than a "create", so
+// this doesn't reuse the traffic-light palettes above. "delete" still reads
+// as rose/attention-grabbing since it's irreversible, not because it's
+// "more severe" on some shared scale with Risk/Dependency severity.
+export const AUDIT_ACTION_COLORS: Record<string, { bg: string; text: string }> = {
+  create: { bg: "#D1FAE5", text: "#065F46" },
+  update: { bg: "#DBEAFE", text: "#1D4ED8" },
+  delete: { bg: "#FFE4E6", text: "#9F1239" },
+  override: { bg: "#FEF3C7", text: "#92400E" },
+  role_change: { bg: "#EDE9FE", text: "#6D28D9" },
+};
+// `action` is a free string (new call sites can introduce new verbs without
+// a schema change) — anything not in the map above falls back to this
+// instead of rendering unstyled.
+export const DEFAULT_AUDIT_ACTION_COLOR = { bg: "#E2E8F0", text: "#475569" };
