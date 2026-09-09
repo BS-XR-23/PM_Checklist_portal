@@ -21,7 +21,8 @@ import {
   IconFileText,
 } from "@/components/layout/icons";
 import { STATUS_COLORS, STATUS_ORDER, SLIPPED_FLAG_COLOR, avatarColorFromString } from "@/lib/colors";
-import { ITEM_STATUSES, type ChecklistType, type ItemStatus } from "@/lib/constants";
+import { ITEM_STATUSES, type ItemStatus } from "@/lib/constants";
+import type { ChecklistType } from "@/lib/checklist-types";
 import { formatPct, formatDate, toDateInputValue, initials } from "@/lib/format";
 import { isSlipped, currentStage } from "@/lib/calculations";
 import { updateChecklistItem, createChecklistItem, deleteChecklistItem } from "@/app/projects/[projectId]/checklist-actions";

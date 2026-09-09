@@ -1,0 +1,67 @@
+import { notFound } from "next/navigation";
+import { prisma } from "@/lib/prisma";
+import { ChecklistTable } from "@/components/checklist/checklist-table";
+import { SubNav } from "@/components/ui/sub-nav";
+import { CHECKLIST_TYPES, CHECKLIST_TYPE_BY_ROUTE } from "@/lib/checklist-types";
+import { requireModuleAccess, getModuleAccess, getCurrentUser } from "@/lib/rbac";
+import type { AccessLevel } from "@prisma/client";
+
+export default async function ChecklistPage({ params }: { params: { projectId: string; type: string } }) {
+  const active = CHECKLIST_TYPE_BY_ROUTE[params.type];
+  if (!active) notFound();
+
+  const [access, otherAccess, user] = await Promise.all([
+    requireModuleAccess(params.projectId, active.moduleName, "READ_LIMITED"),
+    Promise.all(
+      CHECKLIST_TYPES.filter((c) => c.key !== active.key).map(
+        async (c) => [c, await getModuleAccess(params.projectId, c.moduleName)] as [typeof c, AccessLevel]
+      )
+    ),
+    getCurrentUser(),
+  ]);
+
+  const [items, otherCounts, people] = await Promise.all([
+    prisma.checklistItem.findMany({
+      where: { projectId: params.projectId, type: active.key },
+      orderBy: { order: "asc" },
+      include: { ownerPerson: { select: { id: true, name: true } } },
+    }),
+    Promise.all(
+      otherAccess.map(async ([c, a]) =>
+        a !== "NONE" ? [c, await prisma.checklistItem.count({ where: { projectId: params.projectId, type: c.key } })] : [c, 0]
+      )
+    ) as Promise<[(typeof CHECKLIST_TYPES)[number], number][]>,
+    access === "WRITE" ? prisma.person.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }) : Promise.resolve([]),
+  ]);
+
+  const withOwnerName = items.map((i) => ({ ...i, ownerPersonName: i.ownerPerson?.name ?? null }));
+  const visibleItems = access === "READ_LIMITED" ? withOwnerName.map((i) => ({ ...i, notes: null })) : withOwnerName;
+
+  const countByKey = new Map(otherCounts.map(([c, count]) => [c.key, count]));
+  const accessByKey = new Map(otherAccess.map(([c, a]) => [c.key, a]));
+  const subNavOptions = CHECKLIST_TYPES.filter((c) => c.key === active.key || accessByKey.get(c.key) !== "NONE").map((c) => ({
+    href: `/checklist/${c.routeSegment}`,
+    label: c.label,
+    count: c.key === active.key ? items.length : (countByKey.get(c.key) ?? 0),
+  }));
+
+  return (
+    <div>
+      <SubNav projectId={params.projectId} options={subNavOptions} />
+      <div className="mb-4">
+        <h2 className="text-base font-semibold text-slate-900">{active.label}</h2>
+        <p className="text-sm text-slate-500">{active.description}</p>
+      </div>
+      <ChecklistTable
+        projectId={params.projectId}
+        checklistType={active.key}
+        items={visibleItems}
+        stageOrder={active.stageOrder}
+        stageLabel={active.stageLabel}
+        access={access}
+        viewerRole={user!.role}
+        people={people}
+      />
+    </div>
+  );
+}

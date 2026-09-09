@@ -1,51 +1,8 @@
-import { prisma } from "@/lib/prisma";
-import { ChecklistTable } from "@/components/checklist/checklist-table";
-import { SubNav } from "@/components/ui/sub-nav";
-import { DEVOPS_CATEGORIES } from "@/lib/seed-data";
-import { requireModuleAccess, getModuleAccess, getCurrentUser } from "@/lib/rbac";
+import { redirect } from "next/navigation";
 
-export default async function DevOpsChecklistPage({ params }: { params: { projectId: string } }) {
-  const [access, pmAccess, user] = await Promise.all([
-    requireModuleAccess(params.projectId, "DEVOPS_CHECKLIST", "READ_LIMITED"),
-    getModuleAccess(params.projectId, "PM_CHECKLIST"),
-    getCurrentUser(),
-  ]);
-
-  const [items, pmItemCount, people] = await Promise.all([
-    prisma.checklistItem.findMany({
-      where: { projectId: params.projectId, type: "DEVOPS" },
-      orderBy: { order: "asc" },
-      include: { ownerPerson: { select: { id: true, name: true } } },
-    }),
-    pmAccess !== "NONE" ? prisma.checklistItem.count({ where: { projectId: params.projectId, type: "PM" } }) : Promise.resolve(0),
-    access === "WRITE" ? prisma.person.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }) : Promise.resolve([]),
-  ]);
-
-  const withOwnerName = items.map((i) => ({ ...i, ownerPersonName: i.ownerPerson?.name ?? null }));
-  const visibleItems = access === "READ_LIMITED" ? withOwnerName.map((i) => ({ ...i, notes: null })) : withOwnerName;
-
-  const subNavOptions = [
-    ...(pmAccess !== "NONE" ? [{ href: "/pm-checklist", label: "PM Checklist", count: pmItemCount }] : []),
-    { href: "/devops-checklist", label: "DevOps Checklist", count: items.length },
-  ];
-
-  return (
-    <div>
-      <SubNav projectId={params.projectId} options={subNavOptions} />
-      <div className="mb-4">
-        <h2 className="text-base font-semibold text-slate-900">DevOps Checklist</h2>
-        <p className="text-sm text-slate-500">Infrastructure, CI/CD, Security, Reliability, and Release & Ops.</p>
-      </div>
-      <ChecklistTable
-        projectId={params.projectId}
-        checklistType="DEVOPS"
-        items={visibleItems}
-        stageOrder={DEVOPS_CATEGORIES}
-        stageLabel="Category"
-        access={access}
-        viewerRole={user!.role}
-        people={people}
-      />
-    </div>
-  );
+// Old fixed route, kept as a redirect for any existing bookmark/notification
+// link — the real page moved to the dynamic /checklist/[type] route so a new
+// checklist type is a registry entry (lib/checklist-types.ts), not a new folder.
+export default function Page({ params }: { params: { projectId: string } }) {
+  redirect(`/projects/${params.projectId}/checklist/devops`);
 }

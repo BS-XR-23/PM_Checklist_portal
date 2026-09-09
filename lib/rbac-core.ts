@@ -56,6 +56,9 @@ export const DEFAULT_CLIENT_PERMISSIONS: { module: ModuleName; access: AccessLev
   { module: "DASHBOARD", access: "READ_LIMITED" },
   { module: "PM_CHECKLIST", access: "READ_LIMITED" },
   { module: "DEVOPS_CHECKLIST", access: "READ_LIMITED" },
+  { module: "ENGINEERING_CHECKLIST", access: "READ_LIMITED" },
+  { module: "QA_CHECKLIST", access: "READ_LIMITED" },
+  { module: "CREATIVE_XR_CHECKLIST", access: "READ_LIMITED" },
   { module: "MILESTONES", access: "READ_FULL" },
   { module: "RISK_REGISTER", access: "NONE" },
   { module: "CR_LOG", access: "NONE" },
@@ -71,6 +74,9 @@ export const ALL_MODULES: ModuleName[] = [
   "DASHBOARD",
   "PM_CHECKLIST",
   "DEVOPS_CHECKLIST",
+  "ENGINEERING_CHECKLIST",
+  "QA_CHECKLIST",
+  "CREATIVE_XR_CHECKLIST",
   "MILESTONES",
   "RISK_REGISTER",
   "CR_LOG",
@@ -104,7 +110,7 @@ export type AccessPreset = {
 /**
  * One-click starting points for a CLIENT/LIMITED member's module grid on
  * the Team tab — still freely editable per-module afterward, this just
- * saves setting all 11 dropdowns by hand for the common cases. BUDGET_TRACKER
+ * saves setting all 14 dropdowns by hand for the common cases. BUDGET_TRACKER
  * is always left NONE: computeModuleAccess forces it to NONE for everyone
  * but Admin regardless of what's stored, so setting it to anything else
  * here would be a silently-ignored no-op.

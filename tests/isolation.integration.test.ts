@@ -695,7 +695,8 @@ describe("isolation boundary", () => {
 
       const { getDashboardData } = await import("@/lib/dashboard-data");
       const dashboard = await getDashboardData(newProject.id);
-      const presalesStage = dashboard.pmStageSummary.find((s) => s.stage === "Presales");
+      const pmSummary = dashboard.stageSummaryByType.find((c) => c.key === "PM");
+      const presalesStage = pmSummary?.stages.find((s) => s.stage === "Presales");
       expect(presalesStage).toBeDefined();
       expect(presalesStage?.total).toBe(1);
       expect(presalesStage?.completed).toBe(1);

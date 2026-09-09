@@ -5,7 +5,8 @@ import { NotesCell } from "@/components/ui/notes-cell";
 import { RowActionsMenu } from "@/components/ui/row-actions-menu";
 import { IconCalendar } from "@/components/layout/icons";
 import { STATUS_COLORS } from "@/lib/colors";
-import { INVOICE_STATUSES, SIGNOFF_STATUSES, type ChecklistType, type ItemStatus } from "@/lib/constants";
+import { INVOICE_STATUSES, SIGNOFF_STATUSES, type ItemStatus } from "@/lib/constants";
+import type { ChecklistType } from "@/lib/checklist-types";
 import { formatDate, formatMoney, formatPct } from "@/lib/format";
 import { trancheAmount } from "@/lib/calculations";
 import { updateMilestonePayment, updateMilestoneName } from "./milestone-actions";
@@ -24,10 +25,13 @@ export type MilestoneTableRow = {
   status: ItemStatus;
 };
 
-const SOURCE_LABEL: Record<ChecklistType, string> = { PM: "PM", DEVOPS: "DevOps" };
+const SOURCE_LABEL: Record<ChecklistType, string> = { PM: "PM", ENGINEERING: "Engineering", QA: "QA", DEVOPS: "DevOps", CREATIVE_XR: "Creative & XR" };
 const SOURCE_STYLE: Record<ChecklistType, string> = {
   PM: "bg-indigo-50 text-indigo-700",
+  ENGINEERING: "bg-violet-50 text-violet-700",
+  QA: "bg-amber-50 text-amber-700",
   DEVOPS: "bg-blue-50 text-blue-700",
+  CREATIVE_XR: "bg-pink-50 text-pink-700",
 };
 
 const SIGNOFF_STYLE: Record<string, { bg: string; text: string }> = {

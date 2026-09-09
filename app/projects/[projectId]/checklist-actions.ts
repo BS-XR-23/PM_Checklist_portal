@@ -4,16 +4,17 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { parseDateInput } from "@/lib/format";
 import { requireModuleWrite, performTpmOverride, writeAudit } from "@/lib/rbac";
-import type { ChecklistType, ItemStatus } from "@/lib/constants";
+import type { ItemStatus } from "@/lib/constants";
+import { CHECKLIST_TYPE_BY_KEY, type ChecklistType } from "@/lib/checklist-types";
 import type { ModuleName } from "@prisma/client";
 
 function moduleFor(checklistType: ChecklistType): ModuleName {
-  return checklistType === "PM" ? "PM_CHECKLIST" : "DEVOPS_CHECKLIST";
+  return CHECKLIST_TYPE_BY_KEY[checklistType].moduleName;
 }
 
 function revalidateChecklist(projectId: string, checklistType: ChecklistType) {
-  const path = checklistType === "PM" ? "pm-checklist" : "devops-checklist";
-  revalidatePath(`/projects/${projectId}/${path}`);
+  const path = CHECKLIST_TYPE_BY_KEY[checklistType].routeSegment;
+  revalidatePath(`/projects/${projectId}/checklist/${path}`);
   revalidatePath(`/projects/${projectId}/dashboard`);
   revalidatePath(`/projects/${projectId}/milestones`);
   revalidatePath(`/projects/${projectId}/activity`);

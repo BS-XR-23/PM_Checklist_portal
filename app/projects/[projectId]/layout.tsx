@@ -5,6 +5,7 @@ import { NavTabs } from "@/components/ui/nav-tabs";
 import { AppShell } from "@/components/layout/app-shell";
 import { getProjectContext } from "@/lib/rbac";
 import { canViewResourcing } from "@/lib/resourcing-rbac";
+import { CHECKLIST_TYPES, CHECKLIST_TYPE_BY_KEY } from "@/lib/checklist-types";
 
 type Tab = { href: string; label: string; matchHrefs?: string[] };
 
@@ -41,8 +42,12 @@ export default async function ProjectLayout({
   // to be separate tabs — visible if EITHER half is; the page itself (via
   // components/ui/sub-nav.tsx) only shows the half(s) the viewer can reach.
   const visibleTabs: Tab[] = [{ href: "/dashboard", label: "Dashboard" }];
-  if (moduleAccess.PM_CHECKLIST !== "NONE" || moduleAccess.DEVOPS_CHECKLIST !== "NONE") {
-    visibleTabs.push({ href: "/pm-checklist", label: "Checklist", matchHrefs: ["/devops-checklist"] });
+  if (CHECKLIST_TYPES.some((c) => moduleAccess[c.moduleName] !== "NONE")) {
+    visibleTabs.push({
+      href: `/checklist/${CHECKLIST_TYPE_BY_KEY.PM.routeSegment}`,
+      label: "Checklist",
+      matchHrefs: CHECKLIST_TYPES.filter((c) => c.key !== "PM").map((c) => `/checklist/${c.routeSegment}`),
+    });
   }
   if (moduleAccess.MILESTONES !== "NONE") visibleTabs.push({ href: "/milestones", label: "Milestones & Payments" });
   if (moduleAccess.RISK_REGISTER !== "NONE" || moduleAccess.CR_LOG !== "NONE") {

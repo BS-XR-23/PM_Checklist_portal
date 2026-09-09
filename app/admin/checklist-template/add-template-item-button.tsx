@@ -1,7 +1,7 @@
 "use client";
 
 import { useTransition } from "react";
-import type { ChecklistType } from "@/lib/constants";
+import type { ChecklistType } from "@/lib/checklist-types";
 import { createTemplateItem } from "./template-actions";
 
 export function AddTemplateItemButton({ type, stage }: { type: ChecklistType; stage: string }) {

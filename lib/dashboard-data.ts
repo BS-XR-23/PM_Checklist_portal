@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
-import { PM_STAGES, DEVOPS_CATEGORIES } from "@/lib/seed-data";
+import { PM_STAGES } from "@/lib/seed-data";
 import { ITEM_STATUSES, type ItemStatus } from "@/lib/constants";
+import { CHECKLIST_TYPES, CHECKLIST_TYPE_BY_KEY, type ChecklistType } from "@/lib/checklist-types";
 import { riskScore, computeEvm, trancheAmount, currentStage, reminderBand, checklistCompletionPct, budgetEntriesFromSprints, toSprintsForBudget } from "@/lib/calculations";
 
 export async function getDashboardData(projectId: string) {
@@ -29,7 +30,6 @@ export async function getDashboardData(projectId: string) {
   }));
 
   const pmItems = allItems.filter((i) => i.type === "PM");
-  const devopsItems = allItems.filter((i) => i.type === "DEVOPS");
   // N/A items don't count toward completion at all — not the numerator
   // (obviously not completed) and not the denominator either (they're not
   // part of this project's plan, same as if the template item weren't there).
@@ -46,13 +46,11 @@ export async function getDashboardData(projectId: string) {
     count: allItems.filter((i) => i.status === status).length,
   }));
 
-  const perChecklistSummary = [
-    { name: "PM Checklist", items: pmItems },
-    { name: "DevOps Checklist", items: devopsItems },
-  ].map(({ name, items }) => {
+  const perChecklistSummary = CHECKLIST_TYPES.map((c) => {
+    const items = allItems.filter((i) => i.type === c.key);
     const applicable = items.filter((i) => i.status !== "NOT_APPLICABLE");
     const completed = applicable.filter((i) => i.status === "COMPLETED").length;
-    return { name, total: applicable.length, completed, pct: applicable.length ? completed / applicable.length : 0 };
+    return { name: c.label, total: applicable.length, completed, pct: applicable.length ? completed / applicable.length : 0 };
   });
 
   function stageSummary(items: typeof pmItems, stages: readonly string[]) {
@@ -68,12 +66,17 @@ export async function getDashboardData(projectId: string) {
     });
   }
 
+  // One stage/category breakdown per checklist type, in registry order.
   // "Presales" is only ever populated on a project won from a Presales
   // opportunity (winPresalesProject, app/presales/actions.ts) — drop it
   // here when empty so a regular project's Dashboard doesn't show a
-  // permanent "Presales: 0/0" row.
-  const pmStageSummary = stageSummary(pmItems, PM_STAGES).filter((s) => s.stage !== "Presales" || s.total > 0);
-  const devopsStageSummary = stageSummary(devopsItems, DEVOPS_CATEGORIES);
+  // permanent "Presales: 0/0" row under PM Checklist.
+  const stageSummaryByType = CHECKLIST_TYPES.map((c) => {
+    const items = allItems.filter((i) => i.type === c.key);
+    let stages = stageSummary(items, c.stageOrder);
+    if (c.key === "PM") stages = stages.filter((s) => s.stage !== "Presales" || s.total > 0);
+    return { key: c.key, label: c.label, stageLabel: c.stageLabel, stages };
+  });
 
   // Derived, not stored — the current stage (per the resolved PM-Checklist-
   // is-canonical definition, same as the Projects list) and the project's
@@ -96,7 +99,7 @@ export async function getDashboardData(projectId: string) {
     .map(({ i, band }) => ({
       id: i.id,
       source: "CHECKLIST" as const,
-      route: i.type === "PM" ? "pm-checklist" : "devops-checklist",
+      route: `checklist/${CHECKLIST_TYPE_BY_KEY[i.type as ChecklistType].routeSegment}`,
       context: i.stage,
       itemText: i.itemText,
       plannedDate: i.plannedDate as Date,
@@ -120,15 +123,13 @@ export async function getDashboardData(projectId: string) {
     a.band !== b.band ? (a.band === "OVERDUE" ? -1 : 1) : a.plannedDate.getTime() - b.plannedDate.getTime()
   );
 
-  const timelineStrip = [
-    ...pmStageSummary.map((s) => ({ ...s, source: "PM Checklist" })),
-    ...devopsStageSummary.map((s) => ({ ...s, source: "DevOps Checklist" })),
-  ];
+  const timelineStrip = stageSummaryByType.flatMap((c) => c.stages.map((s) => ({ ...s, source: c.label })));
 
+  const checklistTypeOrder = Object.fromEntries(CHECKLIST_TYPES.map((c, idx) => [c.key, idx]));
   const milestonesList = milestones
     .map((m) => ({
       id: m.id,
-      source: m.checklistItem.type === "PM" ? "PM Checklist" : "DevOps Checklist",
+      source: CHECKLIST_TYPE_BY_KEY[m.checklistItem.type as ChecklistType].label,
       stage: m.checklistItem.stage,
       milestoneName: m.checklistItem.milestoneName ?? "",
       actualDate: m.checklistItem.actualDate,
@@ -136,7 +137,7 @@ export async function getDashboardData(projectId: string) {
       order: m.checklistItem.order,
       type: m.checklistItem.type,
     }))
-    .sort((a, b) => (a.type === b.type ? a.order - b.order : a.type === "PM" ? -1 : 1));
+    .sort((a, b) => (a.type === b.type ? a.order - b.order : checklistTypeOrder[a.type] - checklistTypeOrder[b.type]));
 
   const evm = computeEvm(budgetEntriesFromSprints(toSprintsForBudget(sprints), project.plannedStoryPoints), project.contractValue);
   const latestEvm = [...evm].reverse().find((e) => e.spi != null || e.cpi != null) ?? null;
@@ -182,8 +183,7 @@ export async function getDashboardData(projectId: string) {
     recentDecisions,
     statusBreakdown,
     perChecklistSummary,
-    pmStageSummary,
-    devopsStageSummary,
+    stageSummaryByType,
     timelineStrip,
     milestonesList,
     evmChartData: evm.map((e) => ({ weekEnding: e.weekEnding.toISOString(), pv: e.pv, ev: e.ev, ac: e.actualCost })),

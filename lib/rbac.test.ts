@@ -133,6 +133,9 @@ describe("DEFAULT_CLIENT_PERMISSIONS", () => {
     expect(byModule.MILESTONES).toBe("READ_FULL");
     expect(byModule.PM_CHECKLIST).toBe("READ_LIMITED");
     expect(byModule.DEVOPS_CHECKLIST).toBe("READ_LIMITED");
+    expect(byModule.ENGINEERING_CHECKLIST).toBe("READ_LIMITED");
+    expect(byModule.QA_CHECKLIST).toBe("READ_LIMITED");
+    expect(byModule.CREATIVE_XR_CHECKLIST).toBe("READ_LIMITED");
     expect(byModule.DASHBOARD).toBe("READ_LIMITED");
   });
 

@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { reminderBand } from "@/lib/calculations";
+import { CHECKLIST_TYPE_BY_KEY, type ChecklistType } from "@/lib/checklist-types";
 import type { CurrentUser } from "@/lib/rbac";
 import type { Role } from "@prisma/client";
 
@@ -110,7 +111,7 @@ function buildReminders(source: ReminderSource, today: Date): ReminderItem[] {
     .map((i) => ({ i, band: reminderBand(i.plannedDate, i.status === "COMPLETED" || i.status === "NOT_APPLICABLE", today) }))
     .filter((x): x is { i: (typeof source.checklistItems)[number]; band: "OVERDUE" | "DUE_SOON" } => x.band !== null)
     .map(({ i, band }) => ({
-      href: `/projects/${i.project.id}/${i.type === "PM" ? "pm-checklist" : "devops-checklist"}`,
+      href: `/projects/${i.project.id}/checklist/${CHECKLIST_TYPE_BY_KEY[i.type as ChecklistType].routeSegment}`,
       contextLabel: i.project.name,
       groupId: i.project.id,
       projectId: i.project.id,

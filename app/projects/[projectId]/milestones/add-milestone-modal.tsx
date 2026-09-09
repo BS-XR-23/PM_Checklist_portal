@@ -1,21 +1,20 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { PM_STAGES, DEVOPS_CATEGORIES } from "@/lib/seed-data";
-import type { ChecklistType } from "@/lib/constants";
+import { CHECKLIST_TYPES, CHECKLIST_TYPE_BY_KEY, type ChecklistType } from "@/lib/checklist-types";
 import { addMilestone } from "./milestone-actions";
 
 export function AddMilestoneModal({ projectId }: { projectId: string }) {
   const [open, setOpen] = useState(false);
   const [checklistType, setChecklistType] = useState<ChecklistType>("PM");
-  const stages = checklistType === "PM" ? PM_STAGES : DEVOPS_CATEGORIES;
+  const stages = CHECKLIST_TYPE_BY_KEY[checklistType].stageOrder;
   const [stage, setStage] = useState<string>(stages[0]);
   const [name, setName] = useState("");
   const [pending, startTransition] = useTransition();
 
   function changeType(next: ChecklistType) {
     setChecklistType(next);
-    setStage((next === "PM" ? PM_STAGES : DEVOPS_CATEGORIES)[0]);
+    setStage(CHECKLIST_TYPE_BY_KEY[next].stageOrder[0]);
   }
 
   if (!open) {
@@ -46,8 +45,11 @@ export function AddMilestoneModal({ projectId }: { projectId: string }) {
               onChange={(e) => changeType(e.target.value as ChecklistType)}
               className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm"
             >
-              <option value="PM">PM Checklist</option>
-              <option value="DEVOPS">DevOps Checklist</option>
+              {CHECKLIST_TYPES.map((c) => (
+                <option key={c.key} value={c.key}>
+                  {c.label}
+                </option>
+              ))}
             </select>
           </div>
           <div>

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUser, writeAudit } from "@/lib/rbac";
-import type { ChecklistType } from "@/lib/constants";
+import type { ChecklistType } from "@/lib/checklist-types";
 
 async function requireAdmin() {
   const user = await requireUser();

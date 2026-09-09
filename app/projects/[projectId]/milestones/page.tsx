@@ -1,7 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { formatMoney, formatPct } from "@/lib/format";
 import { trancheAmount } from "@/lib/calculations";
-import type { ChecklistType, ItemStatus } from "@/lib/constants";
+import type { ItemStatus } from "@/lib/constants";
+import type { ChecklistType } from "@/lib/checklist-types";
 import { requireModuleAccess } from "@/lib/rbac";
 import { StatTile } from "@/components/ui/stat-tile";
 import { IconLayers, IconCheckCircle, IconTarget, IconCircle, IconDollar } from "@/components/layout/icons";

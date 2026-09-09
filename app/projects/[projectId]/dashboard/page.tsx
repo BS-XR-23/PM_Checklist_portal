@@ -237,18 +237,14 @@ export default async function DashboardPage({ params }: { params: { projectId: s
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <SectionHeader icon={<IconLayers />} iconWrapClass="bg-blue-50 text-blue-600" title="Stage / Category Breakdown" />
           <div className="space-y-3">
-            <div>
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">PM Checklist</p>
-              {data.pmStageSummary.map((s) => (
-                <StageRow key={s.stage} stage={s.stage} total={s.total} completed={s.completed} pct={s.pct} />
-              ))}
-            </div>
-            <div>
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">DevOps Checklist</p>
-              {data.devopsStageSummary.map((s) => (
-                <StageRow key={s.stage} stage={s.stage} total={s.total} completed={s.completed} pct={s.pct} />
-              ))}
-            </div>
+            {data.stageSummaryByType.map((c) => (
+              <div key={c.key}>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">{c.label}</p>
+                {c.stages.map((s) => (
+                  <StageRow key={s.stage} stage={s.stage} total={s.total} completed={s.completed} pct={s.pct} />
+                ))}
+              </div>
+            ))}
           </div>
         </div>
 

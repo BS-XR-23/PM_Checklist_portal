@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireModuleWrite, writeAudit } from "@/lib/rbac";
-import type { ChecklistType } from "@/lib/constants";
+import { CHECKLIST_TYPE_BY_KEY, type ChecklistType } from "@/lib/checklist-types";
 
 export async function updateMilestonePayment(
   id: string,
@@ -105,5 +105,5 @@ export async function addMilestone(projectId: string, input: { checklistType: Ch
   revalidatePath(`/projects/${projectId}/milestones`);
   revalidatePath(`/projects/${projectId}/dashboard`);
   revalidatePath(`/projects/${projectId}/activity`);
-  revalidatePath(`/projects/${projectId}/${input.checklistType === "PM" ? "pm-checklist" : "devops-checklist"}`);
+  revalidatePath(`/projects/${projectId}/checklist/${CHECKLIST_TYPE_BY_KEY[input.checklistType].routeSegment}`);
 }

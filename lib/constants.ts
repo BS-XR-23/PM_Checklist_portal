@@ -18,8 +18,6 @@ export const ROLE_LABELS: Record<Role, string> = {
   LIMITED: "Guest",
 };
 
-export type ChecklistType = "PM" | "DEVOPS";
-
 export type ItemStatus =
   | "NOT_STARTED"
   | "IN_PROGRESS"

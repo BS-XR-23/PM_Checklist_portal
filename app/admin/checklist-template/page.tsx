@@ -2,8 +2,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/rbac";
 import { AppShell } from "@/components/layout/app-shell";
-import { PM_STAGES, DEVOPS_CATEGORIES } from "@/lib/seed-data";
-import type { ChecklistType } from "@/lib/constants";
+import { CHECKLIST_TYPES, type ChecklistType } from "@/lib/checklist-types";
 import { TemplateItemRow, type TemplateItemRowData } from "./template-item-row";
 import { AddTemplateItemButton } from "./add-template-item-button";
 import { PresalesTemplateItemRow } from "./presales-template-item-row";
@@ -19,12 +18,17 @@ export default async function ChecklistTemplatePage() {
     prisma.checklistTemplateItem.findMany({ orderBy: [{ type: "asc" }, { order: "asc" }] }),
     prisma.presalesChecklistTemplateItem.findMany({ orderBy: { order: "asc" } }),
   ]);
-  const pmItems = items.filter((i) => i.type === "PM");
-  const devopsItems = items.filter((i) => i.type === "DEVOPS");
+  const itemsByType = new Map<string, typeof items>();
+  for (const item of items) {
+    const list = itemsByType.get(item.type);
+    if (list) list.push(item);
+    else itemsByType.set(item.type, [item]);
+  }
   // "Presales" is a real ChecklistItem stage (lib/seed-data.ts's PM_STAGES),
   // but deliberately not part of PM_CHECKLIST_SEED/this template — it's
-  // only ever populated by winPresalesProject, so it isn't listed here.
-  const pmStages = PM_STAGES.filter((s) => s !== "Presales");
+  // only ever populated by winPresalesProject, so it's filtered out of the
+  // PM checklist type's stage list here, and only there.
+  const stagesFor = (c: (typeof CHECKLIST_TYPES)[number]) => (c.key === "PM" ? c.stageOrder.filter((s) => s !== "Presales") : c.stageOrder);
 
   return (
     <AppShell user={currentUser}>
@@ -36,8 +40,9 @@ export default async function ChecklistTemplatePage() {
         </p>
       </header>
       <main className="max-w-5xl mx-auto p-4 sm:p-6 space-y-10">
-        <TemplateSection title="PM Checklist" type="PM" stages={pmStages} items={pmItems} />
-        <TemplateSection title="DevOps Checklist" type="DEVOPS" stages={DEVOPS_CATEGORIES} items={devopsItems} />
+        {CHECKLIST_TYPES.map((c) => (
+          <TemplateSection key={c.key} title={c.label} type={c.key} stages={stagesFor(c)} items={itemsByType.get(c.key) ?? []} />
+        ))}
         <section className="space-y-6">
           <div>
             <h2 className="text-base font-semibold text-slate-900">Presales Checklist</h2>

@@ -6,25 +6,15 @@ import { RowActionsMenu } from "@/components/ui/row-actions-menu";
 import { avatarColorFromString, ACCESS_LEVEL_COLORS, MEMBERSHIP_ROLE_COLORS } from "@/lib/colors";
 import { initials } from "@/lib/format";
 import { ROLE_LABELS } from "@/lib/constants";
-import { ACCESS_PRESETS } from "@/lib/rbac-core";
+import { ACCESS_PRESETS, ALL_MODULES as RBAC_ALL_MODULES } from "@/lib/rbac-core";
 import { removeProjectMember, setModulePermission, applyAccessPreset } from "./team-actions";
 
-// BUDGET_TRACKER is intentionally omitted — it's Admin-only now
+// Sourced from lib/rbac-core.ts's single ALL_MODULES list (previously
+// hand-duplicated here, which meant a new module added there silently never
+// appeared in this grid). BUDGET_TRACKER is excluded — it's Admin-only now
 // (lib/rbac-core.ts computeModuleAccess), so a per-membership permission
 // for it would be a no-op.
-const ALL_MODULES: ModuleName[] = [
-  "DASHBOARD",
-  "PM_CHECKLIST",
-  "DEVOPS_CHECKLIST",
-  "MILESTONES",
-  "RISK_REGISTER",
-  "CR_LOG",
-  "PM_PLAN",
-  "DECISION_LOG",
-  "ACTION_ITEMS",
-  "DELIVERY",
-  "DEPENDENCIES",
-];
+const ALL_MODULES = RBAC_ALL_MODULES.filter((m) => m !== "BUDGET_TRACKER");
 
 const ACCESS_LEVELS: AccessLevel[] = ["NONE", "READ_LIMITED", "READ_FULL", "WRITE"];
 

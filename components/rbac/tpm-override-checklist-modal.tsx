@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { ITEM_STATUSES, type ChecklistType, type ItemStatus } from "@/lib/constants";
+import { ITEM_STATUSES, type ItemStatus } from "@/lib/constants";
+import type { ChecklistType } from "@/lib/checklist-types";
 import { STATUS_COLORS } from "@/lib/colors";
 import { toDateInputValue } from "@/lib/format";
 import { tpmOverrideChecklistItem } from "@/app/projects/[projectId]/checklist-actions";
