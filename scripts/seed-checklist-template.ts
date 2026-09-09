@@ -10,6 +10,7 @@ import {
   QA_CHECKLIST_SEED,
   DEVOPS_CHECKLIST_SEED,
   CREATIVE_XR_CHECKLIST_SEED,
+  DEV_CHECKLIST_SEED,
 } from "../lib/seed-data";
 
 const prisma = new PrismaClient();
@@ -21,6 +22,7 @@ async function main() {
     ["QA", QA_CHECKLIST_SEED],
     ["DEVOPS", DEVOPS_CHECKLIST_SEED],
     ["CREATIVE_XR", CREATIVE_XR_CHECKLIST_SEED],
+    ["DEV", DEV_CHECKLIST_SEED],
   ] as const;
   const rows = seeds.flatMap(([type, items]) => items.map((item) => ({ ...item, type })));
 

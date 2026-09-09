@@ -68,6 +68,9 @@ export const DEFAULT_CLIENT_PERMISSIONS: { module: ModuleName; access: AccessLev
   { module: "ACTION_ITEMS", access: "NONE" },
   { module: "DELIVERY", access: "NONE" },
   { module: "DEPENDENCIES", access: "NONE" },
+  { module: "DEV_CHECKLIST", access: "READ_LIMITED" },
+  { module: "RELEASE", access: "READ_LIMITED" },
+  { module: "UAT", access: "READ_LIMITED" },
 ];
 
 export const ALL_MODULES: ModuleName[] = [
@@ -86,6 +89,9 @@ export const ALL_MODULES: ModuleName[] = [
   "ACTION_ITEMS",
   "DELIVERY",
   "DEPENDENCIES",
+  "DEV_CHECKLIST",
+  "RELEASE",
+  "UAT",
 ];
 
 /**

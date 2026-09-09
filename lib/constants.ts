@@ -54,6 +54,42 @@ export const CR_STATUSES = ["Proposed", "Approved", "In Progress", "Completed", 
 export const DEPENDENCY_PRIORITIES = ["Low", "Medium", "High", "Extreme"] as const;
 export const DEPENDENCY_STATUSES = ["Due", "Done", "Blocked"] as const;
 
+// Display labels for the Milestone.type / Release.type Prisma enums —
+// values taken verbatim from the Delivery restructure spec's "Milestone
+// types may include..." / "Release types can include..." lists.
+export const MILESTONE_TYPE_LABELS: Record<string, string> = {
+  PLANNING: "Planning",
+  DESIGN: "Design",
+  DEVELOPMENT: "Development",
+  QA: "QA",
+  UAT: "UAT",
+  RELEASE: "Release",
+  CUSTOM: "Custom",
+};
+export const MILESTONE_TYPES = Object.keys(MILESTONE_TYPE_LABELS);
+
+export const RELEASE_TYPE_LABELS: Record<string, string> = {
+  INTERNAL: "Internal",
+  DEVELOPMENT: "Development",
+  QA: "QA",
+  STAGING: "Staging",
+  UAT: "UAT",
+  PRODUCTION: "Production",
+  HOTFIX: "Hotfix",
+};
+export const RELEASE_TYPES = Object.keys(RELEASE_TYPE_LABELS);
+
+export const RELEASE_DEPLOYMENT_STATUSES = ["Planned", "In Progress", "Deployed", "Rolled Back", "Failed"] as const;
+export const RELEASE_APPROVAL_STATUSES = ["Pending", "Approved", "Rejected"] as const;
+
+export const UAT_CASE_STATUSES = ["NOT_STARTED", "IN_PROGRESS", "PASSED", "FAILED", "BLOCKED"] as const;
+export type UatCaseStatus = (typeof UAT_CASE_STATUSES)[number];
+
+export const UAT_DEFECT_SEVERITIES = ["Low", "Medium", "High", "Critical"] as const;
+export const UAT_DEFECT_STATUSES = ["Open", "In Progress", "Fixed", "Retest", "Closed", "Rejected"] as const;
+
+export const UAT_SIGNOFF_STATUSES = ["Pending", "Signed", "Rejected"] as const;
+
 // Resourcing / engagement intensity. Stored as a 0-100 percentage so the
 // overload sum-threshold below is plain arithmetic; the UI offers these as
 // Low/Med/High presets plus free numeric entry.

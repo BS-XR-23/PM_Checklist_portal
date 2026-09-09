@@ -51,14 +51,23 @@ export async function createProject(input: {
         stage: item.stage,
         itemText: item.itemText,
         milestoneName: item.milestoneName,
+        // Pre-generated so the Milestone row can be created before the
+        // ChecklistItem that references it (FK isn't deferrable).
+        milestoneId: item.milestoneName ? randomUUID() : null,
       }));
+
+      const milestoneItems = checklistItems.filter((item) => item.milestoneName && item.milestoneId);
+      if (milestoneItems.length > 0) {
+        await tx.milestone.createMany({
+          data: milestoneItems.map((item) => ({ id: item.milestoneId!, projectId: project.id, name: item.milestoneName! })),
+        });
+      }
 
       await tx.checklistItem.createMany({ data: checklistItems });
 
-      const milestoneItems = checklistItems.filter((item) => item.milestoneName);
       if (milestoneItems.length > 0) {
         await tx.milestonePayment.createMany({
-          data: milestoneItems.map((item) => ({ checklistItemId: item.id })),
+          data: milestoneItems.map((item) => ({ checklistItemId: item.id, milestoneId: item.milestoneId })),
         });
       }
 

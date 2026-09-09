@@ -1,7 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { requireModuleAccess, requireUser } from "@/lib/rbac";
 import { compareWbsNumbers } from "@/lib/format";
-import { SubNav } from "@/components/ui/sub-nav";
 import { StatTile } from "@/components/ui/stat-tile";
 import { SectionHeader } from "@/components/ui/section-header";
 import { IconClipboardList, IconFileText, IconCheckCircle, IconClock } from "@/components/layout/icons";
@@ -90,13 +89,6 @@ export default async function DeliveryTasksPage({ params }: { params: { projectI
 
   return (
     <div className="space-y-6">
-      <SubNav
-        projectId={params.projectId}
-        options={[
-          { href: "/delivery", label: "Sprints" },
-          { href: "/delivery/tasks", label: "Tasks", count: tasks.length },
-        ]}
-      />
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="text-base font-semibold text-slate-900">Delivery — Tasks</h2>

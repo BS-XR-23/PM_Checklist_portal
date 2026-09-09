@@ -33,6 +33,29 @@ enum ModuleName {
   ACTION_ITEMS
   DELIVERY
   DEPENDENCIES
+  DEV_CHECKLIST
+  RELEASE
+  UAT
+}
+
+enum MilestoneType {
+  PLANNING
+  DESIGN
+  DEVELOPMENT
+  QA
+  UAT
+  RELEASE
+  CUSTOM
+}
+
+enum ReleaseType {
+  INTERNAL
+  DEVELOPMENT
+  QA
+  STAGING
+  UAT
+  PRODUCTION
+  HOTFIX
 }
 
 enum AccessLevel {
@@ -95,6 +118,10 @@ model Project {
   sprints           Sprint[]
   programOversights ProgramOversight[]
   dependencies      DependencyItem[]
+  milestones        Milestone[]
+  releases          Release[]
+  uatCases          UatCase[]
+  uatDefects        UatDefect[]
 }
 
 /// Organizational-only mapping of which projects a PROGRAM_MANAGER oversees.
@@ -202,6 +229,16 @@ model ChecklistItem {
   notes         String?
   isCustom      Boolean   @default(false) // true only for items added via "+ Add Item" / "Add Milestone", never the fixed template
 
+  // Optional links into the Delivery restructure's data model — a checklist
+  // item may (not must) evidence a Milestone/WbsTask/Sprint without
+  // duplicating any of their data.
+  milestoneId String?
+  milestone   Milestone? @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+  wbsTaskId   String?
+  wbsTask     WbsTask?   @relation(fields: [wbsTaskId], references: [id], onDelete: SetNull)
+  sprintId    String?
+  sprint      Sprint?    @relation(fields: [sprintId], references: [id], onDelete: SetNull)
+
   milestonePayment MilestonePayment?
 
   @@unique([projectId, type, order])
@@ -226,10 +263,17 @@ model MilestonePayment {
   id              String        @id @default(cuid())
   checklistItemId String        @unique
   checklistItem   ChecklistItem @relation(fields: [checklistItemId], references: [id], onDelete: Cascade)
-  paymentPct      Float         @default(0)
-  invoiceStatus   String        @default("Not Invoiced")
-  clientSignoff   String        @default("Pending")
-  notes           String?
+  // Nullable for now, additive — backfilled onto every existing row by the
+  // Milestone-model migration, then tightened to be the required/unique
+  // anchor (and checklistItemId relaxed to optional) in a later migration
+  // once that backfill has been verified. See prisma/migrations backfill
+  // script + schema.prisma history for the two-step plan.
+  milestoneId   String?    @unique
+  milestone     Milestone? @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+  paymentPct    Float      @default(0)
+  invoiceStatus String     @default("Not Invoiced")
+  clientSignoff String     @default("Pending")
+  notes         String?
 }
 
 model RiskItem {
@@ -404,8 +448,17 @@ model WbsTask {
   competencyMultiplier Float    @default(1)
   createdAt            DateTime @default(now())
 
+  // Optional link to the Delivery restructure's Milestone model — a WBS
+  // task may roll up under a milestone without duplicating its data.
+  milestoneId String?
+  milestone   Milestone? @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+
+  checklistItems ChecklistItem[]
+  releases       ReleaseWbsTask[]
+
   @@index([projectId])
   @@index([sprintId])
+  @@index([milestoneId])
 }
 
 // A Scrum sprint — a WbsTask committed to one (sprintId) gets an explicit
@@ -449,8 +502,11 @@ model Sprint {
   // see closeSprint() and sprintContributionEntries() in calculations.ts.
   departedTaskSnapshot Json @default("[]")
 
-  tasks       WbsTask[]
-  allocations SprintAllocation[]
+  tasks          WbsTask[]
+  allocations    SprintAllocation[]
+  checklistItems ChecklistItem[]
+  milestones     MilestoneSprint[]
+  releases       ReleaseSprint[]
 
   @@index([projectId])
 }
@@ -604,6 +660,10 @@ model Person {
   presalesChecklistOwner  PresalesChecklistItem[]
   wbsTasks                WbsTask[]
   sprintAllocations       SprintAllocation[]
+  milestoneOwner          Milestone[]
+  releaseOwner            Release[]
+  uatCaseOwner            UatCase[]
+  uatDefectOwner          UatDefect[]
 }
 
 enum PresalesOutcome {
@@ -738,4 +798,194 @@ model ProjectEngagementMonth {
 
   @@unique([engagementId, month])
   @@index([engagementId])
+}
+
+/// A major delivery checkpoint (Requirements Baseline, MVP Complete, UAT
+/// Sign-off, Production Release, ...) — distinct from a WbsTask (a unit of
+/// work) and from a Release (a version/build being shipped). Planned/
+/// Forecast/Actual + status/pctComplete give PMO-style variance reporting;
+/// the optional links below let a milestone roll up WBS/Sprint/checklist
+/// evidence and a Release without duplicating any of their data.
+model Milestone {
+  id                 String        @id @default(cuid())
+  projectId          String
+  project            Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name               String
+  type               MilestoneType @default(DEVELOPMENT)
+  description        String?
+  plannedDate        DateTime?
+  forecastDate       DateTime?
+  actualDate         DateTime?
+  status             String        @default("NOT_STARTED") // see ItemStatus in lib/constants.ts
+  pctComplete        Float         @default(0)
+  ownerPersonId      String?
+  ownerPerson        Person?       @relation(fields: [ownerPersonId], references: [id], onDelete: SetNull)
+  acceptanceCriteria String?
+  dependenciesNote   String? // free-text; formal blocking links are MilestoneDependency below
+  order              Int           @default(0)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  payment        MilestonePayment?
+  checklistItems ChecklistItem[]
+  wbsTasks       WbsTask[]
+  sprints        MilestoneSprint[]
+  releases       Release[]
+  uatCases       UatCase[]
+  blockedBy      MilestoneDependency[] @relation("BlockedMilestone")
+  blocks         MilestoneDependency[] @relation("BlockingMilestone")
+
+  @@index([projectId])
+}
+
+/// Formal milestone-to-milestone blocking relationship — distinct from
+/// DependencyItem, which tracks waits on external parties, not other
+/// milestones.
+model MilestoneDependency {
+  id                  String    @id @default(cuid())
+  blockedMilestoneId  String
+  blockedMilestone    Milestone @relation("BlockedMilestone", fields: [blockedMilestoneId], references: [id], onDelete: Cascade)
+  blockingMilestoneId String
+  blockingMilestone   Milestone @relation("BlockingMilestone", fields: [blockingMilestoneId], references: [id], onDelete: Cascade)
+
+  @@unique([blockedMilestoneId, blockingMilestoneId])
+}
+
+/// Join table: which sprint(s) a milestone spans, where that's meaningful.
+model MilestoneSprint {
+  id          String    @id @default(cuid())
+  milestoneId String
+  milestone   Milestone @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
+  sprintId    String
+  sprint      Sprint    @relation(fields: [sprintId], references: [id], onDelete: Cascade)
+
+  @@unique([milestoneId, sprintId])
+}
+
+/// A version/build being shipped to an environment — distinct from a
+/// Milestone (a checkpoint like "Development Complete"). "Version 1.4.0
+/// deployed to UAT" is a Release; "Development Complete" is a Milestone.
+model Release {
+  id                    String      @id @default(cuid())
+  projectId             String
+  project               Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  version               String
+  name                  String
+  type                  ReleaseType @default(INTERNAL)
+  environment           String?
+  releaseDate           DateTime?
+  ownerPersonId         String?
+  ownerPerson           Person?     @relation(fields: [ownerPersonId], references: [id], onDelete: SetNull)
+  relatedMilestoneId    String?
+  relatedMilestone      Milestone?  @relation(fields: [relatedMilestoneId], references: [id], onDelete: SetNull)
+  buildNumber           String?
+  releaseNotes          String?
+  deploymentStatus      String      @default("Planned") // see RELEASE_DEPLOYMENT_STATUSES in lib/constants.ts
+  rollbackVersion       String?
+  approvalStatus        String      @default("Pending") // see RELEASE_APPROVAL_STATUSES in lib/constants.ts
+  postReleaseValidation String?
+  knownIssues           String?
+  // UAT closure lives here rather than a separate entity — "has the client
+  // accepted this build" is naturally an attribute of the release being
+  // tested, not a freestanding concept. See UAT_SIGNOFF_STATUSES in
+  // lib/constants.ts.
+  uatSignoffStatus String    @default("Pending")
+  uatSignoffDate   DateTime?
+  uatFeedback      String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  sprints    ReleaseSprint[]
+  wbsTasks   ReleaseWbsTask[]
+  uatCases   UatCase[]
+  uatDefects UatDefect[]
+
+  @@unique([projectId, version])
+  @@index([projectId])
+}
+
+/// Join table: which sprint(s) contributed to a release.
+model ReleaseSprint {
+  id        String  @id @default(cuid())
+  releaseId String
+  release   Release @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+  sprintId  String
+  sprint    Sprint  @relation(fields: [sprintId], references: [id], onDelete: Cascade)
+
+  @@unique([releaseId, sprintId])
+}
+
+/// Join table: which WBS tasks are included in a release ("Included WBS").
+model ReleaseWbsTask {
+  id        String  @id @default(cuid())
+  releaseId String
+  release   Release @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+  wbsTaskId String
+  wbsTask   WbsTask @relation(fields: [wbsTaskId], references: [id], onDelete: Cascade)
+
+  @@unique([releaseId, wbsTaskId])
+}
+
+/// A UAT test scenario/case, distinct from internal QA — this is the
+/// client/user acceptance layer. Optionally scoped to a Release and/or
+/// Milestone without duplicating either.
+model UatCase {
+  id             String     @id @default(cuid())
+  projectId      String
+  project        Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  releaseId      String?
+  release        Release?   @relation(fields: [releaseId], references: [id], onDelete: SetNull)
+  milestoneId    String?
+  milestone      Milestone? @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+  code           String?
+  title          String
+  scenario       String?
+  preconditions  String?
+  steps          String?
+  expectedResult String?
+  priority       String     @default("Medium") // see RISK_LEVELS in lib/constants.ts
+  status         String     @default("NOT_STARTED") // see UAT_CASE_STATUSES in lib/constants.ts
+  ownerPersonId  String?
+  ownerPerson    Person?    @relation(fields: [ownerPersonId], references: [id], onDelete: SetNull)
+  executedDate   DateTime?
+  actualResult   String?
+  notes          String?
+  order          Int        @default(0)
+  createdAt      DateTime   @default(now())
+
+  defects UatDefect[]
+
+  @@index([projectId])
+  @@index([releaseId])
+}
+
+/// A defect logged during UAT execution — distinct from internal QA
+/// defects (tracked, if at all, inside the QA checklist), since UAT
+/// defects represent client/user-facing acceptance blockers.
+model UatDefect {
+  id            String    @id @default(cuid())
+  projectId     String
+  project       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  uatCaseId     String?
+  uatCase       UatCase?  @relation(fields: [uatCaseId], references: [id], onDelete: SetNull)
+  releaseId     String?
+  release       Release?  @relation(fields: [releaseId], references: [id], onDelete: SetNull)
+  code          String?
+  title         String
+  description   String?
+  severity      String    @default("Medium") // see UAT_DEFECT_SEVERITIES in lib/constants.ts
+  priority      String    @default("Medium") // see RISK_LEVELS in lib/constants.ts
+  status        String    @default("Open") // see UAT_DEFECT_STATUSES in lib/constants.ts
+  ownerPersonId String?
+  ownerPerson   Person?   @relation(fields: [ownerPersonId], references: [id], onDelete: SetNull)
+  reportedDate  DateTime?
+  targetFixDate DateTime?
+  retestResult  String?
+  closedDate    DateTime?
+  notes         String?
+  order         Int       @default(0)
+  createdAt     DateTime  @default(now())
+
+  @@index([projectId])
+  @@index([uatCaseId])
 }

@@ -300,39 +300,32 @@ describe("isolation boundary", () => {
     expect(programManager).toEqual([]);
   });
 
-  it("sanity check: PM-A CAN add a milestone (creates ChecklistItem + MilestonePayment together) and rename it", async () => {
-    const { addMilestone, updateMilestoneName } = await import("@/app/projects/[projectId]/milestones/milestone-actions");
+  it("sanity check: PM-A CAN add a milestone and rename it", async () => {
+    const { createMilestone, updateMilestone } = await import("@/app/projects/[projectId]/delivery/milestones/milestone-actions");
     actAs(pmAUserId);
 
-    await addMilestone(projectA.id, { checklistType: "PM", stage: "Planning", name: "[TEST] Beta Signoff" });
+    const created = await createMilestone(projectA.id, { name: "[TEST] Beta Signoff", type: "DEVELOPMENT" });
+    expect(created.projectId).toBe(projectA.id);
+    expect(created.name).toBe("[TEST] Beta Signoff");
 
-    const created = await prisma.checklistItem.findFirstOrThrow({
-      where: { projectId: projectA.id, milestoneName: "[TEST] Beta Signoff" },
-      include: { milestonePayment: true },
-    });
-    expect(created.isCustom).toBe(true);
-    expect(created.stage).toBe("Planning");
-    expect(created.milestonePayment?.paymentPct).toBe(0);
-
-    await updateMilestoneName(created.id, projectA.id, "[TEST] Beta Signoff (renamed)");
-    const renamed = await prisma.checklistItem.findUniqueOrThrow({ where: { id: created.id } });
-    expect(renamed.milestoneName).toBe("[TEST] Beta Signoff (renamed)");
+    await updateMilestone(created.id, projectA.id, { name: "[TEST] Beta Signoff (renamed)" });
+    const renamed = await prisma.milestone.findUniqueOrThrow({ where: { id: created.id } });
+    expect(renamed.name).toBe("[TEST] Beta Signoff (renamed)");
   });
 
   it("guessed-ID attack: PM-A cannot add a milestone to Project B, or rename one that belongs to it", async () => {
-    const { addMilestone, updateMilestoneName } = await import("@/app/projects/[projectId]/milestones/milestone-actions");
+    const { createMilestone, updateMilestone } = await import("@/app/projects/[projectId]/delivery/milestones/milestone-actions");
 
-    const milestoneItemInB = await prisma.checklistItem.create({
-      data: { projectId: projectB.id, type: "PM", order: 995, stage: "Pre-Sales & Initiation", itemText: "[TEST] B milestone", milestoneName: "[TEST] B milestone" },
+    const milestoneInB = await prisma.milestone.create({
+      data: { projectId: projectB.id, name: "[TEST] B milestone", type: "DEVELOPMENT" },
     });
-    await prisma.milestonePayment.create({ data: { checklistItemId: milestoneItemInB.id, paymentPct: 0.1 } });
 
     actAs(pmAUserId);
-    await expect(addMilestone(projectB.id, { checklistType: "PM", stage: "Planning", name: "[TEST] should fail" })).rejects.toThrow();
-    await expect(updateMilestoneName(milestoneItemInB.id, projectB.id, "hacked")).rejects.toThrow();
+    await expect(createMilestone(projectB.id, { name: "[TEST] should fail", type: "DEVELOPMENT" })).rejects.toThrow();
+    await expect(updateMilestone(milestoneInB.id, projectB.id, { name: "hacked" })).rejects.toThrow();
 
-    const stillUnchanged = await prisma.checklistItem.findUniqueOrThrow({ where: { id: milestoneItemInB.id } });
-    expect(stillUnchanged.milestoneName).toBe("[TEST] B milestone");
+    const stillUnchanged = await prisma.milestone.findUniqueOrThrow({ where: { id: milestoneInB.id } });
+    expect(stillUnchanged.name).toBe("[TEST] B milestone");
   });
 
   it("Checklist Template is Admin-only: a PM (even with WRITE everywhere on their own project) cannot touch it", async () => {

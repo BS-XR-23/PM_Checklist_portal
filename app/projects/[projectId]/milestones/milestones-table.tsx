@@ -25,13 +25,18 @@ export type MilestoneTableRow = {
   status: ItemStatus;
 };
 
-const SOURCE_LABEL: Record<ChecklistType, string> = { PM: "PM", ENGINEERING: "Engineering", QA: "QA", DEVOPS: "DevOps", CREATIVE_XR: "Creative & XR" };
+// DEV (Development Checklist) never actually appears here — its seed data
+// deliberately carries no milestoneName, so it can never produce a
+// MilestonePayment row (see lib/seed-data.ts) — but the entry is required
+// for type completeness now that ChecklistType includes it.
+const SOURCE_LABEL: Record<ChecklistType, string> = { PM: "PM", ENGINEERING: "Engineering", QA: "QA", DEVOPS: "DevOps", CREATIVE_XR: "Creative & XR", DEV: "Development" };
 const SOURCE_STYLE: Record<ChecklistType, string> = {
   PM: "bg-indigo-50 text-indigo-700",
   ENGINEERING: "bg-violet-50 text-violet-700",
   QA: "bg-amber-50 text-amber-700",
   DEVOPS: "bg-blue-50 text-blue-700",
   CREATIVE_XR: "bg-pink-50 text-pink-700",
+  DEV: "bg-slate-100 text-slate-700",
 };
 
 const SIGNOFF_STYLE: Record<string, { bg: string; text: string }> = {

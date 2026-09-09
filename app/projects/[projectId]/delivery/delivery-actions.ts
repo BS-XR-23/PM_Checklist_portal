@@ -31,6 +31,7 @@ async function requireSprintAdmin(): Promise<CurrentUser> {
 function revalidateDelivery(projectId: string) {
   revalidatePath(`/projects/${projectId}/delivery`);
   revalidatePath(`/projects/${projectId}/delivery/tasks`);
+  revalidatePath(`/projects/${projectId}/delivery/sprints`);
   revalidatePath(`/projects/${projectId}/budget`);
   revalidatePath(`/projects/${projectId}/dashboard`);
 }

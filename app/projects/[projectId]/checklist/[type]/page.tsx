@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { ChecklistTable } from "@/components/checklist/checklist-table";
 import { SubNav } from "@/components/ui/sub-nav";
@@ -9,11 +9,16 @@ import type { AccessLevel } from "@prisma/client";
 export default async function ChecklistPage({ params }: { params: { projectId: string; type: string } }) {
   const active = CHECKLIST_TYPE_BY_ROUTE[params.type];
   if (!active) notFound();
+  // Development Checklist only shows inside Delivery, not the general
+  // Checklist tab — send anyone who lands here (bookmark, typed URL) to its
+  // real home instead of rendering it under this tab's chrome.
+  if (!active.inGeneralChecklistNav) redirect(`/projects/${params.projectId}/delivery/checklist`);
 
+  const generalTypes = CHECKLIST_TYPES.filter((c) => c.inGeneralChecklistNav);
   const [access, otherAccess, user] = await Promise.all([
     requireModuleAccess(params.projectId, active.moduleName, "READ_LIMITED"),
     Promise.all(
-      CHECKLIST_TYPES.filter((c) => c.key !== active.key).map(
+      generalTypes.filter((c) => c.key !== active.key).map(
         async (c) => [c, await getModuleAccess(params.projectId, c.moduleName)] as [typeof c, AccessLevel]
       )
     ),
@@ -39,7 +44,7 @@ export default async function ChecklistPage({ params }: { params: { projectId: s
 
   const countByKey = new Map(otherCounts.map(([c, count]) => [c.key, count]));
   const accessByKey = new Map(otherAccess.map(([c, a]) => [c.key, a]));
-  const subNavOptions = CHECKLIST_TYPES.filter((c) => c.key === active.key || accessByKey.get(c.key) !== "NONE").map((c) => ({
+  const subNavOptions = generalTypes.filter((c) => c.key === active.key || accessByKey.get(c.key) !== "NONE").map((c) => ({
     href: `/checklist/${c.routeSegment}`,
     label: c.label,
     count: c.key === active.key ? items.length : (countByKey.get(c.key) ?? 0),

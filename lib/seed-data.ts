@@ -139,6 +139,60 @@ export const QA_STAGES = ["Test Planning", "Functional Testing", "Device Testing
 
 export const CREATIVE_XR_STAGES = ["Storyboard", "3D", "UX", "Assets", "XR Validation"] as const;
 
+// Development Checklist — a technical delivery quality/governance gate,
+// distinct from PM Checklist's governance items and from WBS/Sprint Tasks
+// (this is never for individual dev tasks like "Implement Login API"; those
+// belong on the Tasks/Sprint tab). Item text taken verbatim from the
+// Delivery restructure spec's 4 categories.
+export const DEV_STAGES = ["Development Readiness", "Development Execution", "Quality Gate", "Development Completion"] as const;
+
+export const DEV_CHECKLIST_SEED: ChecklistSeedItem[] = [
+  // Development Readiness
+  { order: 1, stage: "Development Readiness", itemText: "Requirements/SRS available", milestoneName: null },
+  { order: 2, stage: "Development Readiness", itemText: "Acceptance criteria defined", milestoneName: null },
+  { order: 3, stage: "Development Readiness", itemText: "Scope confirmed", milestoneName: null },
+  { order: 4, stage: "Development Readiness", itemText: "Technical approach approved", milestoneName: null },
+  { order: 5, stage: "Development Readiness", itemText: "Architecture available", milestoneName: null },
+  { order: 6, stage: "Development Readiness", itemText: "Dependencies identified", milestoneName: null },
+  { order: 7, stage: "Development Readiness", itemText: "Development environment ready", milestoneName: null },
+  { order: 8, stage: "Development Readiness", itemText: "Required APIs/services available", milestoneName: null },
+  { order: 9, stage: "Development Readiness", itemText: "Required assets available", milestoneName: null },
+  { order: 10, stage: "Development Readiness", itemText: "Repository/branch ready", milestoneName: null },
+  // Development Execution
+  { order: 11, stage: "Development Execution", itemText: "Sprint scope confirmed", milestoneName: null },
+  { order: 12, stage: "Development Execution", itemText: "Tasks assigned", milestoneName: null },
+  { order: 13, stage: "Development Execution", itemText: "Development completed against requirements", milestoneName: null },
+  { order: 14, stage: "Development Execution", itemText: "Code review completed", milestoneName: null },
+  { order: 15, stage: "Development Execution", itemText: "Unit testing completed", milestoneName: null },
+  { order: 16, stage: "Development Execution", itemText: "Integration completed", milestoneName: null },
+  { order: 17, stage: "Development Execution", itemText: "API/error handling implemented", milestoneName: null },
+  { order: 18, stage: "Development Execution", itemText: "Technical documentation updated", milestoneName: null },
+  { order: 19, stage: "Development Execution", itemText: "Technical debt identified", milestoneName: null },
+  { order: 20, stage: "Development Execution", itemText: "Security considerations reviewed", milestoneName: null },
+  // Quality Gate
+  { order: 21, stage: "Quality Gate", itemText: "Build generated successfully", milestoneName: null },
+  { order: 22, stage: "Quality Gate", itemText: "Automated tests passed", milestoneName: null },
+  { order: 23, stage: "Quality Gate", itemText: "Smoke test completed", milestoneName: null },
+  { order: 24, stage: "Quality Gate", itemText: "Critical defects resolved", milestoneName: null },
+  { order: 25, stage: "Quality Gate", itemText: "Regression completed", milestoneName: null },
+  { order: 26, stage: "Quality Gate", itemText: "Performance requirements validated", milestoneName: null },
+  { order: 27, stage: "Quality Gate", itemText: "Supported platform/device testing completed", milestoneName: null },
+  { order: 28, stage: "Quality Gate", itemText: "Release candidate validated", milestoneName: null },
+  // Development Completion
+  { order: 29, stage: "Development Completion", itemText: "Sprint acceptance completed", milestoneName: null },
+  { order: 30, stage: "Development Completion", itemText: "Feature acceptance completed", milestoneName: null },
+  { order: 31, stage: "Development Completion", itemText: "Known issues documented", milestoneName: null },
+  { order: 32, stage: "Development Completion", itemText: "Technical documentation completed", milestoneName: null },
+  { order: 33, stage: "Development Completion", itemText: "Technical handover completed", milestoneName: null },
+  { order: 34, stage: "Development Completion", itemText: "Milestone acceptance criteria satisfied", milestoneName: null },
+  // Deliberately no milestoneName here (unlike other checklist types' gate
+  // items) — Development Checklist must never auto-create a payment
+  // tranche (Milestones & Payments) or a Delivery Milestone; those are two
+  // separate features with different goals, and a PM adds a Delivery
+  // Milestone explicitly if this gate genuinely marks one.
+  { order: 35, stage: "Development Completion", itemText: "Development milestone approved", milestoneName: null },
+];
+
 // Default rows from PMP_Template.docx, used to pre-populate a new project's PM Plan.
 export const DEFAULT_STAKEHOLDER_ROWS = [
   { stakeholder: "Sponsor", role: "Approves budget/scope", responsibility: "Final decision authority", accessRequired: "Status reports" },

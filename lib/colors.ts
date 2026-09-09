@@ -40,6 +40,51 @@ export function riskScoreSeverity(score: number): keyof typeof RISK_SEVERITY_COL
   return "low";
 }
 
+// UAT case status pills — pass/fail/blocked semantics don't map onto the
+// ItemStatus done/not-done vocabulary, so this is a dedicated map rather
+// than reusing STATUS_COLORS.
+export const UAT_CASE_STATUS_COLORS: Record<string, { bg: string; text: string; label: string }> = {
+  NOT_STARTED: { bg: "#D9D9D9", text: "#3F3F3F", label: "Not Started" },
+  IN_PROGRESS: { bg: "#FFE699", text: "#7A5B00", label: "In Progress" },
+  PASSED: { bg: "#C6E0B4", text: "#2C5F2D", label: "Passed" },
+  FAILED: { bg: "#FF7C80", text: "#7A0000", label: "Failed" },
+  BLOCKED: { bg: "#F4B183", text: "#8A3B00", label: "Blocked" },
+};
+
+// UAT defect severity pills — same 4-tier idea as RISK_SEVERITY_COLORS,
+// extended with a Critical tier above High (defects, unlike risks, can be
+// launch-blocking).
+export const UAT_DEFECT_SEVERITY_COLORS: Record<string, { bg: string; text: string }> = {
+  Low: { bg: "#C6E0B4", text: "#2C5F2D" },
+  Medium: { bg: "#FFE699", text: "#7A5B00" },
+  High: { bg: "#F4B183", text: "#8A3B00" },
+  Critical: { bg: "#FF7C80", text: "#7A0000" },
+};
+
+export const UAT_DEFECT_STATUS_COLORS: Record<string, { bg: string; text: string }> = {
+  Open: { bg: "#FF7C80", text: "#7A0000" },
+  "In Progress": { bg: "#FFE699", text: "#7A5B00" },
+  Fixed: { bg: "#DBEAFE", text: "#1D4ED8" },
+  Retest: { bg: "#EDE9FE", text: "#6D28D9" },
+  Closed: { bg: "#C6E0B4", text: "#2C5F2D" },
+  Rejected: { bg: "#E2E8F0", text: "#475569" },
+};
+
+// Release deployment/approval status pills.
+export const RELEASE_DEPLOYMENT_STATUS_COLORS: Record<string, { bg: string; text: string }> = {
+  Planned: { bg: "#D9D9D9", text: "#3F3F3F" },
+  "In Progress": { bg: "#FFE699", text: "#7A5B00" },
+  Deployed: { bg: "#C6E0B4", text: "#2C5F2D" },
+  "Rolled Back": { bg: "#F4B183", text: "#8A3B00" },
+  Failed: { bg: "#FF7C80", text: "#7A0000" },
+};
+
+export const RELEASE_APPROVAL_STATUS_COLORS: Record<string, { bg: string; text: string }> = {
+  Pending: { bg: "#FFE699", text: "#7A5B00" },
+  Approved: { bg: "#C6E0B4", text: "#2C5F2D" },
+  Rejected: { bg: "#FF7C80", text: "#7A0000" },
+};
+
 // Dependency Tracker priority/status pills — same traffic-light idea as
 // Risk severity, extended with an "Extreme" tier above High.
 export const DEPENDENCY_PRIORITY_COLORS = {

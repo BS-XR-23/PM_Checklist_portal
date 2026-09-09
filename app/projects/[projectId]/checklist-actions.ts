@@ -13,8 +13,11 @@ function moduleFor(checklistType: ChecklistType): ModuleName {
 }
 
 function revalidateChecklist(projectId: string, checklistType: ChecklistType) {
-  const path = CHECKLIST_TYPE_BY_KEY[checklistType].routeSegment;
-  revalidatePath(`/projects/${projectId}/checklist/${path}`);
+  const config = CHECKLIST_TYPE_BY_KEY[checklistType];
+  // DEV's real page lives under Delivery, not the general /checklist/[type]
+  // route (see inGeneralChecklistNav) — revalidate wherever it's actually
+  // rendered.
+  revalidatePath(config.inGeneralChecklistNav ? `/projects/${projectId}/checklist/${config.routeSegment}` : `/projects/${projectId}/delivery/checklist`);
   revalidatePath(`/projects/${projectId}/dashboard`);
   revalidatePath(`/projects/${projectId}/milestones`);
   revalidatePath(`/projects/${projectId}/activity`);

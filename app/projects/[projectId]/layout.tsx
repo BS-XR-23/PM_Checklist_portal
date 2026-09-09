@@ -42,11 +42,14 @@ export default async function ProjectLayout({
   // to be separate tabs — visible if EITHER half is; the page itself (via
   // components/ui/sub-nav.tsx) only shows the half(s) the viewer can reach.
   const visibleTabs: Tab[] = [{ href: "/dashboard", label: "Dashboard" }];
-  if (CHECKLIST_TYPES.some((c) => moduleAccess[c.moduleName] !== "NONE")) {
+  // Development Checklist (DEV) is deliberately excluded from this rotation
+  // — it's reached only from within Delivery, not the general Checklist tab.
+  const generalChecklistTypes = CHECKLIST_TYPES.filter((c) => c.inGeneralChecklistNav);
+  if (generalChecklistTypes.some((c) => moduleAccess[c.moduleName] !== "NONE")) {
     visibleTabs.push({
       href: `/checklist/${CHECKLIST_TYPE_BY_KEY.PM.routeSegment}`,
       label: "Checklist",
-      matchHrefs: CHECKLIST_TYPES.filter((c) => c.key !== "PM").map((c) => `/checklist/${c.routeSegment}`),
+      matchHrefs: generalChecklistTypes.filter((c) => c.key !== "PM").map((c) => `/checklist/${c.routeSegment}`),
     });
   }
   if (moduleAccess.MILESTONES !== "NONE") visibleTabs.push({ href: "/milestones", label: "Milestones & Payments" });
@@ -55,7 +58,21 @@ export default async function ProjectLayout({
   }
   if (moduleAccess.DEPENDENCIES !== "NONE") visibleTabs.push({ href: "/dependencies", label: "Dependencies" });
   if (moduleAccess.BUDGET_TRACKER !== "NONE") visibleTabs.push({ href: "/budget", label: "Budget Tracker" });
-  if (moduleAccess.DELIVERY !== "NONE") visibleTabs.push({ href: "/delivery", label: "Delivery", matchHrefs: ["/delivery/tasks"] });
+  // Delivery is the merge of DELIVERY (Overview/Tasks/Sprints/Milestones)
+  // plus the new DEV_CHECKLIST/RELEASE/UAT modules — visible if any one of
+  // them is, same "the page itself only shows the sub-tab(s) you can reach"
+  // pattern as Checklist/Risk & CR/Team above. Deliberately does NOT include
+  // MILESTONES: "Milestones & Payments" above is a separate, unrelated
+  // feature (payment tranches tied to checklist sign-off) from Delivery's
+  // own Milestones sub-tab (development checkpoints) — different goals, not
+  // to be conflated in nav or gating.
+  if ((["DELIVERY", "DEV_CHECKLIST", "RELEASE", "UAT"] as const).some((m) => moduleAccess[m] !== "NONE")) {
+    visibleTabs.push({
+      href: "/delivery",
+      label: "Delivery",
+      matchHrefs: ["/delivery/tasks", "/delivery/sprints", "/delivery/milestones", "/delivery/checklist", "/delivery/releases", "/delivery/uat"],
+    });
+  }
   if (moduleAccess.PM_PLAN !== "NONE") visibleTabs.push({ href: "/pm-plan", label: "PM Plan" });
   if (moduleAccess.DECISION_LOG !== "NONE" || moduleAccess.ACTION_ITEMS !== "NONE") {
     visibleTabs.push({ href: "/decisions", label: "Decisions", matchHrefs: ["/action-items"] });
