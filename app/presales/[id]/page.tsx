@@ -76,7 +76,7 @@ export default async function PresalesDetailPage({ params }: { params: { id: str
           </div>
           <div className="space-y-3">
             {decisions.map((d) => (
-              <PresalesDecisionRow key={d.id} presalesProjectId={presales.id} item={d} canWrite={canWrite} people={people} />
+              <PresalesDecisionRow key={d.id} presalesProjectId={presales.id} item={d} canWrite={canWrite} />
             ))}
             {decisions.length === 0 && <p className="text-sm text-slate-400">No decisions logged yet.</p>}
           </div>

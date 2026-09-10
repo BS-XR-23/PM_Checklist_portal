@@ -15,14 +15,11 @@ export default async function DecisionLogPage({ params }: { params: { projectId:
     ...(actionItemsAccess !== "NONE" ? [{ href: "/action-items", label: "Action Items" }] : []),
   ];
 
-  const [rawItems, people] = await Promise.all([
-    prisma.decisionLogItem.findMany({
-      where: { projectId: params.projectId },
-      orderBy: { order: "asc" },
-      include: { decidedByPerson: { select: { id: true, name: true } } },
-    }),
-    canWrite ? prisma.person.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }) : Promise.resolve([]),
-  ]);
+  const rawItems = await prisma.decisionLogItem.findMany({
+    where: { projectId: params.projectId },
+    orderBy: { order: "asc" },
+    include: { decidedByPerson: { select: { id: true, name: true } } },
+  });
   const items = rawItems.map((i) => ({ ...i, decidedByPersonName: i.decidedByPerson?.name ?? null }));
 
   return (
@@ -46,7 +43,7 @@ export default async function DecisionLogPage({ params }: { params: { projectId:
 
       <div className="space-y-3">
         {items.map((i) => (
-          <DecisionRow key={i.id} projectId={params.projectId} item={i} canWrite={canWrite} people={people} />
+          <DecisionRow key={i.id} projectId={params.projectId} item={i} canWrite={canWrite} />
         ))}
         {items.length === 0 && <p className="text-sm text-slate-400">No decisions logged yet.</p>}
       </div>

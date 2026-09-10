@@ -4,7 +4,6 @@ import { useTransition } from "react";
 import { InlineText, InlineTextarea, InlineDate } from "@/components/ui/inline-edit";
 import { DataCard, CardFieldGrid, CardField, CardIconButton } from "@/components/ui/data-card";
 import { formatDate, toDateInputValue } from "@/lib/format";
-import { PersonPicker } from "@/components/resourcing/person-picker";
 import { updateDecision, deleteDecision } from "./decision-actions";
 
 export type DecisionRowData = {
@@ -22,12 +21,10 @@ export function DecisionRow({
   projectId,
   item,
   canWrite,
-  people,
 }: {
   projectId: string;
   item: DecisionRowData;
   canWrite: boolean;
-  people: { id: string; name: string }[];
 }) {
   const [pending, startTransition] = useTransition();
 
@@ -58,11 +55,13 @@ export function DecisionRow({
         </CardField>
         <CardField label="Decided By">
           {canWrite ? (
-            <PersonPicker
-              personId={item.decidedByPersonId}
-              legacyText={item.decidedBy}
-              people={people}
-              onSave={(personId) => updateDecision(item.id, projectId, { decidedByPersonId: personId })}
+            // Free text, not a Person picker — "decided by" is often a
+            // company/client, not an individual (e.g. "DED"), though it may
+            // also name a specific person; a fixed People dropdown can't
+            // represent both.
+            <InlineText
+              value={item.decidedByPersonName || item.decidedBy || ""}
+              onSave={(v) => updateDecision(item.id, projectId, { decidedBy: v })}
             />
           ) : (
             item.decidedByPersonName || item.decidedBy || "—"
