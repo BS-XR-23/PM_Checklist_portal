@@ -380,6 +380,13 @@ export function currentStage(
   return null;
 }
 
+// The display label every caller falls back to when currentStage() returns
+// null (every stage done) — one constant so it can't drift the way it once
+// did ("Complete" on the Dashboard and the old Projects list, "Completed" on
+// Portfolio — same meaning, different strings, so a project could show as
+// "done" on one page and not match a "Completed" filter on another).
+export const COMPLETED_STAGE_LABEL = "Completed";
+
 export type ReminderBand = "OVERDUE" | "DUE_SOON" | null;
 
 /**

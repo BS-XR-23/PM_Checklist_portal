@@ -10,6 +10,7 @@ import { ATTENTION_SEVERITY_COLORS } from "@/lib/colors";
 import { AppShell } from "@/components/layout/app-shell";
 import { SectionHeader } from "@/components/ui/section-header";
 import { InfoTooltip } from "@/components/ui/info-tooltip";
+import { TrendBar } from "@/components/ui/trend-bar";
 import { SpiCpiChart } from "@/components/charts/spi-cpi-chart";
 import { IconLayers, IconClock, IconUsers, IconChart, IconDownload, IconAlertTriangle, IconDollar } from "@/components/layout/icons";
 import { PORTFOLIO_PROJECT_INCLUDE, buildPortfolioData, type PortfolioRow, type HealthIndex } from "@/lib/portfolio-data";
@@ -471,20 +472,6 @@ function FunnelRow({ label, amount, pct, color }: { label: string; amount: numbe
         <div className="h-full rounded-full" style={{ width: `${Math.min(100, pct * 100)}%`, backgroundColor: color }} />
       </div>
       <p className="w-24 shrink-0 text-right text-xs font-medium text-slate-700">{formatMoney(amount)}</p>
-    </div>
-  );
-}
-
-function TrendBar({ label, value, max, format }: { label: string; value: number; max: number; format?: (v: number) => string }) {
-  return (
-    <div className="flex items-center gap-2">
-      <p className="w-40 shrink-0 truncate text-xs text-slate-600" title={label}>
-        {label}
-      </p>
-      <div className="flex-1 h-2 rounded-full bg-slate-100 overflow-hidden">
-        <div className="h-full rounded-full bg-indigo-400" style={{ width: `${max ? (value / max) * 100 : 0}%` }} />
-      </div>
-      <p className="w-20 shrink-0 text-right text-xs text-slate-500">{format ? format(value) : value}</p>
     </div>
   );
 }

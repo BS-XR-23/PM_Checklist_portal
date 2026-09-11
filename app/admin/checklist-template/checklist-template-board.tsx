@@ -25,6 +25,38 @@ function sectionKey(type: ChecklistType, stage: string): string {
   return `${type}::${stage}`;
 }
 
+// Each checklist type gets its own color identity in the tab row — plain
+// literal class strings (not template-built) so Tailwind's scanner picks
+// them all up. Kept local to this page rather than added to lib/colors.ts:
+// this is a tab-row accent, not a status/semantic color used elsewhere.
+const TYPE_COLORS: Record<ChecklistType, { icon: string; activeText: string; activeBorder: string }> = {
+  PM: { icon: "text-indigo-500", activeText: "text-indigo-600", activeBorder: "border-indigo-600" },
+  ENGINEERING: { icon: "text-blue-500", activeText: "text-blue-600", activeBorder: "border-blue-600" },
+  QA: { icon: "text-emerald-500", activeText: "text-emerald-600", activeBorder: "border-emerald-600" },
+  DEVOPS: { icon: "text-violet-500", activeText: "text-violet-600", activeBorder: "border-violet-600" },
+  CREATIVE_XR: { icon: "text-rose-500", activeText: "text-rose-600", activeBorder: "border-rose-600" },
+  DEV: { icon: "text-amber-500", activeText: "text-amber-600", activeBorder: "border-amber-600" },
+};
+
+// Rotates per section (by position, not tied to any meaning) purely so a
+// long section list isn't a wall of identical indigo badges — the "eye
+// refreshing" ask. Milestone-set pills stay green everywhere (see below):
+// that color is semantic ("done"/"covered"), not decorative, so it doesn't
+// join the rotation. Left-border uses an inline hex (see StatTile's own
+// accentColor for why: a `border-l-{color}` utility can lose to the
+// element's own `border-slate-200` shorthand depending on Tailwind's
+// generated CSS order — inline style always wins).
+const SECTION_PALETTE = [
+  { hex: "#3b82f6", badgeBg: "bg-blue-100", badgeText: "text-blue-700", pillBg: "bg-blue-50", pillText: "text-blue-700" },
+  { hex: "#8b5cf6", badgeBg: "bg-violet-100", badgeText: "text-violet-700", pillBg: "bg-violet-50", pillText: "text-violet-700" },
+  { hex: "#f43f5e", badgeBg: "bg-rose-100", badgeText: "text-rose-700", pillBg: "bg-rose-50", pillText: "text-rose-700" },
+  { hex: "#f59e0b", badgeBg: "bg-amber-100", badgeText: "text-amber-700", pillBg: "bg-amber-50", pillText: "text-amber-700" },
+  { hex: "#10b981", badgeBg: "bg-emerald-100", badgeText: "text-emerald-700", pillBg: "bg-emerald-50", pillText: "text-emerald-700" },
+  { hex: "#06b6d4", badgeBg: "bg-cyan-100", badgeText: "text-cyan-700", pillBg: "bg-cyan-50", pillText: "text-cyan-700" },
+  { hex: "#6366f1", badgeBg: "bg-indigo-100", badgeText: "text-indigo-700", pillBg: "bg-indigo-50", pillText: "text-indigo-700" },
+  { hex: "#14b8a6", badgeBg: "bg-teal-100", badgeText: "text-teal-700", pillBg: "bg-teal-50", pillText: "text-teal-700" },
+] as const;
+
 export function ChecklistTemplateBoard({
   types,
   itemsByType,
@@ -115,6 +147,7 @@ export function ChecklistTemplateBoard({
       <nav className="flex gap-1 overflow-x-auto border-b border-slate-200">
         {types.map((t) => {
           const active = t.key === activeType.key;
+          const colors = TYPE_COLORS[t.key];
           return (
             <button
               key={t.key}
@@ -122,10 +155,10 @@ export function ChecklistTemplateBoard({
               onClick={() => setActiveKey(t.key)}
               className={clsx(
                 "inline-flex items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-3 text-sm font-medium transition-colors",
-                active ? "border-indigo-600 text-indigo-600" : "border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300"
+                active ? clsx(colors.activeBorder, colors.activeText) : "border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300"
               )}
             >
-              <IconFileText className="h-4 w-4 shrink-0" />
+              <IconFileText className={clsx("h-4 w-4 shrink-0", active ? colors.activeText : colors.icon)} />
               {t.label}
             </button>
           );
@@ -139,27 +172,47 @@ export function ChecklistTemplateBoard({
           of a phone's viewport, so even 2 columns here get too cramped to
           read; full-width single-column tiles stay legible. */}
       <div className="grid grid-cols-1 sm:grid-cols-5 gap-4">
-        <StatTile icon={<IconLayers />} iconWrapClass="bg-blue-50 text-blue-600" label="Sections" value={String(sectionsCount)} />
+        <StatTile
+          icon={<IconLayers />}
+          iconWrapClass="bg-blue-100 text-blue-700"
+          bgClass="bg-blue-50/60"
+          accentColor="#3b82f6"
+          label="Sections"
+          value={String(sectionsCount)}
+        />
         <StatTile
           icon={<IconClipboardList />}
-          iconWrapClass="bg-indigo-50 text-indigo-600"
+          iconWrapClass="bg-indigo-100 text-indigo-700"
+          bgClass="bg-indigo-50/60"
+          accentColor="#6366f1"
           label="Checklist Items"
           value={String(itemsCount)}
         />
         <StatTile
           icon={<IconCheckCircle />}
-          iconWrapClass="bg-emerald-50 text-emerald-600"
+          iconWrapClass="bg-emerald-100 text-emerald-700"
+          bgClass="bg-emerald-50/60"
+          accentColor="#10b981"
           label="Milestones Set"
           value={String(milestonesSet)}
         />
         <StatTile
           icon={<IconGauge />}
-          iconWrapClass="bg-amber-50 text-amber-600"
+          iconWrapClass="bg-amber-100 text-amber-700"
+          bgClass="bg-amber-50/60"
+          accentColor="#f59e0b"
           label="Avg Coverage"
           nowrap
           value={`${avgCoveragePct.toFixed(0)}%`}
         />
-        <StatTile icon={<IconFolder />} iconWrapClass="bg-violet-50 text-violet-600" label="Templates" value={String(types.length)} />
+        <StatTile
+          icon={<IconFolder />}
+          iconWrapClass="bg-violet-100 text-violet-700"
+          bgClass="bg-violet-50/60"
+          accentColor="#8b5cf6"
+          label="Templates"
+          value={String(types.length)}
+        />
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-4">
@@ -198,19 +251,30 @@ export function ChecklistTemplateBoard({
           // Section number reflects this type's fixed stage order, not its
           // position in the (possibly search-filtered) visible list.
           const sectionNumber = activeType.stages.indexOf(stage) + 1;
+          const palette = SECTION_PALETTE[(sectionNumber - 1) % SECTION_PALETTE.length];
 
           return (
-            <div key={stage} className="rounded-lg border border-slate-200 overflow-hidden">
+            <div
+              key={stage}
+              className="rounded-lg border border-slate-200 overflow-hidden"
+              style={{ borderLeftColor: palette.hex, borderLeftWidth: 4 }}
+            >
               <button
                 type="button"
                 onClick={() => toggleSection(stage)}
                 className="w-full flex flex-wrap items-center gap-3 px-4 py-3 text-left hover:bg-slate-50"
               >
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-xs font-semibold text-indigo-600">
+                <span
+                  className={clsx(
+                    "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold",
+                    palette.badgeBg,
+                    palette.badgeText
+                  )}
+                >
                   {sectionNumber}
                 </span>
                 <span className="font-semibold text-slate-900">{stage}</span>
-                <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-600">
+                <span className={clsx("rounded-full px-2 py-0.5 text-xs font-medium", palette.pillBg, palette.pillText)}>
                   {items.length} item{items.length === 1 ? "" : "s"}
                 </span>
                 <span className="ml-auto flex items-center gap-3">

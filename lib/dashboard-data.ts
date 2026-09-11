@@ -2,7 +2,17 @@ import { prisma } from "@/lib/prisma";
 import { PM_STAGES } from "@/lib/seed-data";
 import { ITEM_STATUSES, type ItemStatus } from "@/lib/constants";
 import { CHECKLIST_TYPES, CHECKLIST_TYPE_BY_KEY, type ChecklistType } from "@/lib/checklist-types";
-import { riskScore, computeEvm, trancheAmount, currentStage, reminderBand, checklistCompletionPct, budgetEntriesFromSprints, toSprintsForBudget } from "@/lib/calculations";
+import {
+  riskScore,
+  computeEvm,
+  trancheAmount,
+  currentStage,
+  reminderBand,
+  checklistCompletionPct,
+  budgetEntriesFromSprints,
+  toSprintsForBudget,
+  COMPLETED_STAGE_LABEL,
+} from "@/lib/calculations";
 
 export async function getDashboardData(projectId: string) {
   const [project, allItems, risks, crs, sprints, milestones, actionItems, recentDecisionsRaw] = await Promise.all([
@@ -82,7 +92,7 @@ export async function getDashboardData(projectId: string) {
   // is-canonical definition, same as the Projects list) and the project's
   // "end date" (latest Actual Date across every checklist item), so
   // neither can drift out of sync with the checklist itself.
-  const pmStage = currentStage(pmItems, PM_STAGES) ?? "Complete";
+  const pmStage = currentStage(pmItems, PM_STAGES) ?? COMPLETED_STAGE_LABEL;
   const endDate = applicableItems.reduce<Date | null>((latest, i) => {
     if (!i.actualDate) return latest;
     return !latest || i.actualDate > latest ? i.actualDate : latest;

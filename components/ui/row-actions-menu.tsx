@@ -60,7 +60,21 @@ export function RowActionsMenu({ actions }: { actions: RowAction[] }) {
       <button
         ref={buttonRef}
         type="button"
-        onClick={() => (open ? setOpen(false) : openMenu())}
+        onClick={(e) => {
+          // preventDefault too, not just stopPropagation — this button is a
+          // real DOM descendant of a caller's own ancestor <a> when it puts
+          // this trigger inside a clickable card (e.g. a project card
+          // that's a <Link>). stopPropagation alone only stops the event
+          // from reaching that ancestor's React onClick handler (where
+          // next/link's own preventDefault lives) — it does nothing about
+          // the browser's native "navigate" default action on the <a>,
+          // which still fires unless *something* calls preventDefault on
+          // this same event before it finishes propagating.
+          e.preventDefault();
+          e.stopPropagation();
+          if (open) setOpen(false);
+          else openMenu();
+        }}
         aria-label="Actions"
         className="rounded p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-100"
       >
@@ -70,8 +84,15 @@ export function RowActionsMenu({ actions }: { actions: RowAction[] }) {
         coords &&
         createPortal(
           <>
-            <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+            <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setOpen(false); }} />
+            {/* stopPropagation here: this panel is rendered into a portal at
+                document.body, but React's synthetic events still bubble
+                along the *component* tree, not the DOM tree — so without
+                this, a click on a menu item would also bubble through
+                whatever ancestor this component is declared inside (e.g. a
+                card's <Link>) and trigger that too. */}
             <div
+              onClick={(e) => e.stopPropagation()}
               className="fixed z-50 w-48 rounded-md border border-slate-200 bg-white p-1 text-sm shadow-lg"
               style={{
                 left: coords.left,

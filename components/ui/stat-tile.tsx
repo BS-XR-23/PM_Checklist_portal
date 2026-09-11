@@ -7,6 +7,7 @@ export function StatTile({
   valueColor,
   nowrap,
   accentColor,
+  bgClass,
 }: {
   icon: React.ReactNode;
   iconWrapClass: string;
@@ -25,10 +26,14 @@ export function StatTile({
   // deliberately dark/muted for contrast on a *pale* pill background, so on
   // plain white they read as barely-there rather than "colored").
   accentColor?: string;
+  // Optional card background override (e.g. "bg-blue-50/60") for pages that
+  // want a bolder, tinted tile instead of the plain white default — opt-in
+  // so every existing call site keeps its current look untouched.
+  bgClass?: string;
 }) {
   return (
     <div
-      className="h-full rounded-xl border border-slate-200 bg-white p-3.5 flex items-center gap-2.5"
+      className={`h-full rounded-xl border border-slate-200 ${bgClass ?? "bg-white"} p-3.5 flex items-center gap-2.5`}
       style={accentColor ? { borderLeftColor: accentColor, borderLeftWidth: 3 } : undefined}
     >
       <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${iconWrapClass}`}>

@@ -1,6 +1,14 @@
 import type { Prisma } from "@prisma/client";
 import { PM_STAGES } from "@/lib/seed-data";
-import { budgetEntriesFromSprints, toSprintsForBudget, currentStage, checklistCompletionPct, trancheAmount, computeEvm } from "@/lib/calculations";
+import {
+  budgetEntriesFromSprints,
+  toSprintsForBudget,
+  currentStage,
+  checklistCompletionPct,
+  trancheAmount,
+  computeEvm,
+  COMPLETED_STAGE_LABEL,
+} from "@/lib/calculations";
 import { computeProjectRag, type Rag } from "@/lib/rag";
 
 // A portfolio index needs at least this many active projects with real data
@@ -125,7 +133,7 @@ function buildPortfolioRow(
   // Same "first stage with incomplete work" definition as the single-project
   // Dashboard (lib/dashboard-data.ts) — null (every stage done) reads as
   // "Completed" here, since the Portfolio table needs a stage *label*.
-  const stage = currentStage(pmItems, PM_STAGES) ?? "Completed";
+  const stage = currentStage(pmItems, PM_STAGES) ?? COMPLETED_STAGE_LABEL;
   const progress = checklistCompletionPct(p.checklistItems);
 
   const openRisks = p.risks.filter((r) => r.type === "Risk" && r.status !== "Closed" && r.status !== "Mitigated").length;
@@ -246,7 +254,7 @@ export function buildPortfolioData(projects: ProjectWithPortfolioData[]): Portfo
   const healthy = active.filter((b) => b.row.rag === "GREEN").length;
   const atRisk = active.filter((b) => b.row.rag === "AMBER").length;
   const critical = active.filter((b) => b.row.rag === "RED").length;
-  const completed = rows.filter((r) => r.stage === "Completed").length;
+  const completed = rows.filter((r) => r.stage === COMPLETED_STAGE_LABEL).length;
 
   const totalContractValue = rows.reduce((sum, r) => sum + r.contractValue, 0);
   const collected = rows.reduce((sum, r) => sum + r.paidAmount, 0);
