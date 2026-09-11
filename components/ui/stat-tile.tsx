@@ -10,7 +10,7 @@ export function StatTile({
 }: {
   icon: React.ReactNode;
   iconWrapClass: string;
-  label: string;
+  label: React.ReactNode;
   value: string;
   subtitle?: React.ReactNode;
   valueColor?: string;

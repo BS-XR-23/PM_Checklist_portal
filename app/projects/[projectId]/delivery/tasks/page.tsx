@@ -3,6 +3,7 @@ import { requireModuleAccess, requireUser } from "@/lib/rbac";
 import { compareWbsNumbers } from "@/lib/format";
 import { StatTile } from "@/components/ui/stat-tile";
 import { SectionHeader } from "@/components/ui/section-header";
+import { PageGuide } from "@/components/ui/page-guide";
 import { IconClipboardList, IconFileText, IconCheckCircle, IconClock } from "@/components/layout/icons";
 import { WbsTasksTable } from "../delivery-tasks-table";
 import { UploadWbsTasksForm } from "../upload-wbs-tasks-form";
@@ -105,6 +106,16 @@ export default async function DeliveryTasksPage({ params }: { params: { projectI
           Export .xlsx
         </a>
       </div>
+
+      <PageGuide
+        id="delivery-tasks"
+        title="How to fill this in"
+        points={[
+          <><strong>Story Points</strong> is your estimate, not actuals — it&apos;s what drives Planned Value once a task is committed to a sprint, so keep it realistic.</>,
+          <>The default <strong>Assignee</strong> set here is just a starting point — it&apos;s editable per-sprint once the task is committed and being tracked.</>,
+          <>A task doesn&apos;t earn progress anywhere until it&apos;s committed to a sprint — do that here, or import it directly from the Sprints tab.</>,
+        ]}
+      />
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <StatTile

@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { requireModuleAccess } from "@/lib/rbac";
 import { StatTile } from "@/components/ui/stat-tile";
 import { SectionHeader } from "@/components/ui/section-header";
+import { PageGuide } from "@/components/ui/page-guide";
 import { IconClipboardList, IconCheckCircle, IconAlertTriangle, IconClock } from "@/components/layout/icons";
 import { formatPct } from "@/lib/format";
 import { UatCasesTable } from "./uat-cases-table";
@@ -38,6 +39,16 @@ export default async function UatPage({ params }: { params: { projectId: string 
           closure are tracked here per release/build.
         </p>
       </div>
+
+      <PageGuide
+        id="delivery-uat"
+        title="How to fill this in"
+        points={[
+          <>Track each test case against the release/build it&apos;s validating — a case is only meaningful tied to a specific version.</>,
+          <>When a case fails, log the defect and link it back to that case, so a fix can be traced to what it broke.</>,
+          <><strong>Severity</strong> and <strong>Priority</strong> are separate on a defect: Severity is how bad the bug is, Priority is how soon it needs fixing — a low-severity bug can still be high priority.</>,
+        ]}
+      />
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <StatTile icon={<IconClipboardList />} iconWrapClass="bg-violet-50 text-violet-600" label="Test Cases" value={String(totalCases)} />

@@ -5,6 +5,7 @@ import { STATUS_COLORS, RISK_SEVERITY_COLORS, INDEX_BAND_COLORS, indexBand } fro
 import { requireModuleAccess, getModuleAccess } from "@/lib/rbac";
 import { StatTile } from "@/components/ui/stat-tile";
 import { SectionHeader } from "@/components/ui/section-header";
+import { InfoTooltip } from "@/components/ui/info-tooltip";
 import {
   IconChart,
   IconShield,
@@ -165,7 +166,12 @@ export default async function DashboardPage({ params }: { params: { projectId: s
           <StatTile
             icon={<IconChart />}
             iconWrapClass="bg-blue-50 text-blue-600"
-            label="Latest SPI"
+            label={
+              <span className="inline-flex items-center gap-1">
+                Latest SPI
+                <InfoTooltip text="This is the Budget Tracker's SPI/CPI — dollar-cost based (EV÷PV, EV÷AC). It's not the same figure as Delivery's Sprints/Overview SPI/CPI, which is effort based (EV÷PV, EV÷AV). Both are legitimate; they just answer different questions." />
+              </span>
+            }
             value={financial.latestSpi != null ? financial.latestSpi.toFixed(2) : "—"}
             valueColor={financial.latestSpi != null ? INDEX_BAND_COLORS[indexBand(financial.latestSpi)].text : undefined}
             subtitle={

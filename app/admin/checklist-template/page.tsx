@@ -34,12 +34,18 @@ export default async function ChecklistTemplatePage() {
     <AppShell user={currentUser}>
       <header className="border-b border-slate-200 bg-white px-4 sm:px-6 py-4">
         <h1 className="text-lg font-semibold text-slate-900">Checklist Template</h1>
-        <p className="text-sm text-slate-500 mt-0.5">
-          The master checklists new projects/opportunities are created from. Editing here only affects
-          projects/opportunities created afterward — existing ones keep the checklist they already have.
-        </p>
+        <p className="text-sm text-slate-500 mt-0.5">The master checklists new projects/opportunities are created from.</p>
       </header>
       <main className="max-w-5xl mx-auto p-4 sm:p-6 space-y-10">
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+          <p className="text-sm font-medium text-amber-900">Only affects projects created after this edit.</p>
+          <p className="text-xs text-amber-700 mt-0.5">
+            Existing projects/opportunities keep the checklist they already have — adding, removing, or reordering an
+            item here does not retroactively change any project already created. To roll a change out to existing
+            projects, that&apos;s a separate, deliberate step.
+          </p>
+        </div>
+
         {CHECKLIST_TYPES.map((c) => (
           <TemplateSection key={c.key} title={c.label} type={c.key} stages={stagesFor(c)} items={itemsByType.get(c.key) ?? []} />
         ))}

@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { ChecklistTable } from "@/components/checklist/checklist-table";
 import { SubNav } from "@/components/ui/sub-nav";
+import { PageGuide } from "@/components/ui/page-guide";
 import { CHECKLIST_TYPES, CHECKLIST_TYPE_BY_ROUTE } from "@/lib/checklist-types";
 import { requireModuleAccess, getModuleAccess, getCurrentUser } from "@/lib/rbac";
 import type { AccessLevel } from "@prisma/client";
@@ -57,6 +58,19 @@ export default async function ChecklistPage({ params }: { params: { projectId: s
         <h2 className="text-base font-semibold text-slate-900">{active.label}</h2>
         <p className="text-sm text-slate-500">{active.description}</p>
       </div>
+
+      <div className="mb-4">
+        <PageGuide
+          id="checklist-general"
+          title="How to fill this in"
+          points={[
+            <>Marking an item <strong>Not Applicable</strong> removes it from the completion % entirely — it counts as out of scope, not as incomplete.</>,
+            <>Tagging an item with a <strong>Milestone Name</strong> is what creates a row on the project&apos;s Milestones &amp; Payments tab — that&apos;s the only way a payment milestone gets created, there&apos;s no separate &quot;add milestone&quot; step.</>,
+            <>A read-limited viewer sees every item&apos;s Notes stripped out — that&apos;s deliberate, not missing data.</>,
+          ]}
+        />
+      </div>
+
       <ChecklistTable
         projectId={params.projectId}
         checklistType={active.key}

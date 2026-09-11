@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireModuleAccess } from "@/lib/rbac";
 import { StatTile } from "@/components/ui/stat-tile";
+import { PageGuide } from "@/components/ui/page-guide";
 import { IconLayers, IconCheckCircle, IconClock, IconAlertTriangle } from "@/components/layout/icons";
 import { ReleasesTable } from "./releases-table";
 import { AddReleaseModal } from "./add-release-modal";
@@ -47,6 +48,16 @@ export default async function ReleasesPage({ params }: { params: { projectId: st
         </div>
         {canWrite && <AddReleaseModal projectId={projectId} />}
       </div>
+
+      <PageGuide
+        id="delivery-releases"
+        title="How to fill this in"
+        points={[
+          <>A Release is a shipped version/build — &quot;1.4.0 deployed to UAT&quot; — distinct from a Milestone, which is a checkpoint like &quot;Development Complete&quot;.</>,
+          <>Link a release to the Sprints and WBS tasks it actually contains, and optionally to the Milestone it fulfills, so its scope is traceable.</>,
+          <><strong>Deployment Status</strong> and <strong>Approval Status</strong> are tracked independently — a build can be deployed before it&apos;s formally approved, or vice versa, depending on your process.</>,
+        ]}
+      />
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <StatTile icon={<IconLayers />} iconWrapClass="bg-violet-50 text-violet-600" label="Total Releases" value={String(releases.length)} />

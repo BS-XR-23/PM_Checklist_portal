@@ -10,6 +10,7 @@ import {
 import { StatTile } from "@/components/ui/stat-tile";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { SectionHeader } from "@/components/ui/section-header";
+import { PageGuide } from "@/components/ui/page-guide";
 import { formatDate, formatPct } from "@/lib/format";
 import { RAG_COLORS, type Rag } from "@/lib/rag";
 import { MILESTONE_TYPE_LABELS } from "@/lib/constants";
@@ -144,6 +145,17 @@ export default async function DeliveryOverviewPage({ params }: { params: { proje
           Releases, and UAT. Nothing here is tracked independently; every number links back to its source tab.
         </p>
       </div>
+
+      <PageGuide
+        id="delivery-overview"
+        title="How to read this page"
+        points={[
+          <>Nothing is entered here — every figure is aggregated live from the Tasks, Sprints, Milestones, Releases, and UAT tabs. To change a number, go edit it at its source.</>,
+          <><strong>Delivery Health</strong> takes the worse of SPI and CPI: red under 0.9, amber under 1.0, green at or above.</>,
+          <><strong>Schedule Variance</strong> is EV − PV in story points — negative means the project is behind its plan.</>,
+          <>Each summary card (&quot;View all →&quot;) jumps straight to the tab that owns that data.</>,
+        ]}
+      />
 
       {/* Overall Delivery */}
       <div>

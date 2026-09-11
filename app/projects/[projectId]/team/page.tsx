@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser, requireProjectAccess } from "@/lib/rbac";
 import { canViewResourcing } from "@/lib/resourcing-rbac";
 import { SubNav } from "@/components/ui/sub-nav";
+import { PageGuide } from "@/components/ui/page-guide";
 import { StatTile } from "@/components/ui/stat-tile";
 import { IconUsers, IconBadge, IconUserCheck, IconIdCard } from "@/components/layout/icons";
 import { AddMemberForm } from "./add-member-form";
@@ -42,6 +43,16 @@ export default async function TeamPage({ params }: { params: { projectId: string
           portfolio-wide access and don&apos;t need a row here.
         </p>
       </div>
+
+      <PageGuide
+        id="team-access"
+        title="What the four access levels actually mean"
+        points={[
+          <>A member with the <strong>PM</strong> role always gets full read/write on every module — it&apos;s granted by role, not adjustable per module, so their card won&apos;t show a grid.</>,
+          <><strong>NONE</strong> hides that module&apos;s tab entirely. <strong>READ_LIMITED</strong> shows the tab but strips sensitive detail (rates and costs on Budget, notes on Checklist and Milestones, and similar per module). <strong>READ_FULL</strong> shows everything, read-only. <strong>WRITE</strong> allows editing.</>,
+          <>&quot;Quick preset&quot; sets every module at once to a sensible bundle for that access tier — you can still fine-tune individual modules afterward.</>,
+        ]}
+      />
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <StatTile

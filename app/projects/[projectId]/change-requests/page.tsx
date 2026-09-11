@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { computeCrKpis, crAmount } from "@/lib/calculations";
 import { requireModuleAccess, getModuleAccess } from "@/lib/rbac";
 import { SubNav } from "@/components/ui/sub-nav";
+import { PageGuide } from "@/components/ui/page-guide";
 import { StatTile } from "@/components/ui/stat-tile";
 import { IconLayers, IconTarget, IconClock, IconAlertCircle, IconDollar } from "@/components/layout/icons";
 import { formatMoney } from "@/lib/format";
@@ -50,6 +51,16 @@ export default async function CrLogPage({ params }: { params: { projectId: strin
           {canWrite && <AddCrButton projectId={params.projectId} />}
         </div>
       </div>
+
+      <PageGuide
+        id="cr-log"
+        title="How to fill this in"
+        points={[
+          <><strong>Man-Days Planned</strong> and <strong>Billable Man-Days</strong> are two different fields — Planned is your rough estimate, Billable is what actually gets invoiced. The KPI tiles and Amount both use Billable, not Planned.</>,
+          <>Rate should match the CR Rate Policy set in the PM Checklist&apos;s Planning stage — this page doesn&apos;t enforce that, it&apos;s on the PM to keep them consistent.</>,
+          <>A CR&apos;s <strong>Status</strong> drives which KPI tile it counts toward: Proposed → Upcoming, Approved or In Progress → Work Order, In Progress only → Remaining.</>,
+        ]}
+      />
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         <StatTile icon={<IconLayers />} iconWrapClass="bg-violet-50 text-violet-600" label="Total CRs" value={String(crs.length)} />

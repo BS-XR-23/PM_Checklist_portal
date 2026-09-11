@@ -12,6 +12,7 @@ import { formatMoney } from "@/lib/format";
 import { requireModuleAccess } from "@/lib/rbac";
 import { EvmLineChart } from "@/components/charts/evm-line-chart";
 import { SpiCpiChart } from "@/components/charts/spi-cpi-chart";
+import { PageGuide } from "@/components/ui/page-guide";
 import { ContractInputsForm } from "./contract-inputs-form";
 import { BudgetRow, type RoleBreakdownRow } from "./budget-row";
 
@@ -70,6 +71,16 @@ export default async function BudgetTrackerPage({ params }: { params: { projectI
           (closed sprints use their frozen numbers; the current sprint is live).
         </p>
       </div>
+
+      <PageGuide
+        id="budget-tracker"
+        title="Before you compare this to Delivery's numbers"
+        points={[
+          <>This page&apos;s <strong>CPI is not the same figure</strong> as Delivery&apos;s Sprints/Overview CPI. Here, CPI = EV ÷ Actual Cost (a dollar ratio). On Delivery, CPI = EV ÷ Actual Value (a competency-adjusted effort ratio). Both are legitimate, they just answer different questions — don&apos;t expect them to match.</>,
+          <>Contract Value, Planned Story Points, and Planned Man-Days are the only things entered directly, via the form below — every other figure is derived live from Delivery&apos;s sprint tracking, nothing else is typed in here.</>,
+          <>A read-limited viewer sees Actual Cost, Cost Variance, SPI, and CPI stripped out — that&apos;s deliberate cost-side hiding, not missing data.</>,
+        ]}
+      />
 
       <div className="rounded-lg border border-slate-200 bg-white p-4">
         {access === "WRITE" ? (

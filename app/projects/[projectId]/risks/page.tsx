@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireModuleAccess, getModuleAccess } from "@/lib/rbac";
 import { SubNav } from "@/components/ui/sub-nav";
+import { PageGuide } from "@/components/ui/page-guide";
 import { IconShield, IconAlertTriangle, IconAlertCircle, IconCheckCircle, IconClock } from "@/components/layout/icons";
 import { riskScoreSeverity } from "@/lib/colors";
 import { riskScore } from "@/lib/calculations";
@@ -92,6 +93,16 @@ export default async function RiskRegisterPage({ params }: { params: { projectId
           {canWrite && <AddRiskButton projectId={params.projectId} />}
         </div>
       </div>
+
+      <PageGuide
+        id="risk-register"
+        title="How to fill this in"
+        points={[
+          <>Risk Score = Probability × Impact, each scored Low=1/Medium=2/High=3 — 1-2 is Low, 3-4 is Medium, 6-9 is High.</>,
+          <>The stat tiles above count Open and Monitoring as &quot;open&quot;, and Mitigated/Closed/Not Pursued as &quot;closed&quot; — a risk marked <strong>Realized</strong> (it actually happened) falls into neither count, so check the table directly for those.</>,
+          <>Use <strong>Mitigation / Response Plan</strong> for the actual action being taken — keep the risk description itself focused on what could go wrong, not what you&apos;re doing about it.</>,
+        ]}
+      />
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
         <RiskStatCard label="Total Risks" value={String(totalRisks)} icon={<IconShield />} iconWrapClass="bg-blue-50 text-blue-600" />

@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { toDateInputValue } from "@/lib/format";
 import { requireModuleAccess } from "@/lib/rbac";
 import { StatTile } from "@/components/ui/stat-tile";
+import { PageGuide } from "@/components/ui/page-guide";
 import { IconLayers, IconCheckCircle, IconClock, IconCircle, IconClipboardList } from "@/components/layout/icons";
 import { PlanHeaderMeta } from "@/components/pm-plan/plan-header-meta";
 import { PmPlanSections, type PmPlanSectionData, type PmPlanSectionStatus } from "@/components/pm-plan/pm-plan-sections";
@@ -427,6 +428,17 @@ export default async function PmPlanPage({ params }: { params: { projectId: stri
           canWrite={canWrite}
         />
       </div>
+
+      <PageGuide
+        id="pm-plan"
+        title="How this page works"
+        points={[
+          <>Each section has its own hint text under its title for what belongs there — worth a read before filling in the bundled ones like Charter, Method, Test, or Deploy.</>,
+          <>&quot;Required&quot; is a labeling convention, not an enforced gate — nothing blocks the project if a required section is left empty.</>,
+          <>Completed / In Progress / Not Started just counts how many fields in a section are filled in — it&apos;s not a sign-off or approval status.</>,
+          <>Export .docx turns the whole plan into a formatted document, as it stands right now.</>,
+        ]}
+      />
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <StatTile icon={<IconLayers />} iconWrapClass="bg-violet-50 text-violet-600" label="Sections" value={String(sections.length)} />

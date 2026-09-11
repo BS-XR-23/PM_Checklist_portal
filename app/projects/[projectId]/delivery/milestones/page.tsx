@@ -3,6 +3,7 @@ import { formatPct } from "@/lib/format";
 import type { ItemStatus } from "@/lib/constants";
 import { requireModuleAccess } from "@/lib/rbac";
 import { StatTile } from "@/components/ui/stat-tile";
+import { PageGuide } from "@/components/ui/page-guide";
 import { IconLayers, IconCheckCircle, IconTarget, IconCircle } from "@/components/layout/icons";
 import { MilestonesTable } from "./milestones-table";
 import { AddMilestoneModal } from "./add-milestone-modal";
@@ -46,6 +47,16 @@ export default async function DeliveryMilestonesPage({ params }: { params: { pro
         </div>
         {canWrite && <AddMilestoneModal projectId={projectId} />}
       </div>
+
+      <PageGuide
+        id="delivery-milestones"
+        title="How this differs from Milestones & Payments"
+        points={[
+          <>These are development checkpoints only (&quot;MVP Complete&quot;, &quot;UAT Ready&quot;) — nothing here ever triggers an invoice or payment tranche.</>,
+          <>If a checkpoint should also trigger a client payment, add it under the project&apos;s <strong>Milestones &amp; Payments</strong> tab instead — the two lists are kept deliberately separate and never overlap.</>,
+          <>Status, % Complete, and dates are self-reported by the owner here — they aren&apos;t derived automatically from Tasks or Sprints.</>,
+        ]}
+      />
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <StatTile icon={<IconLayers />} iconWrapClass="bg-violet-50 text-violet-600" label="Total Milestones" value={String(totalMilestones)} />

@@ -143,7 +143,16 @@ export default async function PortfolioPage() {
       {/* Overload & Conflicts — resourcing-specific attention, kept distinct from project health */}
       {showOverload && (overloadedPeople.length > 0 || conflictPairs.length > 0) && (
         <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
-          <SectionHeader icon={<IconUsers />} iconWrapClass="bg-violet-50 text-violet-600" title="Overload & Conflicts" />
+          <SectionHeader
+            icon={<IconUsers />}
+            iconWrapClass="bg-violet-50 text-violet-600"
+            title={
+              <span className="inline-flex items-center gap-1.5">
+                Overload &amp; Conflicts
+                <InfoTooltip text="Overload: a person's summed intensity across every active engagement exceeds 100% of capacity. Conflict: two of a person's engagements have overlapping date ranges — a separate check from overload, since two low-intensity engagements can still overlap without pushing anyone over capacity." />
+              </span>
+            }
+          />
           {overloadedPeople.length > 0 && (
             <div>
               <p className="text-xs font-medium text-slate-500 mb-1.5">Over threshold (combined active allocation &gt; 100%)</p>

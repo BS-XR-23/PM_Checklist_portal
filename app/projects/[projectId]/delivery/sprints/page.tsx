@@ -3,6 +3,7 @@ import { requireModuleAccess, requireUser } from "@/lib/rbac";
 import { compareWbsNumbers } from "@/lib/format";
 import { liveSprintContribution, parseSprintContributions, sprintTotalsFromContributions, sprintOwnHours } from "@/lib/calculations";
 import { StatTile } from "@/components/ui/stat-tile";
+import { PageGuide } from "@/components/ui/page-guide";
 import { IconLayers, IconClock, IconCheckCircle, IconClipboardList } from "@/components/layout/icons";
 import { AddSprintModal } from "../add-sprint-modal";
 import { SprintSummaryRow, type SprintSummaryData, type FrozenTaskSnapshotEntry } from "../sprint-summary-row";
@@ -157,6 +158,17 @@ export default async function DeliverySprintsPage({ params }: { params: { projec
           {canWrite && <AddSprintModal projectId={params.projectId} suggestedName={`Sprint ${sprints.length + 1}`} />}
         </div>
       </div>
+
+      <PageGuide
+        id="delivery-sprints"
+        title="How progress gets tracked here"
+        points={[
+          <><strong>0/100 rule:</strong> a task earns its story points only once % Complete reaches 100 — there&apos;s no partial credit for a task that&apos;s 60% done.</>,
+          <><strong>Actual Hours</strong> shown here is scoped to this sprint (hours logged since the task joined it), not the task&apos;s lifetime total.</>,
+          <>Closing a sprint freezes its PV/EV/AV permanently. If any committed task is still incomplete, you&apos;ll be asked to move it into another open sprint or accept it as spillover before the sprint closes.</>,
+          <>Once closed, a sprint needs an Admin to reopen it — that&apos;s meant for fixing a mistake, not for routine spillover handling.</>,
+        ]}
+      />
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <StatTile icon={<IconLayers />} iconWrapClass="bg-violet-50 text-violet-600" label="Total Sprints" value={String(sprints.length)} />

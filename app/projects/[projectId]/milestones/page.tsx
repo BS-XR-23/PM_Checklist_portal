@@ -5,6 +5,7 @@ import type { ItemStatus } from "@/lib/constants";
 import type { ChecklistType } from "@/lib/checklist-types";
 import { requireModuleAccess } from "@/lib/rbac";
 import { StatTile } from "@/components/ui/stat-tile";
+import { PageGuide } from "@/components/ui/page-guide";
 import { IconLayers, IconCheckCircle, IconTarget, IconCircle, IconDollar } from "@/components/layout/icons";
 import { ContractValueField } from "./contract-value-field";
 import { MilestonesTable } from "./milestones-table";
@@ -51,6 +52,16 @@ export default async function MilestonesPage({ params }: { params: { projectId: 
         </div>
         {canWrite && <AddMilestoneModal projectId={project.id} />}
       </div>
+
+      <PageGuide
+        id="milestones-payments"
+        title="This is payment tracking, not delivery tracking"
+        points={[
+          <>A row here isn&apos;t created directly — it&apos;s pulled automatically from any PM or DevOps checklist item tagged with a milestone name. To add a new one, tag it on that checklist item, not on this page.</>,
+          <>Payment % across every milestone should add up to 100% of Contract Value — the page flags it if the allocation is off.</>,
+          <>These are payment tranches, tied to invoicing and client sign-off. For development delivery checkpoints that aren&apos;t tied to payment, see the project&apos;s <strong>Delivery → Milestones</strong> tab instead — the two lists are separate on purpose.</>,
+        ]}
+      />
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,260px)_1fr] items-start">
         {canWrite ? (
