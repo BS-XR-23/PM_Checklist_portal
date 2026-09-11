@@ -13,6 +13,7 @@ import { IconTarget, IconCheckCircle, IconClock, IconChart, IconUsers, IconClipb
 import { computeDuplicateRefs, DuplicateBadge } from "./duplicate-badge";
 import {
   closeSprint,
+  closeSprintWithMoves,
   reopenSprint,
   updateSprint,
   deleteSprint,
@@ -333,6 +334,7 @@ export function SprintSummaryRow({
   roster,
   backlogTasks,
   allProjectTasks,
+  otherOpenSprints,
   canWrite,
   isAdmin,
 }: {
@@ -341,6 +343,7 @@ export function SprintSummaryRow({
   roster: RosterPerson[];
   backlogTasks: BacklogTaskOption[];
   allProjectTasks: { id: string; wbsNumber: string; title: string }[];
+  otherOpenSprints: { id: string; name: string }[];
   canWrite: boolean;
   isAdmin: boolean;
 }) {
@@ -359,12 +362,55 @@ export function SprintSummaryRow({
   const [selectedBacklogId, setSelectedBacklogId] = useState("");
   const [importPending, startImportTransition] = useTransition();
   const [importError, setImportError] = useState<string | null>(null);
+  const [triageOpen, setTriageOpen] = useState(false);
+  const [triageChoices, setTriageChoices] = useState<Record<string, string>>({});
+  const [triagePending, startTriageTransition] = useTransition();
+  const [triageError, setTriageError] = useState<string | null>(null);
 
   const cpi = competencyCpi(sprint.ev, sprint.av);
   const spi = sprint.pv ? sprint.ev / sprint.pv : null;
   const closed = !!sprint.closedAt;
   const editable = canWrite && !closed;
   const taskColCount = closed ? 5 : editable ? 8 : 7;
+  // Only live, still-committed tasks need a decision — a task that's
+  // already departed this (still-open) sprint is handled by its own
+  // destination, and won't reappear here.
+  const incompleteTasks = sprint.tasks.filter((t) => t.pctComplete < 1);
+
+  function startClose() {
+    if (incompleteTasks.length === 0) {
+      startTransition(async () => {
+        setError(null);
+        if (!window.confirm(`Close "${sprint.name}"? This freezes its PV/EV/AV permanently and can't be undone.`)) return;
+        try {
+          await closeSprint(sprint.id, projectId);
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Failed to close sprint.");
+        }
+      });
+      return;
+    }
+    setError(null);
+    setTriageError(null);
+    setTriageChoices({});
+    setTriageOpen(true);
+  }
+
+  function confirmTriageAndClose() {
+    startTriageTransition(async () => {
+      setTriageError(null);
+      if (!window.confirm(`Close "${sprint.name}"? This freezes its PV/EV/AV permanently and can't be undone.`)) return;
+      const moves = Object.entries(triageChoices)
+        .filter(([, targetSprintId]) => targetSprintId)
+        .map(([taskId, targetSprintId]) => ({ taskId, targetSprintId }));
+      try {
+        await closeSprintWithMoves(sprint.id, projectId, moves);
+        setTriageOpen(false);
+      } catch (err) {
+        setTriageError(err instanceof Error ? err.message : "Failed to close sprint.");
+      }
+    });
+  }
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white hover:border-slate-300 transition-colors">
@@ -693,26 +739,79 @@ export function SprintSummaryRow({
                 </div>
                 {deleteError && <p className="mt-1.5 text-xs text-red-600">{deleteError}</p>}
 
-                <div className="mt-4 pt-4 border-t border-slate-200 flex items-center gap-2">
-                  <button
-                    onClick={() =>
-                      startTransition(async () => {
-                        setError(null);
-                        if (!window.confirm(`Close "${sprint.name}"? This freezes its PV/EV/AV permanently and can't be undone.`)) return;
-                        try {
-                          await closeSprint(sprint.id, projectId);
-                        } catch (err) {
-                          setError(err instanceof Error ? err.message : "Failed to close sprint.");
-                        }
-                      })
-                    }
-                    disabled={pending}
-                    className="rounded-md border border-slate-300 text-slate-700 text-sm font-medium px-4 py-2 hover:bg-slate-50 disabled:opacity-50"
-                  >
-                    {pending ? "Closing..." : "Close Sprint"}
-                  </button>
-                  {error && <span className="text-xs text-red-600">{error}</span>}
-                </div>
+                {triageOpen ? (
+                  <div className="mt-4 pt-4 border-t border-slate-200">
+                    <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3.5 space-y-3">
+                      <div>
+                        <p className="text-sm font-medium text-slate-800">
+                          {incompleteTasks.length} task{incompleteTasks.length === 1 ? "" : "s"} not done — decide before closing
+                        </p>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          Move each into an already-open sprint now, or leave it here as spillover and close anyway.
+                        </p>
+                      </div>
+                      <div className="space-y-2">
+                        {incompleteTasks.map((t) => (
+                          <div key={t.id} className="flex items-center justify-between gap-3 rounded-md bg-white border border-slate-200 px-3 py-2">
+                            <div className="min-w-0">
+                              <p className="text-sm text-slate-700 truncate">
+                                {t.wbsNumber ? `${t.wbsNumber} — ` : ""}
+                                {t.title}
+                              </p>
+                              <p className="text-xs text-slate-400">{Math.round(t.pctComplete * 100)}% done</p>
+                            </div>
+                            <select
+                              className="rounded border border-slate-200 px-2 py-1.5 text-xs disabled:opacity-50"
+                              value={triageChoices[t.id] ?? ""}
+                              onChange={(e) => setTriageChoices((c) => ({ ...c, [t.id]: e.target.value }))}
+                              disabled={triagePending}
+                            >
+                              <option value="">Leave as spillover</option>
+                              {otherOpenSprints.map((s) => (
+                                <option key={s.id} value={s.id}>
+                                  Move to {s.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        ))}
+                      </div>
+                      {otherOpenSprints.length === 0 && (
+                        <p className="text-xs text-amber-700">
+                          No other open sprint to move tasks into — create one first, or leave everything as spillover.
+                        </p>
+                      )}
+                      <div className="flex items-center gap-2 pt-1">
+                        <button
+                          onClick={confirmTriageAndClose}
+                          disabled={triagePending}
+                          className="rounded-md bg-slate-900 text-white text-sm font-medium px-4 py-2 hover:bg-slate-800 disabled:opacity-50"
+                        >
+                          {triagePending ? "Closing..." : "Confirm & Close"}
+                        </button>
+                        <button
+                          onClick={() => setTriageOpen(false)}
+                          disabled={triagePending}
+                          className="rounded-md border border-slate-300 text-slate-700 text-sm font-medium px-4 py-2 hover:bg-slate-50 disabled:opacity-50"
+                        >
+                          Cancel
+                        </button>
+                        {triageError && <span className="text-xs text-red-600">{triageError}</span>}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-4 pt-4 border-t border-slate-200 flex items-center gap-2">
+                    <button
+                      onClick={startClose}
+                      disabled={pending}
+                      className="rounded-md border border-slate-300 text-slate-700 text-sm font-medium px-4 py-2 hover:bg-slate-50 disabled:opacity-50"
+                    >
+                      {pending ? "Closing..." : "Close Sprint"}
+                    </button>
+                    {error && <span className="text-xs text-red-600">{error}</span>}
+                  </div>
+                )}
               </div>
             )}
 

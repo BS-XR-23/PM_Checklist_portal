@@ -487,6 +487,31 @@ export async function closeSprint(id: string, _projectId: string) {
 }
 
 /**
+ * Close-with-triage: lets a normal PM (not just Admin) hand off a sprint's
+ * still-incomplete tasks to another *already-open* sprint before the freeze
+ * happens, instead of needing an Admin to reopen a closed sprint afterward.
+ * Each move runs through the exact same assignTaskToSprint used everywhere
+ * else — sequentially, not in parallel, since two tasks leaving this sprint
+ * at once would race on the same departedTaskSnapshot read-modify-write.
+ * Any task not listed in `moves` is left committed as-is and gets frozen as
+ * spillover by the closeSprint() call at the end, same as today.
+ */
+export async function closeSprintWithMoves(
+  id: string,
+  projectId: string,
+  moves: { taskId: string; targetSprintId: string }[]
+) {
+  for (const move of moves) {
+    const task = await prisma.wbsTask.findUniqueOrThrow({ where: { id: move.taskId } });
+    if (task.sprintId !== id) {
+      throw new Error(`"${task.title}" is no longer in this sprint — refresh and try again.`);
+    }
+    await assignTaskToSprint(move.taskId, move.targetSprintId, projectId);
+  }
+  await closeSprint(id, projectId);
+}
+
+/**
  * Admin-only escape hatch out of the closed lock. Deliberately just flips
  * closedAt back to null and leaves the frozen* columns alone — they're
  * simply ignored (the UI reads live task data) once the sprint is open

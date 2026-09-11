@@ -88,7 +88,11 @@ function RowActionItem({ action, onDone }: { action: RowAction; onDone: () => vo
       disabled={pending}
       onClick={() =>
         startTransition(async () => {
-          await action.onClick();
+          try {
+            await action.onClick();
+          } catch (err) {
+            window.alert(err instanceof Error ? err.message : "Something went wrong.");
+          }
           onDone();
         })
       }

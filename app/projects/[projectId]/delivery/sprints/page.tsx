@@ -54,6 +54,10 @@ export default async function DeliverySprintsPage({ params }: { params: { projec
     title: t.title,
   }));
 
+  // For the close-triage panel: which other sprints a spillover task could
+  // move into right now (self excluded per-row below).
+  const openSprints = sprints.filter((s) => !s.closedAt).map((s) => ({ id: s.id, name: s.name }));
+
   const roster = Array.from(new Map(engagements.map((e) => [e.personId, e])).values()).map((e) => ({
     personId: e.person.id,
     personName: e.person.name,
@@ -181,6 +185,7 @@ export default async function DeliverySprintsPage({ params }: { params: { projec
               roster={roster}
               backlogTasks={backlogTasks}
               allProjectTasks={allProjectTasks}
+              otherOpenSprints={openSprints.filter((o) => o.id !== s.id)}
               canWrite={canWrite}
               isAdmin={isAdmin}
             />
