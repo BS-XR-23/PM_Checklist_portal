@@ -329,65 +329,69 @@ export function WbsTasksTable({
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-      {tasks.length > 0 && (
+      {(tasks.length > 0 || (canWrite && showAddRow)) && (
         <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 bg-slate-50/60 px-4 py-2.5">
-          <div className="relative">
-            <IconSearch className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPage(1);
-              }}
-              placeholder="Search title or WBS#…"
-              className="w-48 rounded border border-slate-200 pl-7 pr-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-slate-400"
-            />
-          </div>
-          <select
-            value={sprintFilter}
-            onChange={(e) => {
-              setSprintFilter(e.target.value);
-              setPage(1);
-            }}
-            className="rounded border border-slate-200 px-1.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-slate-400"
-          >
-            <option value="all">All sprints</option>
-            <option value="backlog">Backlog (unassigned)</option>
-            {sprints.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
-          <select
-            value={assigneeFilter}
-            onChange={(e) => {
-              setAssigneeFilter(e.target.value);
-              setPage(1);
-            }}
-            className="rounded border border-slate-200 px-1.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-slate-400"
-          >
-            <option value="all">All assignees</option>
-            <option value="unassigned">Unassigned</option>
-            {roster.map((p) => (
-              <option key={p.personId} value={p.personId}>
-                {p.personName}
-              </option>
-            ))}
-          </select>
-          {filtersActive && (
-            <button
-              onClick={() => {
-                setSearch("");
-                setSprintFilter("all");
-                setAssigneeFilter("all");
-                setPage(1);
-              }}
-              className="text-xs text-slate-400 hover:text-slate-700"
-            >
-              Clear filters
-            </button>
+          {tasks.length > 0 && (
+            <>
+              <div className="relative">
+                <IconSearch className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(e) => {
+                    setSearch(e.target.value);
+                    setPage(1);
+                  }}
+                  placeholder="Search title or WBS#…"
+                  className="w-48 rounded border border-slate-200 pl-7 pr-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-slate-400"
+                />
+              </div>
+              <select
+                value={sprintFilter}
+                onChange={(e) => {
+                  setSprintFilter(e.target.value);
+                  setPage(1);
+                }}
+                className="rounded border border-slate-200 px-1.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-slate-400"
+              >
+                <option value="all">All sprints</option>
+                <option value="backlog">Backlog (unassigned)</option>
+                {sprints.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={assigneeFilter}
+                onChange={(e) => {
+                  setAssigneeFilter(e.target.value);
+                  setPage(1);
+                }}
+                className="rounded border border-slate-200 px-1.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-slate-400"
+              >
+                <option value="all">All assignees</option>
+                <option value="unassigned">Unassigned</option>
+                {roster.map((p) => (
+                  <option key={p.personId} value={p.personId}>
+                    {p.personName}
+                  </option>
+                ))}
+              </select>
+              {filtersActive && (
+                <button
+                  onClick={() => {
+                    setSearch("");
+                    setSprintFilter("all");
+                    setAssigneeFilter("all");
+                    setPage(1);
+                  }}
+                  className="text-xs text-slate-400 hover:text-slate-700"
+                >
+                  Clear filters
+                </button>
+              )}
+            </>
           )}
           {canWrite && showAddRow && (
             <div className="ml-auto flex items-center gap-2">

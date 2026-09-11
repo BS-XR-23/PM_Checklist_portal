@@ -36,7 +36,18 @@ export function useAnchoredPosition<T extends HTMLElement>(
       openUp,
     });
 
-    const close = () => onClose();
+    // Capture-phase so it also catches scroll on an ancestor scroll
+    // container (which doesn't bubble) — but that means it also sees the
+    // anchored textarea/input's own internal scroll (e.g. the cursor
+    // auto-scrolling into view after pasting a long value). Closing on that
+    // would unmount the editor before its onBlur ever fires and save, so
+    // pasted-but-uncommitted text would just vanish — skip scrolls that
+    // originate on a form field, since a real "the page moved" scroll never
+    // targets the editor itself.
+    const close = (e: Event) => {
+      if (e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement) return;
+      onClose();
+    };
     window.addEventListener("scroll", close, true);
     window.addEventListener("resize", close);
     return () => {
