@@ -20,7 +20,10 @@ export function PresalesTemplateItemRow({ item }: { item: PresalesTemplateItemRo
         <InlineText value={item.itemText} onSave={(v) => updatePresalesTemplateItem(item.id, v)} />
       </div>
       <button
-        onClick={() => startTransition(() => deletePresalesTemplateItem(item.id))}
+        onClick={() => {
+          if (!window.confirm(`Delete "${item.itemText}"? This can't be undone.`)) return;
+          startTransition(() => deletePresalesTemplateItem(item.id));
+        }}
         disabled={pending}
         title="Delete template item"
         className="text-slate-300 hover:text-red-600 disabled:opacity-50 shrink-0"

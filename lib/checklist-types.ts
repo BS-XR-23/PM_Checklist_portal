@@ -96,3 +96,14 @@ export const CHECKLIST_TYPE_BY_KEY: Record<ChecklistType, ChecklistTypeConfig> =
 export const CHECKLIST_TYPE_BY_ROUTE: Record<string, ChecklistTypeConfig> = Object.fromEntries(
   CHECKLIST_TYPES.map((c) => [c.routeSegment, c])
 );
+
+/**
+ * Stage list for template-editing UIs (the admin Checklist Template page
+ * and its .xlsx export) — same as `stageOrder` except PM's "Presales" stage
+ * is excluded there: it's a real ChecklistItem stage (see PM_STAGES), but
+ * deliberately not part of PM_CHECKLIST_SEED — only ever populated by
+ * winPresalesProject — so it has nothing to template-edit here.
+ */
+export function templateStagesFor(config: ChecklistTypeConfig): readonly string[] {
+  return config.key === "PM" ? config.stageOrder.filter((s) => s !== "Presales") : config.stageOrder;
+}
