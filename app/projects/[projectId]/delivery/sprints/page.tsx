@@ -6,6 +6,7 @@ import { StatTile } from "@/components/ui/stat-tile";
 import { PageGuide } from "@/components/ui/page-guide";
 import { IconLayers, IconClock, IconCheckCircle, IconClipboardList } from "@/components/layout/icons";
 import { AddSprintModal } from "../add-sprint-modal";
+import { SprintPlaybookModal } from "../sprint-playbook-modal";
 import { SprintSummaryRow, type SprintSummaryData, type FrozenTaskSnapshotEntry } from "../sprint-summary-row";
 
 export const dynamic = "force-dynamic";
@@ -149,6 +150,7 @@ export default async function DeliverySprintsPage({ params }: { params: { projec
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          <SprintPlaybookModal />
           <a
             href={`/api/projects/${params.projectId}/delivery/export`}
             className="rounded-md border border-slate-300 text-slate-700 text-sm font-medium px-4 py-2 hover:bg-slate-50"
