@@ -90,21 +90,13 @@ export default async function DeliveryTasksPage({ params }: { params: { projectI
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h2 className="text-base font-semibold text-slate-900">Delivery — Tasks</h2>
-          <p className="text-sm text-slate-500">
-            The project-wide WBS — defined once here. Story Points is the estimate; the default assignee here is
-            just a starting point, overridable once a task is committed and tracked. Commit a task to a sprint here,
-            or import it into one directly from the Sprints tab, to track its progress there.
-          </p>
-        </div>
-        <a
-          href={`/api/projects/${params.projectId}/delivery/tasks/export`}
-          className="rounded-md border border-slate-300 text-slate-700 text-sm font-medium px-4 py-2 hover:bg-slate-50 shrink-0"
-        >
-          Export .xlsx
-        </a>
+      <div>
+        <h2 className="text-base font-semibold text-slate-900">Delivery — Tasks</h2>
+        <p className="text-sm text-slate-500">
+          The project-wide WBS — defined once here. Story Points is the estimate; the default assignee here is
+          just a starting point, overridable once a task is committed and tracked. Commit a task to a sprint here,
+          or import it into one directly from the Sprints tab, to track its progress there.
+        </p>
       </div>
 
       <PageGuide
@@ -151,6 +143,14 @@ export default async function DeliveryTasksPage({ params }: { params: { projectI
         emptyMessage="No active tasks — everything's either done or nothing's been added yet."
         taskHistory={canViewHistory ? taskHistory : undefined}
         uploadForm={canWrite ? <UploadWbsTasksForm projectId={params.projectId} /> : undefined}
+        exportAction={
+          <a
+            href={`/api/projects/${params.projectId}/delivery/tasks/export`}
+            className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-300 hover:text-slate-900"
+          >
+            Export .xlsx
+          </a>
+        }
       />
 
       <div>

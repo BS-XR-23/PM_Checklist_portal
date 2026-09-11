@@ -2,6 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
+import clsx from "clsx";
 import { useAnchoredPosition } from "./use-anchored-position";
 
 const EXPANDED_WIDTH = 360;
@@ -23,6 +24,15 @@ const cellClass =
 // visible width in narrow columns (e.g. Role Rates' compact sidebar table)
 // without adding value over typing/arrow-key editing directly.
 const numberCellClass = cellClass + " [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
+
+// A failed save used to be invisible — the draft just sat there looking
+// saved while the server-side value hadn't actually changed. Every variant
+// below now reverts the draft to the last-known-good value and surfaces
+// this on a failure, so "it didn't save" is never silent.
+const errorTextClass = "text-xs text-red-600 mt-0.5";
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : "Failed to save.";
+}
 
 /**
  * A single-line value at rest (truncated + a `title` tooltip so hovering
@@ -53,12 +63,22 @@ export function InlineText({
 }) {
   const [draft, setDraft] = useState(value);
   const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const coords = useAnchoredPosition(expanded, inputRef, () => setExpanded(false), { width: EXPANDED_WIDTH, estHeight: 140 });
 
   const commit = () => {
-    if (draft !== value) startTransition(() => onSave(draft));
+    if (draft === value) return;
+    setError(null);
+    startTransition(async () => {
+      try {
+        await onSave(draft);
+      } catch (err) {
+        setError(errorMessage(err));
+        setDraft(value);
+      }
+    });
   };
 
   return (
@@ -66,7 +86,7 @@ export function InlineText({
       <input
         ref={inputRef}
         type="text"
-        className={className ?? cellClass}
+        className={clsx(className ?? cellClass, error && "border-red-400 focus:ring-red-400")}
         value={draft}
         title={draft}
         placeholder={placeholder}
@@ -74,6 +94,7 @@ export function InlineText({
         onChange={(e) => setDraft(e.target.value)}
         onFocus={() => setExpanded(true)}
       />
+      {error && !expanded && <p className={errorTextClass}>{error}</p>}
       {expanded &&
         coords &&
         createPortal(
@@ -103,6 +124,7 @@ export function InlineText({
                   setExpanded(false);
                 } else if (e.key === "Escape") {
                   setDraft(value);
+                  setError(null);
                   setExpanded(false);
                 }
               }}
@@ -144,23 +166,36 @@ export function InlineTextarea({
 }) {
   const [draft, setDraft] = useState(value);
   const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
 
   return (
-    <textarea
-      ref={autoGrow}
-      className={textareaClass}
-      rows={1}
-      value={draft}
-      placeholder={placeholder}
-      disabled={pending}
-      onChange={(e) => {
-        setDraft(e.target.value);
-        autoGrow(e.target);
-      }}
-      onBlur={() => {
-        if (draft !== value) startTransition(() => onSave(draft));
-      }}
-    />
+    <>
+      <textarea
+        ref={autoGrow}
+        className={clsx(textareaClass, error && "border-red-400 focus:ring-red-400")}
+        rows={1}
+        value={draft}
+        placeholder={placeholder}
+        disabled={pending}
+        onChange={(e) => {
+          setDraft(e.target.value);
+          autoGrow(e.target);
+        }}
+        onBlur={() => {
+          if (draft === value) return;
+          setError(null);
+          startTransition(async () => {
+            try {
+              await onSave(draft);
+            } catch (err) {
+              setError(errorMessage(err));
+              setDraft(value);
+            }
+          });
+        }}
+      />
+      {error && <p className={errorTextClass}>{error}</p>}
+    </>
   );
 }
 
@@ -175,20 +210,33 @@ export function InlineNumber({
 }) {
   const [draft, setDraft] = useState(value == null ? "" : String(value));
   const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
 
   return (
-    <input
-      type="number"
-      step={step}
-      className={numberCellClass}
-      value={draft}
-      disabled={pending}
-      onChange={(e) => setDraft(e.target.value)}
-      onBlur={() => {
-        const parsed = draft === "" ? null : Number(draft);
-        if (parsed !== value) startTransition(() => onSave(parsed));
-      }}
-    />
+    <>
+      <input
+        type="number"
+        step={step}
+        className={clsx(numberCellClass, error && "border-red-400 focus:ring-red-400")}
+        value={draft}
+        disabled={pending}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => {
+          const parsed = draft === "" ? null : Number(draft);
+          if (parsed === value) return;
+          setError(null);
+          startTransition(async () => {
+            try {
+              await onSave(parsed);
+            } catch (err) {
+              setError(errorMessage(err));
+              setDraft(value == null ? "" : String(value));
+            }
+          });
+        }}
+      />
+      {error && <p className={errorTextClass}>{error}</p>}
+    </>
   );
 }
 
@@ -202,25 +250,38 @@ export function InlinePercent({
 }) {
   const [draft, setDraft] = useState(String(Math.round(value * 1000) / 10));
   const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
 
   return (
-    <div className="flex items-center gap-1">
-      <input
-        type="number"
-        step={0.5}
-        min={0}
-        max={100}
-        className={numberCellClass}
-        value={draft}
-        disabled={pending}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={() => {
-          const parsedPct = draft === "" ? 0 : Number(draft);
-          const parsed = parsedPct / 100;
-          if (parsed !== value) startTransition(() => onSave(parsed));
-        }}
-      />
-      <span className="text-xs text-slate-400">%</span>
+    <div>
+      <div className="flex items-center gap-1">
+        <input
+          type="number"
+          step={0.5}
+          min={0}
+          max={100}
+          className={clsx(numberCellClass, error && "border-red-400 focus:ring-red-400")}
+          value={draft}
+          disabled={pending}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={() => {
+            const parsedPct = draft === "" ? 0 : Number(draft);
+            const parsed = parsedPct / 100;
+            if (parsed === value) return;
+            setError(null);
+            startTransition(async () => {
+              try {
+                await onSave(parsed);
+              } catch (err) {
+                setError(errorMessage(err));
+                setDraft(String(Math.round(value * 1000) / 10));
+              }
+            });
+          }}
+        />
+        <span className="text-xs text-slate-400">%</span>
+      </div>
+      {error && <p className={errorTextClass}>{error}</p>}
     </div>
   );
 }
@@ -232,16 +293,34 @@ export function InlineDate({
   value: string | null; // yyyy-mm-dd
   onSave: (value: string | null) => Promise<void>;
 }) {
+  const [selected, setSelected] = useState(value ?? "");
   const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
 
   return (
-    <input
-      type="date"
-      className={cellClass}
-      defaultValue={value ?? ""}
-      disabled={pending}
-      onChange={(e) => startTransition(() => onSave(e.target.value || null))}
-    />
+    <>
+      <input
+        type="date"
+        className={clsx(cellClass, error && "border-red-400 focus:ring-red-400")}
+        value={selected}
+        disabled={pending}
+        onChange={(e) => {
+          const next = e.target.value;
+          const prev = selected;
+          setSelected(next);
+          setError(null);
+          startTransition(async () => {
+            try {
+              await onSave(next || null);
+            } catch (err) {
+              setError(errorMessage(err));
+              setSelected(prev);
+            }
+          });
+        }}
+      />
+      {error && <p className={errorTextClass}>{error}</p>}
+    </>
   );
 }
 
@@ -260,21 +339,39 @@ export function InlineSelect({
   style?: React.CSSProperties;
   className?: string;
 }) {
+  const [selected, setSelected] = useState(value);
   const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
 
   return (
-    <select
-      className={className ?? cellClass}
-      style={style}
-      defaultValue={value}
-      disabled={pending}
-      onChange={(e) => startTransition(() => onSave(e.target.value))}
-    >
-      {options.map((opt) => (
-        <option key={opt} value={opt}>
-          {renderOption ? renderOption(opt) : opt}
-        </option>
-      ))}
-    </select>
+    <div>
+      <select
+        className={clsx(className ?? cellClass, error && "border-red-400 focus:ring-red-400")}
+        style={style}
+        value={selected}
+        disabled={pending}
+        onChange={(e) => {
+          const next = e.target.value;
+          const prev = selected;
+          setSelected(next);
+          setError(null);
+          startTransition(async () => {
+            try {
+              await onSave(next);
+            } catch (err) {
+              setError(errorMessage(err));
+              setSelected(prev);
+            }
+          });
+        }}
+      >
+        {options.map((opt) => (
+          <option key={opt} value={opt}>
+            {renderOption ? renderOption(opt) : opt}
+          </option>
+        ))}
+      </select>
+      {error && <p className={errorTextClass}>{error}</p>}
+    </div>
   );
 }

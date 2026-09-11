@@ -4,7 +4,16 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import clsx from "clsx";
 
-export type RowAction = { label: string; pendingLabel?: string; onClick: () => Promise<void>; danger?: boolean };
+export type RowAction = {
+  label: string;
+  pendingLabel?: string;
+  onClick: () => Promise<void>;
+  danger?: boolean;
+  /** When set, a native confirm() must be accepted before onClick runs — for
+   * actions (delete) that used to fire on the first click with no chance to
+   * back out of a mis-click. */
+  confirmMessage?: string;
+};
 
 const MENU_WIDTH = 192; // matches w-48
 const ITEM_HEIGHT = 32;
@@ -86,7 +95,8 @@ function RowActionItem({ action, onDone }: { action: RowAction; onDone: () => vo
     <button
       type="button"
       disabled={pending}
-      onClick={() =>
+      onClick={() => {
+        if (action.confirmMessage && !window.confirm(action.confirmMessage)) return;
         startTransition(async () => {
           try {
             await action.onClick();
@@ -94,8 +104,8 @@ function RowActionItem({ action, onDone }: { action: RowAction; onDone: () => vo
             window.alert(err instanceof Error ? err.message : "Something went wrong.");
           }
           onDone();
-        })
-      }
+        });
+      }}
       className={clsx(
         "w-full text-left rounded px-2.5 py-1.5 disabled:opacity-50",
         action.danger ? "text-red-600 hover:bg-red-50" : "text-slate-700 hover:bg-slate-50"

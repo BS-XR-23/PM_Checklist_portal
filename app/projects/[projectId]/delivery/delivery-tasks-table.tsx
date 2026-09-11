@@ -61,6 +61,7 @@ function SortHeader({ label, sortKey, active, dir, onClick, className }: { label
 }
 
 function PersonSelect({ rowId, projectId, value, roster }: { rowId: string; projectId: string; value: string; roster: RosterPerson[] }) {
+  const [selected, setSelected] = useState(value);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -68,15 +69,19 @@ function PersonSelect({ rowId, projectId, value, roster }: { rowId: string; proj
     <div className="min-w-[160px]">
       <select
         className="w-full rounded border border-slate-200 px-1.5 py-1 text-xs hover:border-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-400 disabled:opacity-50"
-        defaultValue={value}
+        value={selected}
         disabled={pending}
         onChange={(e) => {
+          const next = e.target.value;
+          const prev = selected;
+          setSelected(next);
           setError(null);
           startTransition(async () => {
             try {
-              await updateWbsTask(rowId, projectId, { personId: e.target.value || null });
+              await updateWbsTask(rowId, projectId, { personId: next || null });
             } catch (err) {
               setError(err instanceof Error ? err.message : "Failed to set assignee.");
+              setSelected(prev);
             }
           });
         }}
@@ -95,6 +100,7 @@ function PersonSelect({ rowId, projectId, value, roster }: { rowId: string; proj
 }
 
 function SprintSelect({ taskId, projectId, value, sprints }: { taskId: string; projectId: string; value: string; sprints: SprintOption[] }) {
+  const [selected, setSelected] = useState(value);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -102,15 +108,19 @@ function SprintSelect({ taskId, projectId, value, sprints }: { taskId: string; p
     <div className="min-w-[140px]">
       <select
         className="w-full rounded border border-slate-200 px-1.5 py-1 text-xs hover:border-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-400 disabled:opacity-50"
-        defaultValue={value}
+        value={selected}
         disabled={pending}
         onChange={(e) => {
+          const next = e.target.value;
+          const prev = selected;
+          setSelected(next);
           setError(null);
           startTransition(async () => {
             try {
-              await assignTaskToSprint(taskId, e.target.value || null, projectId);
+              await assignTaskToSprint(taskId, next || null, projectId);
             } catch (err) {
               setError(err instanceof Error ? err.message : "Failed to commit task to sprint.");
+              setSelected(prev);
             }
           });
         }}
@@ -128,11 +138,12 @@ function SprintSelect({ taskId, projectId, value, sprints }: { taskId: string; p
   );
 }
 
-function AddTaskModal({ onSubmit, onClose, pending }: { onSubmit: (data: { wbsNumber: string; title: string; storyPoints: number }) => void; onClose: () => void; pending: boolean }) {
+function AddTaskModal({ onSubmit, onClose }: { onSubmit: (data: { wbsNumber: string; title: string; storyPoints: number }) => Promise<void>; onClose: () => void }) {
   const [wbsNumber, setWbsNumber] = useState("");
   const [title, setTitle] = useState("");
   const [storyPoints, setStoryPoints] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
@@ -148,14 +159,23 @@ function AddTaskModal({ onSubmit, onClose, pending }: { onSubmit: (data: { wbsNu
           </button>
         </div>
         <form
-          onSubmit={(e) => {
+          onSubmit={async (e) => {
             e.preventDefault();
             if (!title.trim()) {
               setError("A title is required.");
               return;
             }
             setError(null);
-            onSubmit({ wbsNumber: wbsNumber.trim(), title: title.trim(), storyPoints: storyPoints === "" ? 0 : Number(storyPoints) });
+            setPending(true);
+            try {
+              await onSubmit({ wbsNumber: wbsNumber.trim(), title: title.trim(), storyPoints: storyPoints === "" ? 0 : Number(storyPoints) });
+              // On success the parent unmounts this modal (setShowAddTask(false)) — no
+              // need to clear `pending` here, and doing so would be a set-state-after-
+              // unmount no-op at best.
+            } catch (err) {
+              setError(err instanceof Error ? err.message : "Failed to add task.");
+              setPending(false);
+            }
           }}
         >
           <div className="space-y-3">
@@ -236,6 +256,7 @@ export function WbsTasksTable({
   emptyMessage = "No WBS tasks yet.",
   taskHistory,
   uploadForm,
+  exportAction,
 }: {
   projectId: string;
   tasks: WbsTaskData[];
@@ -251,8 +272,12 @@ export function WbsTasksTable({
   taskHistory?: Record<string, AuditLogRow[]>;
   /** Rendered inline (toggled via "Import Tasks") — only meaningful when showAddRow. */
   uploadForm?: React.ReactNode;
+  /** Rendered in the same toolbar as Import/Add Task, next to them, so both
+   * directions of moving data (in via Import, out via Export) live in one
+   * place instead of Export sitting up in the page header. Shown regardless
+   * of canWrite — a read-only viewer can still export. */
+  exportAction?: React.ReactNode;
 }) {
-  const [pending, startTransition] = useTransition();
   const [historyTaskId, setHistoryTaskId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [sprintFilter, setSprintFilter] = useState<string>("all");
@@ -329,7 +354,7 @@ export function WbsTasksTable({
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-      {(tasks.length > 0 || (canWrite && showAddRow)) && (
+      {(tasks.length > 0 || (canWrite && showAddRow) || exportAction) && (
         <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 bg-slate-50/60 px-4 py-2.5">
           {tasks.length > 0 && (
             <>
@@ -393,26 +418,30 @@ export function WbsTasksTable({
               )}
             </>
           )}
-          {canWrite && showAddRow && (
+          {(exportAction || (canWrite && showAddRow)) && (
             <div className="ml-auto flex items-center gap-2">
-              {uploadForm && (
-                <button
-                  type="button"
-                  onClick={() => setShowImport((v) => !v)}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-300 hover:text-slate-900"
-                >
-                  <IconUpload className="h-3.5 w-3.5" />
-                  Import Tasks
-                </button>
+              {exportAction}
+              {canWrite && showAddRow && (
+                <>
+                  {uploadForm && (
+                    <button
+                      type="button"
+                      onClick={() => setShowImport((v) => !v)}
+                      className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-300 hover:text-slate-900"
+                    >
+                      <IconUpload className="h-3.5 w-3.5" />
+                      Import Tasks
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setShowAddTask(true)}
+                    className="rounded-md bg-indigo-600 text-white text-xs font-semibold px-3 py-1.5 hover:bg-indigo-700 disabled:opacity-50"
+                  >
+                    + Add Task
+                  </button>
+                </>
               )}
-              <button
-                type="button"
-                onClick={() => setShowAddTask(true)}
-                disabled={pending}
-                className="rounded-md bg-indigo-600 text-white text-xs font-semibold px-3 py-1.5 hover:bg-indigo-700 disabled:opacity-50"
-              >
-                + Add Task
-              </button>
             </div>
           )}
         </div>
@@ -542,6 +571,7 @@ export function WbsTasksTable({
                           label: "Delete task",
                           pendingLabel: "Deleting...",
                           danger: true,
+                          confirmMessage: `Delete "${t.wbsNumber ? `${t.wbsNumber} — ` : ""}${t.title}"? This can't be undone.`,
                           onClick: () => deleteWbsTask(t.id, projectId),
                         },
                       ]}
@@ -611,17 +641,14 @@ export function WbsTasksTable({
 
       {showAddTask && (
         <AddTaskModal
-          pending={pending}
           onClose={() => setShowAddTask(false)}
-          onSubmit={(data) => {
+          onSubmit={async (data) => {
+            const created = await createWbsTask(projectId, data);
             setSearch("");
             setSprintFilter("all");
             setAssigneeFilter("all");
-            startTransition(async () => {
-              const created = await createWbsTask(projectId, data);
-              setPendingFocusId(created.id);
-              setShowAddTask(false);
-            });
+            setPendingFocusId(created.id);
+            setShowAddTask(false);
           }}
         />
       )}
