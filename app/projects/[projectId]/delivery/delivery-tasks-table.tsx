@@ -289,6 +289,20 @@ export function WbsTasksTable({
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<(typeof PAGE_SIZES)[number]>(10);
 
+  // Escape closes whichever modal is open (Add Task, History) — both had a
+  // backdrop and an X button but no keyboard way out, which every other
+  // modal-like affordance in the app supports. Harmless to fire when
+  // neither is open: setting already-false/-null state is a no-op.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setShowAddTask(false);
+      setHistoryTaskId(null);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
   // Duplicate-title detection, computed client-side from the already-loaded
   // task list — no extra round-trip needed. Non-blocking: a matching title
   // just gets flagged (with the other WBS#s it collides with) so the PM can
