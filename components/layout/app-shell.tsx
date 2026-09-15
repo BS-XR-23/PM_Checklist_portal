@@ -14,7 +14,7 @@ export async function AppShell({ user, children }: { user: CurrentUser; children
   ]);
 
   return (
-    <div className="flex min-h-screen bg-slate-50">
+    <div className="flex flex-col md:flex-row min-h-screen bg-slate-50">
       <Sidebar user={user} reminderCount={reminderCount} hasLinkedPerson={!!person} />
       <div className="flex-1 min-w-0">{children}</div>
     </div>

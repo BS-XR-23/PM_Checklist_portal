@@ -16,7 +16,7 @@ export function DeliveryProgressGauge({ value, label, size = 180 }: { value: num
   const compact = size < 140;
 
   return (
-    <div className="relative">
+    <div className="relative" style={{ width: size }}>
       <ResponsiveContainer width="100%" height={size}>
         <RadialBarChart data={data} innerRadius="70%" outerRadius="100%" startAngle={90} endAngle={-270} barSize={compact ? 9 : 14}>
           <PolarAngleAxis type="number" domain={[0, 100]} angleAxisId={0} tick={false} />

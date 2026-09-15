@@ -159,15 +159,15 @@ export function ProjectFilters({
           <h1 className="text-xl font-bold text-slate-900">Projects</h1>
           <p className="text-sm text-slate-500 max-w-xl">Manage and track all projects across different stages — from presales to delivery.</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2 shrink-0">
-          <div className="relative">
+        <div className="flex flex-wrap items-center gap-2 min-w-0">
+          <div className="relative w-full sm:w-auto">
             <IconSearch className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search projects, client, or PM…"
-              className="w-64 rounded-md border border-slate-200 pl-8 pr-2.5 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
+              className="w-full sm:w-64 rounded-md border border-slate-200 pl-8 pr-2.5 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
             />
           </div>
           <button
@@ -304,16 +304,22 @@ export function ProjectFilters({
         {visible.length === 0 ? (
           <p className="text-sm text-slate-500">No projects match this filter.</p>
         ) : view === "grid" ? (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {visible.map((p) => (
               <ProjectCard key={p.id} p={p} isAdmin={isAdmin} />
             ))}
           </div>
         ) : (
-          <div className="space-y-2">
-            {visible.map((p) => (
-              <ProjectListRow key={p.id} p={p} isAdmin={isAdmin} />
-            ))}
+          // List view's columns are fixed-width (matches the row-alignment
+          // needs of a dense table); rather than reflowing them at narrow
+          // widths, this degrades to horizontal scroll like every other wide
+          // table in the app instead of blowing out the page's own width.
+          <div className="overflow-x-auto">
+            <div className="space-y-2">
+              {visible.map((p) => (
+                <ProjectListRow key={p.id} p={p} isAdmin={isAdmin} />
+              ))}
+            </div>
           </div>
         )}
       </div>

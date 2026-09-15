@@ -1,11 +1,12 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import clsx from "clsx";
 import { SignOutLink } from "@/components/ui/sign-out-link";
 import { ChangePasswordModal } from "@/components/ui/change-password-modal";
-import { IconGrid, IconChart, IconUser, IconUsers, IconIdCard, IconClipboardList, IconLayers, IconBell, IconTarget } from "./icons";
+import { IconGrid, IconChart, IconUser, IconUsers, IconIdCard, IconClipboardList, IconLayers, IconBell, IconTarget, IconMenu, IconX } from "./icons";
 import { initials } from "@/lib/format";
 import { ROLE_LABELS } from "@/lib/constants";
 import type { Role } from "@prisma/client";
@@ -22,6 +23,29 @@ export function Sidebar({
   hasLinkedPerson?: boolean;
 }) {
   const pathname = usePathname();
+  const [open, setOpen] = useState(false);
+
+  // Off-canvas drawer below md — collapses automatically on navigation so it
+  // never lingers open after a link click, and locks body scroll while open
+  // so the page underneath can't be dragged around behind the backdrop.
+  useEffect(() => setOpen(false), [pathname]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [open]);
 
   const primaryItems: NavItem[] = [{ href: "/projects", label: "Projects", icon: IconGrid }];
   // Internal pipeline data — the deal team (PM/Admin) plus leadership
@@ -65,45 +89,88 @@ export function Sidebar({
   }
 
   return (
-    <aside className="w-60 shrink-0 h-screen sticky top-0 flex flex-col border-r border-slate-200 bg-white">
-      <div className="px-4 py-4 border-b border-slate-100 flex items-center gap-2.5">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-900 text-xs font-bold text-white">
-          XR
-        </span>
-        <div className="min-w-0">
-          <p className="text-sm font-semibold text-slate-900 leading-tight truncate">XR PM Checklist</p>
-          <p className="text-xs text-slate-400">Portal</p>
-        </div>
+    <>
+      <div className="md:hidden sticky top-0 z-30 flex items-center gap-2.5 border-b border-slate-200 bg-white px-4 py-3">
+        <button
+          type="button"
+          aria-label="Open navigation menu"
+          aria-expanded={open}
+          onClick={() => setOpen(true)}
+          className="p-1 -ml-1 text-slate-600 hover:text-slate-900"
+        >
+          <IconMenu className="w-5 h-5" width={20} height={20} />
+        </button>
+        <span className="text-sm font-semibold text-slate-900">XR PM Checklist</span>
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-4">
-        <NavGroup items={primaryItems} pathname={pathname} />
-        {adminItems.length > 0 && (
-          <div>
-            <p className="px-2 mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-              {user.role === "ADMIN" ? "Admin" : "Directory"}
-            </p>
-            <NavGroup items={adminItems} pathname={pathname} />
-          </div>
+      {open && (
+        <div
+          className="md:hidden fixed inset-0 z-40 bg-black/30"
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpen(false);
+          }}
+        />
+      )}
+
+      <aside
+        className={clsx(
+          "fixed inset-y-0 left-0 z-50 w-60 shrink-0 h-screen flex flex-col border-r border-slate-200 bg-white",
+          "transform transition-transform duration-300 ease-in-out",
+          open ? "translate-x-0" : "-translate-x-full",
+          "md:static md:translate-x-0 md:transition-none md:z-auto md:sticky md:top-0"
         )}
-      </nav>
-
-      <div className="border-t border-slate-100 px-3 py-3">
-        <div className="flex items-center gap-2.5 mb-2">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-900 text-xs font-semibold text-white">
-            {initials(user.name)}
+      >
+        <div className="px-4 py-4 border-b border-slate-100 flex items-center gap-2.5">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-900 text-xs font-bold text-white">
+            XR
           </span>
-          <div className="min-w-0">
-            <p className="text-sm font-medium text-slate-800 truncate">{user.name}</p>
-            <p className="text-xs text-slate-400">{ROLE_LABELS[user.role]}</p>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-slate-900 leading-tight truncate">XR PM Checklist</p>
+            <p className="text-xs text-slate-400">Portal</p>
+          </div>
+          {/* The mobile top bar's own toggle sits at the same x-position this
+              open drawer covers (z-50, full height), so it's unreachable once
+              open — this close button lives inside the drawer itself instead. */}
+          <button
+            type="button"
+            aria-label="Close navigation menu"
+            onClick={() => setOpen(false)}
+            className="md:hidden shrink-0 p-1 text-slate-400 hover:text-slate-600"
+          >
+            <IconX className="w-4.5 h-4.5" width={18} height={18} />
+          </button>
+        </div>
+
+        <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-4">
+          <NavGroup items={primaryItems} pathname={pathname} />
+          {adminItems.length > 0 && (
+            <div>
+              <p className="px-2 mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                {user.role === "ADMIN" ? "Admin" : "Directory"}
+              </p>
+              <NavGroup items={adminItems} pathname={pathname} />
+            </div>
+          )}
+        </nav>
+
+        <div className="border-t border-slate-100 px-3 py-3">
+          <div className="flex items-center gap-2.5 mb-2">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-900 text-xs font-semibold text-white">
+              {initials(user.name)}
+            </span>
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-slate-800 truncate">{user.name}</p>
+              <p className="text-xs text-slate-400">{ROLE_LABELS[user.role]}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 pl-0.5">
+            <ChangePasswordModal />
+            <SignOutLink />
           </div>
         </div>
-        <div className="flex items-center gap-3 pl-0.5">
-          <ChangePasswordModal />
-          <SignOutLink />
-        </div>
-      </div>
-    </aside>
+      </aside>
+    </>
   );
 }
 

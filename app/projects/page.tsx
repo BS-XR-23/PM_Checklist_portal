@@ -102,9 +102,9 @@ export default async function ProjectsPage() {
             height) so it reads as a glanceable summary bar, not a second
             full section competing with the card grid above it. */}
         {nonDeletedCards.length > 0 && (
-          <div className="rounded-xl border border-slate-200 bg-white p-3 h-36 overflow-hidden">
-            <div className="flex h-full divide-x divide-slate-100">
-              <div className="flex-[1.4] min-w-0 pr-4 overflow-hidden">
+          <div className="rounded-xl border border-slate-200 bg-white p-3 sm:h-36 overflow-hidden">
+            <div className="flex flex-col sm:flex-row sm:h-full divide-y sm:divide-y-0 sm:divide-x divide-slate-100">
+              <div className="flex-[1.4] min-w-0 py-3 sm:py-0 sm:pr-4 overflow-hidden">
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Upcoming Milestones</span>
                   {canSeeAll && (
@@ -140,21 +140,21 @@ export default async function ProjectsPage() {
                 )}
               </div>
 
-              <div className="flex-1 min-w-0 px-4 overflow-hidden">
+              <div className="flex-1 min-w-0 py-3 sm:py-0 sm:px-4 overflow-hidden">
                 <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Projects by Health</span>
                 <div className="mt-1.5">
                   <HealthDonutChart healthy={healthy} atRisk={atRisk} critical={critical} completed={completedCount} size={72} />
                 </div>
               </div>
 
-              <div className="flex-1 min-w-0 px-4 overflow-hidden flex flex-col items-center">
+              <div className="flex-1 min-w-0 py-3 sm:py-0 sm:px-4 overflow-hidden flex flex-col items-center">
                 <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide self-start">Delivery Progress</span>
                 <div className="flex-1 flex items-center">
                   <DeliveryProgressGauge value={avgProgress} label="Avg. Progress" size={72} />
                 </div>
               </div>
 
-              <div className="flex-1 min-w-0 pl-4 overflow-hidden">
+              <div className="flex-1 min-w-0 py-3 sm:py-0 sm:pl-4 overflow-hidden">
                 <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Projects by Stage</span>
                 {/* A compact inline version, not the shared TrendBar — that
                     component's fixed label/value widths are sized for
