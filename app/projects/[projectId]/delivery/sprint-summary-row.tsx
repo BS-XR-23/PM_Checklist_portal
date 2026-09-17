@@ -552,7 +552,7 @@ export function SprintSummaryRow({
                             </td>
                             <td className="py-2 px-3 min-w-[80px]">
                               {editable ? (
-                                <InlineNumber value={t.storyPoints} step={1} onSave={(v) => updateWbsTask(t.id, projectId, { storyPoints: v ?? 0 })} />
+                                <InlineNumber value={t.storyPoints} step={0.125} onSave={(v) => updateWbsTask(t.id, projectId, { storyPoints: v ?? 0 })} />
                               ) : (
                                 <span className="text-slate-500">{t.storyPoints}</span>
                               )}

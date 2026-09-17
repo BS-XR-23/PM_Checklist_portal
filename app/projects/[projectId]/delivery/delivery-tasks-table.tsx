@@ -159,6 +159,7 @@ function AddTaskModal({ onSubmit, onClose }: { onSubmit: (data: { wbsNumber: str
           </button>
         </div>
         <form
+          noValidate
           onSubmit={async (e) => {
             e.preventDefault();
             if (!title.trim()) {
@@ -204,7 +205,7 @@ function AddTaskModal({ onSubmit, onClose }: { onSubmit: (data: { wbsNumber: str
               <label className="block text-xs font-medium text-slate-500 mb-1">Story Points</label>
               <input
                 type="number"
-                step="0.5"
+                step="0.125"
                 min="0"
                 value={storyPoints}
                 onChange={(e) => setStoryPoints(e.target.value)}
@@ -522,7 +523,7 @@ export function WbsTasksTable({
                 </td>
                 <td className="px-4 py-2">
                   {canWrite ? (
-                    <InlineNumber value={t.storyPoints} step={1} onSave={(v) => updateWbsTask(t.id, projectId, { storyPoints: v ?? 0 })} />
+                    <InlineNumber value={t.storyPoints} step={0.125} onSave={(v) => updateWbsTask(t.id, projectId, { storyPoints: v ?? 0 })} />
                   ) : (
                     <span className="text-slate-600">{t.storyPoints}</span>
                   )}
