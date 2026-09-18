@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { formatDate, toDateInputValue } from "@/lib/format";
+import clsx from "clsx";
+import { formatDate, toDateInputValue, compareWbsNumbers } from "@/lib/format";
 import { competencyCpi } from "@/lib/calculations";
 import { INDEX_BAND_COLORS, indexBand, STATUS_COLORS, avatarColorFromString } from "@/lib/colors";
 import { initials } from "@/lib/format";
@@ -9,7 +10,7 @@ import { InlinePercent, InlineNumber, InlineText, InlineDate } from "@/component
 import { StatTile } from "@/components/ui/stat-tile";
 import { SectionHeader } from "@/components/ui/section-header";
 import { RowActionsMenu } from "@/components/ui/row-actions-menu";
-import { IconTarget, IconCheckCircle, IconClock, IconChart, IconUsers, IconClipboardList } from "@/components/layout/icons";
+import { IconTarget, IconCheckCircle, IconClock, IconChart, IconUsers, IconClipboardList, IconSort } from "@/components/layout/icons";
 import { computeDuplicateRefs, DuplicateBadge } from "./duplicate-badge";
 import {
   closeSprint,
@@ -38,6 +39,40 @@ function IndexValue({ value }: { value: number | null }) {
     >
       {value.toFixed(2)}
     </span>
+  );
+}
+
+type SprintSortKey = "wbsNumber" | "storyPoints" | "pctComplete" | "actualHours";
+
+// Same clickable-column-header pattern as the Tasks tab's SortHeader
+// (delivery-tasks-table.tsx) — kept as its own copy since that one isn't
+// exported and the sort keys differ (this table has no "done"/"remaining").
+function SortHeader({
+  label,
+  sortKey,
+  active,
+  dir,
+  onClick,
+  className,
+}: {
+  label: string;
+  sortKey: SprintSortKey;
+  active: boolean;
+  dir: "asc" | "desc";
+  onClick: (k: SprintSortKey) => void;
+  className?: string;
+}) {
+  return (
+    <th className={className}>
+      <button
+        type="button"
+        onClick={() => onClick(sortKey)}
+        className={clsx("inline-flex items-center gap-1 hover:text-slate-700", active && "text-slate-800")}
+      >
+        {label}
+        <IconSort className={clsx("h-3 w-3 shrink-0", active ? "text-slate-600" : "text-slate-300", active && dir === "desc" && "rotate-180")} />
+      </button>
+    </th>
   );
 }
 
@@ -148,7 +183,7 @@ function AssigneeSelect({ taskId, projectId, value, roster }: { taskId: string; 
   const [error, setError] = useState<string | null>(null);
 
   return (
-    <div className="min-w-[160px]">
+    <div className="min-w-[120px]">
       <select
         className="w-full rounded border border-slate-200 px-1.5 py-1 text-xs hover:border-slate-300 focus:outline-none focus:ring-1 focus:ring-slate-400 disabled:opacity-50"
         defaultValue={value}
@@ -367,6 +402,55 @@ export function SprintSummaryRow({
   const [triagePending, startTriageTransition] = useTransition();
   const [triageError, setTriageError] = useState<string | null>(null);
 
+  // Task table filters — status/%complete apply to any task row (open or
+  // closed, since even a frozen snapshot carries pctComplete); the hours
+  // range only applies to the open/live table, since a closed sprint's
+  // frozenTaskSnapshot never captured actualHours in the first place.
+  const [statusFilter, setStatusFilter] = useState<"ALL" | "IN_PROGRESS" | "COMPLETED">("ALL");
+  const [pctMin, setPctMin] = useState("");
+  const [pctMax, setPctMax] = useState("");
+  const [hoursMin, setHoursMin] = useState("");
+  const [hoursMax, setHoursMax] = useState("");
+  const filtersActive = statusFilter !== "ALL" || pctMin !== "" || pctMax !== "" || hoursMin !== "" || hoursMax !== "";
+  function clearFilters() {
+    setStatusFilter("ALL");
+    setPctMin("");
+    setPctMax("");
+    setHoursMin("");
+    setHoursMax("");
+  }
+  function matchesFilters(pctComplete: number, actualHours: number | null) {
+    if (statusFilter === "IN_PROGRESS" && pctComplete >= 1) return false;
+    if (statusFilter === "COMPLETED" && pctComplete < 1) return false;
+    const pct = pctComplete * 100;
+    if (pctMin !== "" && pct < Number(pctMin)) return false;
+    if (pctMax !== "" && pct > Number(pctMax)) return false;
+    if (actualHours != null) {
+      if (hoursMin !== "" && actualHours < Number(hoursMin)) return false;
+      if (hoursMax !== "" && actualHours > Number(hoursMax)) return false;
+    }
+    return true;
+  }
+
+  const [sort, setSort] = useState<{ key: SprintSortKey; dir: "asc" | "desc" } | null>(null);
+  const toggleSort = (key: SprintSortKey) => {
+    setSort((prev) => (prev?.key === key ? { key, dir: prev.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" }));
+  };
+  // Shared by all three row groups below (live/departed/frozen) — takes a
+  // getter for "actual hours" since that field is named differently (or
+  // absent) on each of the three row shapes.
+  function sortTasks<T extends { wbsNumber: string; storyPoints: number; pctComplete: number }>(list: T[], hoursOf: (t: T) => number): T[] {
+    if (!sort) return list;
+    return [...list].sort((a, b) => {
+      let cmp = 0;
+      if (sort.key === "wbsNumber") cmp = compareWbsNumbers(a.wbsNumber, b.wbsNumber);
+      else if (sort.key === "storyPoints") cmp = a.storyPoints - b.storyPoints;
+      else if (sort.key === "pctComplete") cmp = a.pctComplete - b.pctComplete;
+      else cmp = hoursOf(a) - hoursOf(b);
+      return sort.dir === "asc" ? cmp : -cmp;
+    });
+  }
+
   const cpi = competencyCpi(sprint.ev, sprint.av);
   const spi = sprint.pv ? sprint.ev / sprint.pv : null;
   const closed = !!sprint.closedAt;
@@ -376,6 +460,23 @@ export function SprintSummaryRow({
   // already departed this (still-open) sprint is handled by its own
   // destination, and won't reappear here.
   const incompleteTasks = sprint.tasks.filter((t) => t.pctComplete < 1);
+  // Grand-total row always reflects the whole sprint regardless of the
+  // filters above — filters narrow what's *displayed*, not what's *counted*.
+  // Mirrors "still counted in its totals" for departed tasks (see below).
+  const totalActualHours =
+    sprint.tasks.reduce((sum, t) => sum + t.actualHours, 0) + sprint.departedTasks.reduce((sum, t) => sum + t.sprintOwnHours, 0);
+  const visibleFrozenTasks = sortTasks(
+    sprint.frozenTasks.filter((t) => matchesFilters(t.pctComplete, null)),
+    () => 0
+  );
+  const visibleTasks = sortTasks(
+    sprint.tasks.filter((t) => matchesFilters(t.pctComplete, t.actualHours)),
+    (t) => t.actualHours
+  );
+  const visibleDepartedTasks = sortTasks(
+    sprint.departedTasks.filter((t) => matchesFilters(t.pctComplete, t.sprintOwnHours)),
+    (t) => t.sprintOwnHours
+  );
 
   function startClose() {
     if (incompleteTasks.length === 0) {
@@ -495,152 +596,231 @@ export function SprintSummaryRow({
 
             <div className="mb-7">
               <SectionHeader icon={<IconClipboardList />} iconWrapClass="bg-blue-50 text-blue-600" title="Tasks" className="mb-2" />
-              <div className="rounded-xl border border-slate-200 overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-slate-50">
-                    <tr className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                      <th className="py-2.5 px-3 w-24">WBS#</th>
-                      <th className="py-2.5 px-3">Title</th>
-                      <th className="py-2.5 px-3 w-28">Story Pts</th>
-                      <th className="py-2.5 px-3 w-28">% Complete</th>
-                      {!closed && <th className="py-2.5 px-3 w-32">Actual Hrs</th>}
-                      {!closed && <th className="py-2.5 px-3 w-44">Assignee</th>}
-                      <th className="py-2.5 px-3 w-28">Status</th>
-                      {editable && <th className="py-2.5 px-3 w-10" />}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {closed
-                      ? sprint.frozenTasks.map((t) => (
-                          <tr key={t.taskId} className="border-t border-slate-100">
-                            <td className="py-2 px-3 text-slate-600">{t.wbsNumber || "—"}</td>
-                            <td className="py-2 px-3 text-slate-600">{t.title}</td>
-                            <td className="py-2 px-3 text-slate-500">{t.storyPoints}</td>
-                            <td className="py-2 px-3 text-slate-500">{Math.round(t.pctComplete * 100)}%</td>
-                            <td className="py-2 px-3">
-                              <StatusPill pctComplete={t.pctComplete} />
-                            </td>
-                          </tr>
-                        ))
-                      : sprint.tasks.map((t) => (
-                          <tr key={t.id} className="border-t border-slate-100">
-                            <td className="py-2 px-3">
-                              {editable ? (
-                                <InlineText value={t.wbsNumber} onSave={(v) => updateWbsTask(t.id, projectId, { wbsNumber: v })} />
-                              ) : (
-                                <span className="text-slate-600">{t.wbsNumber || "—"}</span>
-                              )}
-                            </td>
-                            <td className="py-2 px-3">
-                              <div className="flex items-center gap-1.5">
-                                <div className="min-w-0 flex-1">
-                                  {editable ? (
-                                    <InlineText value={t.title} onSave={(v) => updateWbsTask(t.id, projectId, { title: v })} />
-                                  ) : (
-                                    <span className="text-slate-600">{t.title}</span>
+              <div className="rounded-xl border border-slate-200 overflow-hidden">
+                <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 bg-slate-50/60 px-4 py-2.5">
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+                    className="rounded border border-slate-200 px-1.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-slate-400"
+                  >
+                    <option value="ALL">All statuses</option>
+                    <option value="IN_PROGRESS">In Progress</option>
+                    <option value="COMPLETED">Completed</option>
+                  </select>
+                  <div className="flex items-center gap-1 rounded border border-slate-200 px-1.5 py-1 text-xs text-slate-500">
+                    <span className="text-slate-400">%</span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      placeholder="Min"
+                      value={pctMin}
+                      onChange={(e) => setPctMin(e.target.value)}
+                      className="w-10 focus:outline-none"
+                    />
+                    <span className="text-slate-300">–</span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      placeholder="Max"
+                      value={pctMax}
+                      onChange={(e) => setPctMax(e.target.value)}
+                      className="w-10 focus:outline-none"
+                    />
+                  </div>
+                  {!closed && (
+                    <div className="flex items-center gap-1 rounded border border-slate-200 px-1.5 py-1 text-xs text-slate-500">
+                      <span className="text-slate-400">Hrs</span>
+                      <input
+                        type="number"
+                        min={0}
+                        placeholder="Min"
+                        value={hoursMin}
+                        onChange={(e) => setHoursMin(e.target.value)}
+                        className="w-10 focus:outline-none"
+                      />
+                      <span className="text-slate-300">–</span>
+                      <input
+                        type="number"
+                        min={0}
+                        placeholder="Max"
+                        value={hoursMax}
+                        onChange={(e) => setHoursMax(e.target.value)}
+                        className="w-10 focus:outline-none"
+                      />
+                    </div>
+                  )}
+                  {filtersActive && (
+                    <button onClick={clearFilters} className="text-xs text-slate-400 hover:text-slate-700">
+                      Clear filters
+                    </button>
+                  )}
+                  <div className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-500">
+                    Total Actual Hrs <span className="font-semibold text-slate-800">{totalActualHours}</span>
+                  </div>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-50">
+                      <tr className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                        <SortHeader label="WBS#" sortKey="wbsNumber" active={sort?.key === "wbsNumber"} dir={sort?.dir ?? "asc"} onClick={toggleSort} className="py-2.5 px-3 w-32" />
+                        <th className="py-2.5 px-3">Title</th>
+                        <SortHeader label="Story Pts" sortKey="storyPoints" active={sort?.key === "storyPoints"} dir={sort?.dir ?? "asc"} onClick={toggleSort} className="py-2.5 px-3 w-28" />
+                        <SortHeader label="% Complete" sortKey="pctComplete" active={sort?.key === "pctComplete"} dir={sort?.dir ?? "asc"} onClick={toggleSort} className="py-2.5 px-3 w-28" />
+                        {!closed && (
+                          <SortHeader label="Actual Hrs" sortKey="actualHours" active={sort?.key === "actualHours"} dir={sort?.dir ?? "asc"} onClick={toggleSort} className="py-2.5 px-3 w-32" />
+                        )}
+                        {!closed && <th className="py-2.5 px-3 w-36">Assignee</th>}
+                        <th className="py-2.5 px-3 w-28">Status</th>
+                        {editable && <th className="py-2.5 px-3 w-10" />}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {closed
+                        ? visibleFrozenTasks.map((t) => (
+                            <tr key={t.taskId} className="border-t border-slate-100">
+                              <td className="py-2 px-3 text-slate-600">{t.wbsNumber || "—"}</td>
+                              <td className="py-2 px-3 text-slate-600">{t.title}</td>
+                              <td className="py-2 px-3 text-slate-500">{t.storyPoints}</td>
+                              <td className="py-2 px-3 text-slate-500">{Math.round(t.pctComplete * 100)}%</td>
+                              <td className="py-2 px-3">
+                                <StatusPill pctComplete={t.pctComplete} />
+                              </td>
+                            </tr>
+                          ))
+                        : visibleTasks.map((t) => (
+                            <tr key={t.id} className="border-t border-slate-100">
+                              <td className="py-2 px-3">
+                                {editable ? (
+                                  <InlineText value={t.wbsNumber} onSave={(v) => updateWbsTask(t.id, projectId, { wbsNumber: v })} />
+                                ) : (
+                                  <span className="text-slate-600">{t.wbsNumber || "—"}</span>
+                                )}
+                              </td>
+                              <td className="py-2 px-3">
+                                <div className="flex items-center gap-1.5">
+                                  <div className="min-w-0 flex-1">
+                                    {editable ? (
+                                      <InlineText value={t.title} onSave={(v) => updateWbsTask(t.id, projectId, { title: v })} />
+                                    ) : (
+                                      <span className="text-slate-600">{t.title}</span>
+                                    )}
+                                  </div>
+                                  {duplicateWbsByTaskId.has(t.id) && (
+                                    <DuplicateBadge
+                                      projectId={projectId}
+                                      taskId={t.id}
+                                      otherRefs={duplicateWbsByTaskId.get(t.id)!}
+                                      canWrite={editable}
+                                    />
                                   )}
                                 </div>
-                                {duplicateWbsByTaskId.has(t.id) && (
-                                  <DuplicateBadge
-                                    projectId={projectId}
-                                    taskId={t.id}
-                                    otherRefs={duplicateWbsByTaskId.get(t.id)!}
-                                    canWrite={editable}
-                                  />
-                                )}
-                              </div>
-                            </td>
-                            <td className="py-2 px-3 min-w-[80px]">
-                              {editable ? (
-                                <InlineNumber value={t.storyPoints} step={0.125} onSave={(v) => updateWbsTask(t.id, projectId, { storyPoints: v ?? 0 })} />
-                              ) : (
-                                <span className="text-slate-500">{t.storyPoints}</span>
-                              )}
-                            </td>
-                            <td className="py-2 px-3 min-w-[100px]">
-                              {editable ? (
-                                <InlinePercent value={t.pctComplete} onSave={(v) => updateTaskProgress(t.id, projectId, { pctComplete: v })} />
-                              ) : (
-                                <span className="text-slate-600">{Math.round(t.pctComplete * 100)}%</span>
-                              )}
-                            </td>
-                            <td className="py-2 px-3 min-w-[90px]">
-                              {editable ? (
-                                <InlineNumber
-                                  value={t.actualHours}
-                                  step={0.5}
-                                  onSave={(v) => updateTaskProgress(t.id, projectId, { actualHours: t.sprintEntryHours + (v ?? 0) })}
-                                />
-                              ) : (
-                                <span className="text-slate-600">{t.actualHours}</span>
-                              )}
-                            </td>
-                            <td className="py-2 px-3">
-                              <div className="flex items-center gap-2">
-                                <PersonAvatar name={t.personName} />
+                              </td>
+                              <td className="py-2 px-3 min-w-[80px]">
                                 {editable ? (
-                                  <AssigneeSelect taskId={t.id} projectId={projectId} value={t.personId ?? ""} roster={roster} />
+                                  <InlineNumber value={t.storyPoints} step={0.125} onSave={(v) => updateWbsTask(t.id, projectId, { storyPoints: v ?? 0 })} />
                                 ) : (
-                                  <span className="text-slate-600">{t.personName ?? "—"}</span>
+                                  <span className="text-slate-500">{t.storyPoints}</span>
                                 )}
+                              </td>
+                              <td className="py-2 px-3 min-w-[100px]">
+                                {editable ? (
+                                  <InlinePercent value={t.pctComplete} onSave={(v) => updateTaskProgress(t.id, projectId, { pctComplete: v })} />
+                                ) : (
+                                  <span className="text-slate-600">{Math.round(t.pctComplete * 100)}%</span>
+                                )}
+                              </td>
+                              <td className="py-2 px-3 min-w-[90px]">
+                                {editable ? (
+                                  <InlineNumber
+                                    value={t.actualHours}
+                                    step={0.5}
+                                    onSave={(v) => updateTaskProgress(t.id, projectId, { actualHours: t.sprintEntryHours + (v ?? 0) })}
+                                  />
+                                ) : (
+                                  <span className="text-slate-600">{t.actualHours}</span>
+                                )}
+                              </td>
+                              <td className="py-2 px-3">
+                                <div className="flex items-center gap-2">
+                                  <PersonAvatar name={t.personName} />
+                                  {editable ? (
+                                    <AssigneeSelect taskId={t.id} projectId={projectId} value={t.personId ?? ""} roster={roster} />
+                                  ) : (
+                                    <span className="text-slate-600">{t.personName ?? "—"}</span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="py-2 px-3">
+                                <StatusPill pctComplete={t.pctComplete} />
+                              </td>
+                              {editable && (
+                                <td className="py-2 px-3">
+                                  <RowActionsMenu
+                                    actions={[
+                                      {
+                                        label: "Remove from sprint",
+                                        pendingLabel: "Removing...",
+                                        danger: true,
+                                        onClick: () => assignTaskToSprint(t.id, null, projectId),
+                                      },
+                                    ]}
+                                  />
+                                </td>
+                              )}
+                            </tr>
+                          ))}
+                      {!closed &&
+                        visibleDepartedTasks.map((t) => (
+                          <tr key={`departed-${t.taskId}`} className="border-t border-slate-100 bg-slate-50/50 text-slate-400" title="Moved to another sprint (or back to the backlog) while this sprint was open — still counted in its totals">
+                            <td className="py-2 px-3">{t.wbsNumber || "—"}</td>
+                            <td className="py-2 px-3">
+                              <div className="flex items-center gap-1.5">
+                                <span className="truncate">{t.title}</span>
+                                <span className="inline-flex shrink-0 items-center rounded-full bg-slate-200 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-500">
+                                  Moved
+                                </span>
                               </div>
                             </td>
+                            <td className="py-2 px-3">{t.storyPoints}</td>
+                            <td className="py-2 px-3">{Math.round(t.pctComplete * 100)}%</td>
+                            <td className="py-2 px-3">{t.sprintOwnHours}</td>
+                            <td className="py-2 px-3">—</td>
                             <td className="py-2 px-3">
                               <StatusPill pctComplete={t.pctComplete} />
                             </td>
-                            {editable && (
-                              <td className="py-2 px-3">
-                                <RowActionsMenu
-                                  actions={[
-                                    {
-                                      label: "Remove from sprint",
-                                      pendingLabel: "Removing...",
-                                      danger: true,
-                                      onClick: () => assignTaskToSprint(t.id, null, projectId),
-                                    },
-                                  ]}
-                                />
-                              </td>
-                            )}
+                            {editable && <td className="py-2 px-3" />}
                           </tr>
                         ))}
-                    {!closed &&
-                      sprint.departedTasks.map((t) => (
-                        <tr key={`departed-${t.taskId}`} className="border-t border-slate-100 bg-slate-50/50 text-slate-400" title="Moved to another sprint (or back to the backlog) while this sprint was open — still counted in its totals">
-                          <td className="py-2 px-3">{t.wbsNumber || "—"}</td>
-                          <td className="py-2 px-3">
-                            <div className="flex items-center gap-1.5">
-                              <span className="truncate">{t.title}</span>
-                              <span className="inline-flex shrink-0 items-center rounded-full bg-slate-200 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-500">
-                                Moved
-                              </span>
-                            </div>
+                      {(closed ? sprint.frozenTasks.length : sprint.tasks.length + sprint.departedTasks.length) === 0 && (
+                        <tr>
+                          <td colSpan={taskColCount} className="py-3 px-3 text-slate-400">
+                            No tasks committed to this sprint {closed ? "when it closed" : "yet — add one below"}.
                           </td>
-                          <td className="py-2 px-3">{t.storyPoints}</td>
-                          <td className="py-2 px-3">{Math.round(t.pctComplete * 100)}%</td>
-                          <td className="py-2 px-3">{t.sprintOwnHours}</td>
-                          <td className="py-2 px-3">—</td>
-                          <td className="py-2 px-3">
-                            <StatusPill pctComplete={t.pctComplete} />
-                          </td>
-                          {editable && <td className="py-2 px-3" />}
                         </tr>
-                      ))}
-                    {(closed ? sprint.frozenTasks.length : sprint.tasks.length + sprint.departedTasks.length) === 0 && (
-                      <tr>
-                        <td colSpan={taskColCount} className="py-3 px-3 text-slate-400">
-                          No tasks committed to this sprint {closed ? "when it closed" : "yet — add one below"}.
+                      )}
+                      {filtersActive &&
+                        (closed ? sprint.frozenTasks.length : sprint.tasks.length + sprint.departedTasks.length) > 0 &&
+                        visibleFrozenTasks.length + visibleTasks.length + visibleDepartedTasks.length === 0 && (
+                          <tr>
+                            <td colSpan={taskColCount} className="py-3 px-3 text-slate-400">
+                              No tasks match these filters.{" "}
+                              <button onClick={clearFilters} className="font-medium text-indigo-600 hover:text-indigo-700">
+                                Clear filters
+                              </button>
+                            </td>
+                          </tr>
+                        )}
+                      <tr className="border-t border-slate-200 font-medium text-slate-700">
+                        <td className="py-2 px-3" colSpan={taskColCount - 1}>
+                          Grand Total (Earned Value)
                         </td>
+                        <td className="py-2 px-3">{sprint.ev.toFixed(1)}</td>
                       </tr>
-                    )}
-                    <tr className="border-t border-slate-200 font-medium text-slate-700">
-                      <td className="py-2 px-3" colSpan={taskColCount - 1}>
-                        Grand Total (Earned Value)
-                      </td>
-                      <td className="py-2 px-3">{sprint.ev.toFixed(1)}</td>
-                    </tr>
-                  </tbody>
-                </table>
+                    </tbody>
+                  </table>
+                </div>
               </div>
               {editable && (
                 <div className="mt-3">
