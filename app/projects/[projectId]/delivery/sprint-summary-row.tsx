@@ -13,6 +13,7 @@ import { RowActionsMenu } from "@/components/ui/row-actions-menu";
 import { IconTarget, IconCheckCircle, IconClock, IconChart, IconUsers, IconClipboardList, IconSort } from "@/components/layout/icons";
 import { computeDuplicateRefs, DuplicateBadge } from "./duplicate-badge";
 import {
+  startSprint,
   closeSprint,
   closeSprintWithMoves,
   reopenSprint,
@@ -169,6 +170,7 @@ export type SprintSummaryData = {
   startDate: Date;
   endDate: Date;
   closedAt: Date | null;
+  startedAt: Date | null;
   pv: number;
   ev: number;
   av: number;
@@ -390,6 +392,8 @@ export function SprintSummaryRow({
   const duplicateWbsByTaskId = useMemo(() => computeDuplicateRefs(allProjectTasks), [allProjectTasks]);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [startPending, startStartTransition] = useTransition();
+  const [startError, setStartError] = useState<string | null>(null);
   const [deletePending, startDeleteTransition] = useTransition();
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [reopenPending, startReopenTransition] = useTransition();
@@ -454,6 +458,8 @@ export function SprintSummaryRow({
   const cpi = competencyCpi(sprint.ev, sprint.av);
   const spi = sprint.pv ? sprint.ev / sprint.pv : null;
   const closed = !!sprint.closedAt;
+  const started = !!sprint.startedAt;
+  const draft = !closed && !started;
   const editable = canWrite && !closed;
   const taskColCount = closed ? 5 : editable ? 8 : 7;
   // Only live, still-committed tasks need a decision — a task that's
@@ -477,6 +483,18 @@ export function SprintSummaryRow({
     sprint.departedTasks.filter((t) => matchesFilters(t.pctComplete, t.sprintOwnHours)),
     (t) => t.sprintOwnHours
   );
+
+  function handleStartSprint() {
+    startStartTransition(async () => {
+      setStartError(null);
+      if (!window.confirm(`Start "${sprint.name}"? PV/EV/AV tracking begins now.`)) return;
+      try {
+        await startSprint(sprint.id, projectId);
+      } catch (err) {
+        setStartError(err instanceof Error ? err.message : "Failed to start sprint.");
+      }
+    });
+  }
 
   function startClose() {
     if (incompleteTasks.length === 0) {
@@ -523,13 +541,15 @@ export function SprintSummaryRow({
         className="w-full flex flex-wrap items-center justify-between gap-2 px-4 py-3.5 cursor-pointer hover:bg-slate-50/60"
       >
         <div className="flex items-center gap-3">
-          <span className={`h-2 w-2 rounded-full ${closed ? "bg-slate-400" : "bg-emerald-500"}`} />
+          <span className={`h-2 w-2 rounded-full ${closed ? "bg-slate-400" : draft ? "bg-amber-400" : "bg-emerald-500"}`} />
           <span className="text-sm font-semibold text-slate-800">{sprint.name}</span>
           <span className="text-xs text-slate-400">
             {formatDate(sprint.startDate)} – {formatDate(sprint.endDate)}
           </span>
           {closed ? (
             <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">Closed</span>
+          ) : draft ? (
+            <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-medium text-slate-600">Draft</span>
           ) : (
             <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">Open</span>
           )}
@@ -553,10 +573,12 @@ export function SprintSummaryRow({
             <div className="flex items-start justify-between gap-4 mb-5">
               <div>
                 <div className="flex items-center gap-2.5">
-                  <span className={`h-2.5 w-2.5 rounded-full ${closed ? "bg-slate-400" : "bg-emerald-500"}`} />
+                  <span className={`h-2.5 w-2.5 rounded-full ${closed ? "bg-slate-400" : draft ? "bg-amber-400" : "bg-emerald-500"}`} />
                   <h3 className="text-xl font-bold text-slate-900">{sprint.name}</h3>
                   {closed ? (
                     <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">Closed</span>
+                  ) : draft ? (
+                    <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-medium text-slate-600">Draft</span>
                   ) : (
                     <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">Open</span>
                   )}
@@ -919,7 +941,8 @@ export function SprintSummaryRow({
                 </div>
                 {deleteError && <p className="mt-1.5 text-xs text-red-600">{deleteError}</p>}
 
-                {triageOpen ? (
+                {started ? (
+                  triageOpen ? (
                   <div className="mt-4 pt-4 border-t border-slate-200">
                     <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3.5 space-y-3">
                       <div>
@@ -980,16 +1003,28 @@ export function SprintSummaryRow({
                       </div>
                     </div>
                   </div>
+                  ) : (
+                    <div className="mt-4 pt-4 border-t border-slate-200 flex items-center gap-2">
+                      <button
+                        onClick={startClose}
+                        disabled={pending}
+                        className="rounded-md border border-slate-300 text-slate-700 text-sm font-medium px-4 py-2 hover:bg-slate-50 disabled:opacity-50"
+                      >
+                        {pending ? "Closing..." : "Close Sprint"}
+                      </button>
+                      {error && <span className="text-xs text-red-600">{error}</span>}
+                    </div>
+                  )
                 ) : (
                   <div className="mt-4 pt-4 border-t border-slate-200 flex items-center gap-2">
                     <button
-                      onClick={startClose}
-                      disabled={pending}
+                      onClick={handleStartSprint}
+                      disabled={startPending}
                       className="rounded-md border border-slate-300 text-slate-700 text-sm font-medium px-4 py-2 hover:bg-slate-50 disabled:opacity-50"
                     >
-                      {pending ? "Closing..." : "Close Sprint"}
+                      {startPending ? "Starting..." : "Start Sprint"}
                     </button>
-                    {error && <span className="text-xs text-red-600">{error}</span>}
+                    {startError && <span className="text-xs text-red-600">{startError}</span>}
                   </div>
                 )}
               </div>

@@ -34,7 +34,9 @@ export async function GET(_req: NextRequest, { params }: { params: { projectId: 
     const liveEntries = s.tasks.map(liveSprintContribution);
     const { plannedValue: pv, earnedValue: ev, actualValue: av } = s.closedAt
       ? { plannedValue: s.frozenPlannedPoints ?? 0, earnedValue: s.frozenEarnedPoints ?? 0, actualValue: s.frozenActualValue ?? 0 }
-      : sprintTotalsFromContributions([...liveEntries, ...departedEntries]);
+      : !s.startedAt
+        ? { plannedValue: 0, earnedValue: 0, actualValue: 0 }
+        : sprintTotalsFromContributions([...liveEntries, ...departedEntries]);
     const spi = pv ? ev / pv : null;
     const cpi = competencyCpi(ev, av);
 
@@ -42,7 +44,7 @@ export async function GET(_req: NextRequest, { params }: { params: { projectId: 
       Sprint: s.name,
       "Start Date": formatDate(s.startDate),
       "End Date": formatDate(s.endDate),
-      Status: s.closedAt ? "Closed" : "Open",
+      Status: s.closedAt ? "Closed" : s.startedAt ? "Open" : "Draft",
       PV: Number(pv.toFixed(2)),
       EV: Number(ev.toFixed(2)),
       AV: Number(av.toFixed(2)),

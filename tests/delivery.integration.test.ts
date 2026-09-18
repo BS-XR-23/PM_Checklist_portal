@@ -139,7 +139,7 @@ describe("Delivery isolation boundary", () => {
   });
 
   it("updateTaskProgress is rejected before the task is committed to a sprint, and once its sprint is closed", async () => {
-    const { createWbsTask, createSprint, assignTaskToSprint, closeSprint, updateTaskProgress } = await import(
+    const { createWbsTask, createSprint, startSprint, assignTaskToSprint, closeSprint, updateTaskProgress } = await import(
       "@/app/projects/[projectId]/delivery/delivery-actions"
     );
 
@@ -151,6 +151,7 @@ describe("Delivery isolation boundary", () => {
 
     await createSprint(projectA.id, "[TEST] Sprint 1c", "2026-01-01", "2026-01-14");
     const sprint = await prisma.sprint.findFirstOrThrow({ where: { projectId: projectA.id }, orderBy: { createdAt: "desc" } });
+    await startSprint(sprint.id, projectA.id);
     await assignTaskToSprint(task.id, sprint.id, projectA.id);
     await closeSprint(sprint.id, projectA.id);
 
@@ -161,7 +162,7 @@ describe("Delivery isolation boundary", () => {
   });
 
   it("deleteWbsTask is rejected while the task is committed to any sprint, open or closed — it must be uncommitted first", async () => {
-    const { createWbsTask, createSprint, assignTaskToSprint, closeSprint, deleteWbsTask } = await import(
+    const { createWbsTask, createSprint, startSprint, assignTaskToSprint, closeSprint, deleteWbsTask } = await import(
       "@/app/projects/[projectId]/delivery/delivery-actions"
     );
 
@@ -170,6 +171,7 @@ describe("Delivery isolation boundary", () => {
     const task = await prisma.wbsTask.findFirstOrThrow({ where: { projectId: projectA.id }, orderBy: { createdAt: "desc" } });
     await createSprint(projectA.id, "[TEST] Sprint 1d", "2026-01-01", "2026-01-14");
     const sprint = await prisma.sprint.findFirstOrThrow({ where: { projectId: projectA.id }, orderBy: { createdAt: "desc" } });
+    await startSprint(sprint.id, projectA.id);
     await assignTaskToSprint(task.id, sprint.id, projectA.id);
     await closeSprint(sprint.id, projectA.id);
 
@@ -312,13 +314,14 @@ describe("Delivery isolation boundary", () => {
   });
 
   it("updateSprint/deleteSprint: a closed sprint is locked for everyone, even Admin, until an Admin explicitly reopens it", async () => {
-    const { createSprint, updateSprint, closeSprint, deleteSprint, reopenSprint } = await import(
+    const { createSprint, startSprint, updateSprint, closeSprint, deleteSprint, reopenSprint } = await import(
       "@/app/projects/[projectId]/delivery/delivery-actions"
     );
 
     actAs(pmAUserId);
     await createSprint(projectA.id, "[TEST] Sprint 2b", "2026-02-01", "2026-02-14");
     const sprint = await prisma.sprint.findFirstOrThrow({ where: { projectId: projectA.id }, orderBy: { createdAt: "desc" } });
+    await startSprint(sprint.id, projectA.id);
     await closeSprint(sprint.id, projectA.id);
 
     await expect(updateSprint(sprint.id, projectA.id, { name: "should fail" })).rejects.toThrow(/closed/);
@@ -379,11 +382,14 @@ describe("Delivery isolation boundary", () => {
   });
 
   it("assignTaskToSprint rejects committing a task into an already-closed sprint", async () => {
-    const { createSprint, closeSprint, createWbsTask, assignTaskToSprint } = await import("@/app/projects/[projectId]/delivery/delivery-actions");
+    const { createSprint, startSprint, closeSprint, createWbsTask, assignTaskToSprint } = await import(
+      "@/app/projects/[projectId]/delivery/delivery-actions"
+    );
 
     actAs(pmAUserId);
     await createSprint(projectA.id, "[TEST] Sprint 4", "2026-04-01", "2026-04-14");
     const sprint = await prisma.sprint.findFirstOrThrow({ where: { projectId: projectA.id }, orderBy: { createdAt: "desc" } });
+    await startSprint(sprint.id, projectA.id);
     await closeSprint(sprint.id, projectA.id);
 
     await createWbsTask(projectA.id);
@@ -396,13 +402,14 @@ describe("Delivery isolation boundary", () => {
   });
 
   it("assignTaskToSprint rejects removing a task from an already-closed sprint for anyone, even Admin, until the sprint is reopened", async () => {
-    const { createSprint, createWbsTask, assignTaskToSprint, closeSprint, reopenSprint } = await import(
+    const { createSprint, startSprint, createWbsTask, assignTaskToSprint, closeSprint, reopenSprint } = await import(
       "@/app/projects/[projectId]/delivery/delivery-actions"
     );
 
     actAs(pmAUserId);
     await createSprint(projectA.id, "[TEST] Sprint 4b", "2026-04-01", "2026-04-14");
     const sprint = await prisma.sprint.findFirstOrThrow({ where: { projectId: projectA.id }, orderBy: { createdAt: "desc" } });
+    await startSprint(sprint.id, projectA.id);
     await createWbsTask(projectA.id);
     const task = await prisma.wbsTask.findFirstOrThrow({ where: { projectId: projectA.id }, orderBy: { createdAt: "desc" } });
     await assignTaskToSprint(task.id, sprint.id, projectA.id);
@@ -457,15 +464,17 @@ describe("Delivery isolation boundary", () => {
   });
 
   it("assignTaskToSprint: moving a task out of an open sprint snapshots its contribution into departedTaskSnapshot instead of silently losing it", async () => {
-    const { createSprint, createWbsTask, updateWbsTask, assignTaskToSprint, updateTaskProgress } = await import(
+    const { createSprint, startSprint, createWbsTask, updateWbsTask, assignTaskToSprint, updateTaskProgress } = await import(
       "@/app/projects/[projectId]/delivery/delivery-actions"
     );
 
     actAs(pmAUserId);
     await createSprint(projectA.id, "[TEST] Sprint 7a", "2026-09-01", "2026-09-14");
     const sprint1 = await prisma.sprint.findFirstOrThrow({ where: { name: "[TEST] Sprint 7a" } });
+    await startSprint(sprint1.id, projectA.id);
     await createSprint(projectA.id, "[TEST] Sprint 7b", "2026-09-15", "2026-09-28");
     const sprint2 = await prisma.sprint.findFirstOrThrow({ where: { name: "[TEST] Sprint 7b" } });
+    await startSprint(sprint2.id, projectA.id);
 
     await createWbsTask(projectA.id);
     const task = await prisma.wbsTask.findFirstOrThrow({ where: { projectId: projectA.id }, orderBy: { createdAt: "desc" } });
@@ -501,15 +510,17 @@ describe("Delivery isolation boundary", () => {
   });
 
   it("closeSprint's frozen PV/EV/AV include a task that departed this sprint mid-flight, not just its still-live tasks", async () => {
-    const { createSprint, createWbsTask, updateWbsTask, assignTaskToSprint, updateTaskProgress, closeSprint } = await import(
+    const { createSprint, startSprint, createWbsTask, updateWbsTask, assignTaskToSprint, updateTaskProgress, closeSprint } = await import(
       "@/app/projects/[projectId]/delivery/delivery-actions"
     );
 
     actAs(pmAUserId);
     await createSprint(projectA.id, "[TEST] Sprint 8a", "2026-10-01", "2026-10-14");
     const sprint1 = await prisma.sprint.findFirstOrThrow({ where: { name: "[TEST] Sprint 8a" } });
+    await startSprint(sprint1.id, projectA.id);
     await createSprint(projectA.id, "[TEST] Sprint 8b", "2026-10-15", "2026-10-28");
     const sprint2 = await prisma.sprint.findFirstOrThrow({ where: { name: "[TEST] Sprint 8b" } });
+    await startSprint(sprint2.id, projectA.id);
 
     await createWbsTask(projectA.id);
     const departedTask = await prisma.wbsTask.findFirstOrThrow({ where: { projectId: projectA.id }, orderBy: { createdAt: "desc" } });
@@ -559,13 +570,14 @@ describe("Delivery isolation boundary", () => {
   });
 
   it("closeSprint freezes PV/EV/AV via the 0/100 rule, plus a task snapshot, matching hand-computed numbers", async () => {
-    const { createSprint, createWbsTask, updateWbsTask, assignTaskToSprint, updateTaskProgress, closeSprint } = await import(
+    const { createSprint, startSprint, createWbsTask, updateWbsTask, assignTaskToSprint, updateTaskProgress, closeSprint } = await import(
       "@/app/projects/[projectId]/delivery/delivery-actions"
     );
 
     actAs(pmAUserId);
     await createSprint(projectA.id, "[TEST] Sprint 5", "2026-07-01", "2026-07-14");
     const sprint = await prisma.sprint.findFirstOrThrow({ where: { projectId: projectA.id }, orderBy: { createdAt: "desc" } });
+    await startSprint(sprint.id, projectA.id);
 
     await createWbsTask(projectA.id);
     const taskDone = await prisma.wbsTask.findFirstOrThrow({ where: { projectId: projectA.id }, orderBy: { createdAt: "desc" } });
@@ -640,11 +652,12 @@ describe("Delivery isolation boundary", () => {
   });
 
   it("SprintAllocation mutations are rejected once the sprint is closed", async () => {
-    const { createSprint, closeSprint, addSprintAllocation } = await import("@/app/projects/[projectId]/delivery/delivery-actions");
+    const { createSprint, startSprint, closeSprint, addSprintAllocation } = await import("@/app/projects/[projectId]/delivery/delivery-actions");
 
     actAs(pmAUserId);
     await createSprint(projectA.id, "[TEST] Sprint 7", "2026-09-01", "2026-09-14");
     const sprint = await prisma.sprint.findFirstOrThrow({ where: { projectId: projectA.id }, orderBy: { createdAt: "desc" } });
+    await startSprint(sprint.id, projectA.id);
     await closeSprint(sprint.id, projectA.id);
 
     await expect(addSprintAllocation(sprint.id, engagedPerson.id, projectA.id)).rejects.toThrow(/closed/);

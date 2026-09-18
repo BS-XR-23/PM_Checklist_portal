@@ -78,7 +78,9 @@ export default async function DeliverySprintsPage({ params }: { params: { projec
     const liveEntries = s.tasks.map(liveSprintContribution);
     const { plannedValue: pv, earnedValue: ev, actualValue: av } = s.closedAt
       ? { plannedValue: s.frozenPlannedPoints ?? 0, earnedValue: s.frozenEarnedPoints ?? 0, actualValue: s.frozenActualValue ?? 0 }
-      : sprintTotalsFromContributions([...liveEntries, ...departedEntries]);
+      : !s.startedAt
+        ? { plannedValue: 0, earnedValue: 0, actualValue: 0 }
+        : sprintTotalsFromContributions([...liveEntries, ...departedEntries]);
 
     // Same natural WBS# sort as the Tasks tab, not commit order — a PM
     // scanning a sprint's drill-down expects it grouped the same way.
@@ -105,9 +107,8 @@ export default async function DeliverySprintsPage({ params }: { params: { projec
     // accounts for them, not just its live total. Closed sprints don't
     // need this separately: their departures are already folded into
     // frozenTaskSnapshot at close time.
-    const departedTasks = s.closedAt
-      ? []
-      : [...departedEntries].sort((a, b) => compareWbsNumbers(a.wbsNumber, b.wbsNumber));
+    const departedTasks =
+      s.closedAt || !s.startedAt ? [] : [...departedEntries].sort((a, b) => compareWbsNumbers(a.wbsNumber, b.wbsNumber));
 
     const frozenTasks = Array.isArray(s.frozenTaskSnapshot)
       ? [...(s.frozenTaskSnapshot as unknown as FrozenTaskSnapshotEntry[])].sort((a, b) => compareWbsNumbers(a.wbsNumber, b.wbsNumber))
@@ -128,6 +129,7 @@ export default async function DeliverySprintsPage({ params }: { params: { projec
       startDate: s.startDate,
       endDate: s.endDate,
       closedAt: s.closedAt,
+      startedAt: s.startedAt,
       pv,
       ev,
       av,
@@ -172,13 +174,19 @@ export default async function DeliverySprintsPage({ params }: { params: { projec
         ]}
       />
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
         <StatTile icon={<IconLayers />} iconWrapClass="bg-violet-50 text-violet-600" label="Total Sprints" value={String(sprints.length)} />
+        <StatTile
+          icon={<IconClock />}
+          iconWrapClass="bg-slate-50 text-slate-600"
+          label="Draft Sprints"
+          value={String(sprints.filter((s) => !s.startedAt && !s.closedAt).length)}
+        />
         <StatTile
           icon={<IconClock />}
           iconWrapClass="bg-blue-50 text-blue-600"
           label="Open Sprints"
-          value={String(sprints.filter((s) => !s.closedAt).length)}
+          value={String(sprints.filter((s) => !!s.startedAt && !s.closedAt).length)}
         />
         <StatTile
           icon={<IconCheckCircle />}

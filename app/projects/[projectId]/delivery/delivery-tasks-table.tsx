@@ -24,7 +24,7 @@ export type WbsTaskData = {
   sprintId: string | null;
 };
 export type RosterPerson = { personId: string; personName: string; competencyLevel: string | null };
-export type SprintOption = { id: string; name: string; closedAt: Date | null };
+export type SprintOption = { id: string; name: string; closedAt: Date | null; startedAt: Date | null };
 
 const PAGE_SIZES = [10, 25, 50] as const;
 type SortKey = "wbsNumber" | "storyPoints" | "done" | "remaining";
@@ -129,7 +129,7 @@ function SprintSelect({ taskId, projectId, value, sprints }: { taskId: string; p
         {sprints.map((s) => (
           <option key={s.id} value={s.id} disabled={!!s.closedAt}>
             {s.name}
-            {s.closedAt ? " (closed)" : ""}
+            {s.closedAt ? " (closed)" : !s.startedAt ? " (draft)" : ""}
           </option>
         ))}
       </select>

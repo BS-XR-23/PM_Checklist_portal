@@ -45,7 +45,7 @@ export default async function DeliveryTasksPage({ params }: { params: { projectI
     competencyLevel: e.person.competency?.level ?? null,
   }));
 
-  const sprintOptions = sprints.map((s) => ({ id: s.id, name: s.name, closedAt: s.closedAt }));
+  const sprintOptions = sprints.map((s) => ({ id: s.id, name: s.name, closedAt: s.closedAt, startedAt: s.startedAt }));
 
   // One query for every task's history, grouped client-side by entityId —
   // avoids an on-demand fetch per row click, and keeps the read on the

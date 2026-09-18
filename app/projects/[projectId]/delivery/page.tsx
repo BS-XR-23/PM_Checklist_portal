@@ -80,7 +80,9 @@ export default async function DeliveryOverviewPage({ params }: { params: { proje
     const live = s.tasks.map(liveSprintContribution);
     const { plannedValue, earnedValue, actualValue } = s.closedAt
       ? { plannedValue: s.frozenPlannedPoints ?? 0, earnedValue: s.frozenEarnedPoints ?? 0, actualValue: s.frozenActualValue ?? 0 }
-      : sprintTotalsFromContributions([...live, ...departed]);
+      : !s.startedAt
+        ? { plannedValue: 0, earnedValue: 0, actualValue: 0 }
+        : sprintTotalsFromContributions([...live, ...departed]);
     totalPv += plannedValue;
     totalEv += earnedValue;
     totalAv += actualValue;
@@ -90,14 +92,20 @@ export default async function DeliveryOverviewPage({ params }: { params: { proje
   const scheduleVariancePts = totalEv - totalPv;
   const health = deliveryHealth(spi, cpi);
 
-  const currentSprint = sprints.find((s) => !s.closedAt) ?? [...sprints].reverse()[0] ?? null;
+  const currentSprint =
+    sprints.find((s) => s.startedAt && !s.closedAt) ??
+    sprints.find((s) => !s.startedAt && !s.closedAt) ??
+    [...sprints].reverse()[0] ??
+    null;
   let currentSprintProgress: number | null = null;
   if (currentSprint) {
     const departed = parseSprintContributions(currentSprint.departedTaskSnapshot);
     const live = currentSprint.tasks.map(liveSprintContribution);
     const { plannedValue, earnedValue } = currentSprint.closedAt
       ? { plannedValue: currentSprint.frozenPlannedPoints ?? 0, earnedValue: currentSprint.frozenEarnedPoints ?? 0 }
-      : sprintTotalsFromContributions([...live, ...departed]);
+      : !currentSprint.startedAt
+        ? { plannedValue: 0, earnedValue: 0 }
+        : sprintTotalsFromContributions([...live, ...departed]);
     currentSprintProgress = plannedValue ? earnedValue / plannedValue : null;
   }
 
@@ -187,7 +195,15 @@ export default async function DeliveryOverviewPage({ params }: { params: { proje
             iconWrapClass="bg-violet-50 text-violet-600"
             label="Current Sprint"
             value={currentSprint?.name ?? "—"}
-            subtitle={currentSprint ? (currentSprint.closedAt ? "Closed" : "Open") : "No sprints yet"}
+            subtitle={
+              currentSprint
+                ? currentSprint.closedAt
+                  ? "Closed"
+                  : currentSprint.startedAt
+                    ? "Open"
+                    : "Draft"
+                : "No sprints yet"
+            }
           />
           <StatTile
             icon={<IconFolder />}

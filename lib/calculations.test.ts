@@ -37,6 +37,7 @@ function sprintForBudget(overrides: Partial<SprintForBudget> = {}): SprintForBud
   return {
     endDate: new Date("2026-01-14"),
     closedAt: null,
+    startedAt: new Date("2026-01-01"),
     frozenPlannedPoints: null,
     frozenEarnedPoints: null,
     frozenActualValue: null,
@@ -295,6 +296,19 @@ describe("budgetEntriesFromSprints", () => {
     const result = budgetEntriesFromSprints(sprints, 15);
     expect(result[0].pctPlannedComplete).toBeCloseTo(1); // (10+5) / 15
     expect(result[0].pctActualComplete).toBeCloseTo(10 / 15); // only the fully-done task earns
+  });
+
+  it("a Draft sprint (never started) reads PV/EV/actualCost as zero, even with tasks already committed to it", () => {
+    const sprints = [
+      sprintForBudget({
+        startedAt: null,
+        liveEntries: [contribution({ storyPoints: 10, pctComplete: 1, sprintOwnHours: 8 })],
+      }),
+    ];
+    const result = budgetEntriesFromSprints(sprints, 15);
+    expect(result[0].pctPlannedComplete).toBe(0);
+    expect(result[0].pctActualComplete).toBe(0);
+    expect(result[0].actualCost).toBe(0);
   });
 
   it("a closed sprint reads its frozen snapshot, ignoring the (possibly since-changed) live tasks", () => {

@@ -896,7 +896,13 @@ describe("isolation boundary", () => {
     const seniorPerson = await prisma.person.create({ data: { name: "[TEST] Senior for budget derivation", roleRateId: seniorRate.id } });
     await prisma.projectEngagement.create({ data: { personId: seniorPerson.id, projectId: projectA.id, roleOnProject: "Senior" } });
     const sprint = await prisma.sprint.create({
-      data: { projectId: projectA.id, name: "[TEST] Budget derivation sprint", startDate: new Date("2026-08-25"), endDate: new Date("2026-09-01") },
+      data: {
+        projectId: projectA.id,
+        name: "[TEST] Budget derivation sprint",
+        startDate: new Date("2026-08-25"),
+        endDate: new Date("2026-09-01"),
+        startedAt: new Date("2026-08-25"),
+      },
     });
     const task = await prisma.wbsTask.create({
       data: {

@@ -445,6 +445,7 @@ export async function closeSprint(id: string, _projectId: string) {
   const user = await requireModuleWrite(existing.projectId, "DELIVERY");
 
   if (existing.closedAt) throw new Error("This sprint is already closed.");
+  if (!existing.startedAt) throw new Error("Start this sprint before closing it.");
 
   const entries: SprintTaskContribution[] = [
     ...existing.tasks.map(liveSprintContribution),
@@ -481,6 +482,34 @@ export async function closeSprint(id: string, _projectId: string) {
     entityType: "Sprint",
     entityId: id,
     summary: `Closed sprint "${existing.name}" — PV ${plannedValue.toFixed(1)}, EV ${earnedValue.toFixed(1)}, AV ${actualValue.toFixed(1)}`,
+  });
+
+  revalidateDelivery(existing.projectId);
+}
+
+/**
+ * One-way: Draft → Open. Nothing is computed or frozen here (unlike
+ * closeSprint) — this just switches on live PV/EV/AV tracking and
+ * departure snapshotting (see detachFromCurrentSprint's startedAt guard
+ * above) from this point forward. Can't be undone by a PM; there's no
+ * "un-start" precedent (reopenSprint below only reverses Closed → Open).
+ */
+export async function startSprint(id: string, _projectId: string) {
+  const existing = await prisma.sprint.findUniqueOrThrow({ where: { id } });
+  const user = await requireModuleWrite(existing.projectId, "DELIVERY");
+
+  if (existing.closedAt) throw new Error("This sprint is already closed.");
+  if (existing.startedAt) throw new Error("This sprint has already been started.");
+
+  await prisma.sprint.update({ where: { id }, data: { startedAt: new Date() } });
+
+  await writeAudit({
+    actor: user,
+    projectId: existing.projectId,
+    action: "update",
+    entityType: "Sprint",
+    entityId: id,
+    summary: `Started sprint "${existing.name}"`,
   });
 
   revalidateDelivery(existing.projectId);
@@ -609,6 +638,10 @@ export async function assignTaskToSprint(taskId: string, sprintId: string | null
     if (currentSprint.closedAt) {
       throw new Error(`This task's sprint "${currentSprint.name}" is closed — ask an Admin to reopen it before removing tasks.`);
     }
+    // Still Draft (never started) — nothing has been planned-value
+    // committed yet, so a task leaving now needs no snapshot; it just
+    // disappears from the sprint's (currently all-zero) totals.
+    if (!currentSprint.startedAt) return;
     const departure = liveSprintContribution(task);
     const survivors = parseSprintContributions(currentSprint.departedTaskSnapshot).filter((d) => d.taskId !== taskId);
     await prisma.sprint.update({

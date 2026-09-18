@@ -100,7 +100,7 @@ async function main() {
   await prisma.project.update({ where: { id: demoProject.id }, data: { plannedStoryPoints: taskStoryPoints.reduce((a, b) => a + b, 0) } });
 
   const sprint = await prisma.sprint.create({
-    data: { projectId: demoProject.id, name: "[DEMO] Sprint 1", startDate: daysAgo(21), endDate: daysAgo(7) },
+    data: { projectId: demoProject.id, name: "[DEMO] Sprint 1", startDate: daysAgo(21), endDate: daysAgo(7), startedAt: daysAgo(21) },
   });
 
   // 1 story point ~ 1 actual man-day (8 hours) for this demo — actualHours

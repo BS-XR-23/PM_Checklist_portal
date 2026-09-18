@@ -258,6 +258,7 @@ export function roleBreakdownFromContributions(entries: SprintTaskContribution[]
 export type SprintForBudget = {
   endDate: Date;
   closedAt: Date | null;
+  startedAt: Date | null;
   frozenPlannedPoints: number | null;
   frozenEarnedPoints: number | null;
   frozenActualValue: number | null;
@@ -280,6 +281,7 @@ export function toSprintsForBudget(
   sprints: {
     endDate: Date;
     closedAt: Date | null;
+    startedAt: Date | null;
     frozenPlannedPoints: number | null;
     frozenEarnedPoints: number | null;
     frozenActualValue: number | null;
@@ -301,6 +303,7 @@ export function toSprintsForBudget(
   return sprints.map((s) => ({
     endDate: s.endDate,
     closedAt: s.closedAt,
+    startedAt: s.startedAt,
     frozenPlannedPoints: s.frozenPlannedPoints,
     frozenEarnedPoints: s.frozenEarnedPoints,
     frozenActualValue: s.frozenActualValue,
@@ -333,7 +336,7 @@ export function budgetEntriesFromSprints(
   let cumulativeEarned = 0;
 
   return sprints.map((s) => {
-    const entries = s.closedAt ? s.frozenEntries : [...s.liveEntries, ...s.departedEntries];
+    const entries = s.closedAt ? s.frozenEntries : !s.startedAt ? [] : [...s.liveEntries, ...s.departedEntries];
     const totals = sprintTotalsFromContributions(entries);
 
     const pv = s.closedAt ? s.frozenPlannedPoints ?? 0 : totals.plannedValue;

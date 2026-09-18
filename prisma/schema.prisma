@@ -466,16 +466,23 @@ model WbsTask {
 // rule (a committed task earns its full storyPoints once its latest
 // tracked % reaches 100%, else 0).
 //
-// closedAt is the whole point: while null, PV/EV/AV are computed live from
-// current WbsTask state (see sprintEarnedValue in calculations.ts). Once
-// closeSprint() sets it, the frozen* fields (including frozenTaskSnapshot,
-// the drill-down list at close time) are a permanent record the UI reads
-// directly instead of recomputing — so a task carrying over into a later
-// sprint, or being edited afterward, can never silently rewrite this
-// sprint's already-reported numbers or which tasks earned them. A closed
-// sprint can only be reopened by an Admin (reopenSprint in
-// delivery-actions.ts); while closed, a task can't be committed into or
-// removed from it.
+// Three lifecycle states: Draft (startedAt null, closedAt null) — tasks can
+// be freely committed/removed for planning, PV/EV/AV read as 0, and a
+// removal leaves no trace (see detachFromCurrentSprint's startedAt guard in
+// delivery-actions.ts) since nothing has been planned-value committed yet.
+// Open/Active (startedAt set, closedAt null) — startSprint() sets startedAt
+// once and it never resets; from here PV/EV/AV are computed live from
+// current WbsTask state (see sprintEarnedValue in calculations.ts) and a
+// task leaving the sprint is snapshotted into departedTaskSnapshot so it
+// isn't silently dropped from the totals it already earned. Closed
+// (closedAt set) — closeSprint() (which requires startedAt already set)
+// freezes the frozen* fields (including frozenTaskSnapshot, the drill-down
+// list at close time) as a permanent record the UI reads directly instead
+// of recomputing — so a task carrying over into a later sprint, or being
+// edited afterward, can never silently rewrite this sprint's already-
+// reported numbers or which tasks earned them. A closed sprint can only be
+// reopened by an Admin (reopenSprint in delivery-actions.ts); while closed,
+// a task can't be committed into or removed from it.
 model Sprint {
   id        String   @id @default(cuid())
   projectId String
@@ -485,6 +492,7 @@ model Sprint {
   endDate   DateTime
   createdAt DateTime @default(now())
 
+  startedAt           DateTime?
   closedAt            DateTime?
   frozenPlannedPoints Float?
   frozenEarnedPoints  Float?

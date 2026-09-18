@@ -45,7 +45,9 @@ export default async function BudgetTrackerPage({ params }: { params: { projectI
   const roleBreakdowns: RoleBreakdownRow[][] = sprints.map((s) => {
     const entries = s.closedAt
       ? parseSprintContributions(s.frozenTaskSnapshot)
-      : [...s.tasks.map(liveSprintContribution), ...parseSprintContributions(s.departedTaskSnapshot)];
+      : !s.startedAt
+        ? []
+        : [...s.tasks.map(liveSprintContribution), ...parseSprintContributions(s.departedTaskSnapshot)];
     return roleBreakdownFromContributions(entries);
   });
 
