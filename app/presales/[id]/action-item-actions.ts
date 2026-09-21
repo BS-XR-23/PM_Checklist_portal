@@ -17,6 +17,12 @@ function revalidateActionItems(presalesProjectId: string) {
   revalidatePath(`/presales/${presalesProjectId}`);
 }
 
+// Bumps the parent's updatedAt so it doubles as a "last activity" signal —
+// used by the board's Stale badge and the Reminders system.
+function touchPresalesProject(presalesProjectId: string) {
+  return prisma.presalesProject.update({ where: { id: presalesProjectId }, data: { updatedAt: new Date() } });
+}
+
 export async function createPresalesActionItem(presalesProjectId: string) {
   const user = await requirePresalesWrite();
 
@@ -24,6 +30,7 @@ export async function createPresalesActionItem(presalesProjectId: string) {
   const created = await prisma.presalesActionItem.create({
     data: { presalesProjectId, description: "New action item", order: count },
   });
+  await touchPresalesProject(presalesProjectId);
 
   await writeAudit({
     actor: user,
@@ -60,6 +67,7 @@ export async function updatePresalesActionItem(
       ...(data.notes !== undefined ? { notes: data.notes || null } : {}),
     },
   });
+  await touchPresalesProject(existing.presalesProjectId);
 
   await writeAudit({
     actor: user,
@@ -78,6 +86,7 @@ export async function deletePresalesActionItem(id: string, _presalesProjectId: s
   const user = await requirePresalesWrite();
 
   await prisma.presalesActionItem.delete({ where: { id } });
+  await touchPresalesProject(existing.presalesProjectId);
 
   await writeAudit({
     actor: user,

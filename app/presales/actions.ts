@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { parseDateInput } from "@/lib/format";
 import { requireUser, writeAudit, type CurrentUser } from "@/lib/rbac";
 import { createProject } from "@/lib/create-project";
+import type { PresalesForecastCategory, PresalesStage, PresalesCurrency, PresalesSource } from "@prisma/client";
 
 // Presales isn't a module of a project — it's its own entity — so
 // authorization here is a plain role check, the same shape the top-level
@@ -33,9 +34,33 @@ export async function createPresalesProject(formData: FormData) {
   const estimatedValueRaw = formData.get("estimatedValue");
   const estimatedValue = estimatedValueRaw ? Number(estimatedValueRaw) : null;
   const expectedCloseDate = parseDateInput(String(formData.get("expectedCloseDate") ?? "") || null);
+  const pocDone = formData.get("pocDone") === "on";
+  const forecastCategoryRaw = String(formData.get("forecastCategory") ?? "");
+  const forecastCategory = forecastCategoryRaw ? (forecastCategoryRaw as PresalesForecastCategory) : null;
+  const practiceArea = String(formData.get("practiceArea") ?? "").trim() || null;
+  const industry = String(formData.get("industry") ?? "").trim() || null;
+  const technology = String(formData.get("technology") ?? "").trim() || null;
+  const estimatedValueCurrency: PresalesCurrency = String(formData.get("estimatedValueCurrency") ?? "") === "BDT" ? "BDT" : "USD";
+  const presaleFolderLink = String(formData.get("presaleFolderLink") ?? "").trim() || null;
+  const sourceRaw = String(formData.get("source") ?? "");
+  const source = sourceRaw ? (sourceRaw as PresalesSource) : null;
 
   const created = await prisma.presalesProject.create({
-    data: { name, client: client || null, estimatedValue, expectedCloseDate, createdById: user.id },
+    data: {
+      name,
+      client: client || null,
+      estimatedValue,
+      estimatedValueCurrency,
+      expectedCloseDate,
+      createdById: user.id,
+      pocDone,
+      forecastCategory,
+      practiceArea,
+      industry,
+      technology,
+      presaleFolderLink,
+      source,
+    },
   });
 
   // Seed the standard presales playbook (Admin-managed, app/admin/checklist-
@@ -68,6 +93,18 @@ export async function updatePresalesProject(
     description: string;
     estimatedValue: number | null;
     expectedCloseDate: string | null;
+    stage: PresalesStage;
+    dealOwnerPersonId: string | null;
+    pocDone: boolean;
+    forecastCategory: PresalesForecastCategory | null;
+    practiceArea: string;
+    industry: string;
+    technology: string;
+    estimatedValueCurrency: PresalesCurrency;
+    presaleFolderLink: string;
+    source: PresalesSource | null;
+    onHold: boolean;
+    holdReason: string;
   }>
 ) {
   const user = await requirePresalesWrite();
@@ -81,6 +118,18 @@ export async function updatePresalesProject(
       ...(data.description !== undefined ? { description: data.description || null } : {}),
       ...(data.estimatedValue !== undefined ? { estimatedValue: data.estimatedValue } : {}),
       ...(data.expectedCloseDate !== undefined ? { expectedCloseDate: parseDateInput(data.expectedCloseDate) } : {}),
+      ...(data.stage !== undefined ? { stage: data.stage } : {}),
+      ...(data.dealOwnerPersonId !== undefined ? { dealOwnerPersonId: data.dealOwnerPersonId } : {}),
+      ...(data.pocDone !== undefined ? { pocDone: data.pocDone } : {}),
+      ...(data.forecastCategory !== undefined ? { forecastCategory: data.forecastCategory } : {}),
+      ...(data.practiceArea !== undefined ? { practiceArea: data.practiceArea || null } : {}),
+      ...(data.industry !== undefined ? { industry: data.industry || null } : {}),
+      ...(data.technology !== undefined ? { technology: data.technology || null } : {}),
+      ...(data.estimatedValueCurrency !== undefined ? { estimatedValueCurrency: data.estimatedValueCurrency } : {}),
+      ...(data.presaleFolderLink !== undefined ? { presaleFolderLink: data.presaleFolderLink || null } : {}),
+      ...(data.source !== undefined ? { source: data.source } : {}),
+      ...(data.onHold !== undefined ? { onHold: data.onHold } : {}),
+      ...(data.holdReason !== undefined ? { holdReason: data.holdReason || null } : {}),
     },
   });
 

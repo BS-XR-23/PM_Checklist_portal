@@ -1,4 +1,4 @@
-import type { AccessLevel, Role } from "@prisma/client";
+import type { AccessLevel, PresalesForecastCategory, PresalesStage, Role } from "@prisma/client";
 import type { ItemStatus } from "@/lib/constants";
 import { HIGH_INTENSITY_THRESHOLD_PCT } from "@/lib/constants";
 
@@ -107,6 +107,24 @@ export const REMINDER_SOURCE_STYLE = {
   ACTION_ITEM: { bg: "#EDE9FE", text: "#6D28D9", label: "Action Item" },
   PRESALES_OPPORTUNITY: { bg: "#FEF3C7", text: "#92400E", label: "Presales" },
   PRESALES_ACTION_ITEM: { bg: "#FEF3C7", text: "#92400E", label: "Presales Action" },
+  PRESALES_STALE: { bg: "#FFE4E6", text: "#9F1239", label: "Presales Stale" },
+};
+
+// Presales pipeline — ramps cool (early, low-commitment) to warm (late,
+// high-commitment), independent of RAG/risk semantics: further along the
+// pipeline isn't "worse," so this doesn't reuse the green/amber/red palette.
+export const PRESALES_STAGE_COLORS: Record<PresalesStage, { bg: string; text: string; label: string }> = {
+  LEAD: { bg: "#E0E7FF", text: "#4338CA", label: "Lead" },
+  QUALIFYING: { bg: "#DBEAFE", text: "#1D4ED8", label: "Qualifying" },
+  PROPOSAL: { bg: "#FEF3C7", text: "#92400E", label: "Proposal" },
+  NEGOTIATION: { bg: "#FFE4E6", text: "#9F1239", label: "Negotiation" },
+};
+
+// The deal owner's manual override on top of stage-derived win probability.
+export const FORECAST_CATEGORY_COLORS: Record<PresalesForecastCategory, { bg: string; text: string; label: string }> = {
+  COMMIT: { bg: "#C6E0B4", text: "#2C5F2D", label: "Likely to Win" },
+  BEST_CASE: { bg: "#FFE699", text: "#7A5B00", label: "Possible" },
+  PIPELINE: { bg: "#E2E8F0", text: "#475569", label: "Long Shot" },
 };
 
 // Portfolio "Needs Management Attention" issue chips — a 4-tier severity

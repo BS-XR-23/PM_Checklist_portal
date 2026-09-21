@@ -2,6 +2,13 @@ export function formatMoney(value: number, currency = "USD"): string {
   return new Intl.NumberFormat("en-US", { style: "currency", currency, maximumFractionDigits: 0 }).format(value);
 }
 
+// formatMoney's Intl.NumberFormat("en-US", {currency: "BDT"}) prints the ISO
+// code "BDT" rather than the ৳ glyph (the en-US locale doesn't know it) —
+// this formats it the way the Bangladesh-facing reference tool actually did.
+export function formatBDT(value: number): string {
+  return `৳${new Intl.NumberFormat("en-US").format(Math.round(value))}`;
+}
+
 export function formatPct(value: number, digits = 0): string {
   return `${(value * 100).toFixed(digits)}%`;
 }

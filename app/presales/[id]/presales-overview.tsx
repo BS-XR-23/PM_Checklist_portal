@@ -2,11 +2,16 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { InlineText, InlineTextarea, InlineNumber, InlineDate } from "@/components/ui/inline-edit";
-import { formatMoney, formatDate, toDateInputValue } from "@/lib/format";
+import { InlineText, InlineTextarea, InlineNumber, InlineDate, InlineSelect } from "@/components/ui/inline-edit";
+import { PersonPicker } from "@/components/resourcing/person-picker";
+import { InfoTooltip } from "@/components/ui/info-tooltip";
+import { IconExternalLink } from "@/components/layout/icons";
+import { formatDate, toDateInputValue } from "@/lib/format";
 import { RAG_COLORS } from "@/lib/rag";
+import { PRESALES_STAGE_COLORS, FORECAST_CATEGORY_COLORS } from "@/lib/colors";
+import { STAGE_ORDER, STAGE_INFO, SOURCE_ORDER, SOURCE_LABELS, usdEquivalent, formatByCurrency, USD_TO_BDT_RATE } from "@/lib/presales-stage";
 import { updatePresalesProject, winPresalesProject, markPresalesLost, reopenPresalesProject } from "../actions";
-import type { PresalesOutcome } from "@prisma/client";
+import type { PresalesOutcome, PresalesStage, PresalesForecastCategory, PresalesCurrency, PresalesSource } from "@prisma/client";
 
 export type PresalesOverviewData = {
   id: string;
@@ -14,8 +19,21 @@ export type PresalesOverviewData = {
   client: string | null;
   description: string | null;
   estimatedValue: number | null;
+  estimatedValueCurrency: PresalesCurrency;
   expectedCloseDate: Date | null;
   outcome: PresalesOutcome;
+  stage: PresalesStage;
+  dealOwnerPersonId: string | null;
+  dealOwnerPerson: { id: string; name: string } | null;
+  pocDone: boolean;
+  forecastCategory: PresalesForecastCategory | null;
+  practiceArea: string | null;
+  industry: string | null;
+  technology: string | null;
+  presaleFolderLink: string | null;
+  source: PresalesSource | null;
+  onHold: boolean;
+  holdReason: string | null;
   lostReason: string | null;
   wonProject: { id: string; name: string } | null;
 };
@@ -26,7 +44,15 @@ const OUTCOME_BADGE: Record<PresalesOutcome, { bg: string; text: string; label: 
   LOST: RAG_COLORS.RED,
 };
 
-export function PresalesOverview({ data, canWrite }: { data: PresalesOverviewData; canWrite: boolean }) {
+export function PresalesOverview({
+  data,
+  canWrite,
+  people,
+}: {
+  data: PresalesOverviewData;
+  canWrite: boolean;
+  people: { id: string; name: string }[];
+}) {
   const badge = OUTCOME_BADGE[data.outcome];
 
   return (
@@ -53,9 +79,28 @@ export function PresalesOverview({ data, canWrite }: { data: PresalesOverviewDat
         <div>
           <p className="text-xs font-medium text-slate-500 mb-1">Estimated Value</p>
           {canWrite ? (
-            <InlineNumber value={data.estimatedValue} onSave={(v) => updatePresalesProject(data.id, { estimatedValue: v })} step={0.01} />
+            <div className="flex items-center gap-1.5">
+              <InlineNumber value={data.estimatedValue} onSave={(v) => updatePresalesProject(data.id, { estimatedValue: v })} step={0.01} />
+              <InlineSelect
+                value={data.estimatedValueCurrency}
+                options={["USD", "BDT"]}
+                className="rounded-md border border-slate-200 px-1.5 py-1 text-xs"
+                onSave={(v) => updatePresalesProject(data.id, { estimatedValueCurrency: v as PresalesCurrency })}
+              />
+            </div>
           ) : (
-            <p className="text-sm text-slate-800">{data.estimatedValue ? formatMoney(data.estimatedValue) : "—"}</p>
+            <p className="text-sm text-slate-800">{data.estimatedValue ? formatByCurrency(data.estimatedValue, data.estimatedValueCurrency) : "—"}</p>
+          )}
+          {data.estimatedValue != null && (
+            <p className="text-xs text-slate-400 mt-0.5">
+              {/* Derived, never stored — same "don't let two numbers drift apart" principle as win probability. */}
+              ≈{" "}
+              {data.estimatedValueCurrency === "USD"
+                ? formatByCurrency(data.estimatedValue * USD_TO_BDT_RATE, "BDT")
+                : formatByCurrency(usdEquivalent(data.estimatedValue, data.estimatedValueCurrency), "USD")}
+              {" · 1 USD = "}
+              {USD_TO_BDT_RATE} BDT
+            </p>
           )}
         </div>
         <div>
@@ -67,6 +112,168 @@ export function PresalesOverview({ data, canWrite }: { data: PresalesOverviewDat
           )}
         </div>
       </div>
+
+      {data.outcome === "OPEN" && (
+        <div className="grid sm:grid-cols-2 gap-4">
+          <div>
+            <p className="text-xs font-medium text-slate-500 mb-1 flex items-center gap-1">
+              Stage
+              <InfoTooltip text={STAGE_INFO[data.stage]} />
+            </p>
+            {canWrite ? (
+              <InlineSelect
+                value={data.stage}
+                options={STAGE_ORDER}
+                renderOption={(s) => PRESALES_STAGE_COLORS[s as PresalesStage].label}
+                className="rounded-full border-0 px-2.5 py-0.5 text-xs font-semibold"
+                style={{ backgroundColor: PRESALES_STAGE_COLORS[data.stage].bg, color: PRESALES_STAGE_COLORS[data.stage].text }}
+                onSave={(v) => updatePresalesProject(data.id, { stage: v as PresalesStage })}
+              />
+            ) : (
+              <span
+                className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold"
+                style={{ backgroundColor: PRESALES_STAGE_COLORS[data.stage].bg, color: PRESALES_STAGE_COLORS[data.stage].text }}
+              >
+                {PRESALES_STAGE_COLORS[data.stage].label}
+              </span>
+            )}
+          </div>
+          <div>
+            <p className="text-xs font-medium text-slate-500 mb-1">Deal Owner</p>
+            {canWrite ? (
+              <PersonPicker
+                personId={data.dealOwnerPersonId}
+                legacyText={null}
+                people={people}
+                onSave={(id) => updatePresalesProject(data.id, { dealOwnerPersonId: id })}
+              />
+            ) : (
+              <p className="text-sm text-slate-800">{data.dealOwnerPerson?.name ?? "—"}</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {data.outcome === "OPEN" && (
+        <div className="grid sm:grid-cols-2 gap-4">
+          <div>
+            <p className="text-xs font-medium text-slate-500 mb-1">POC Done?</p>
+            {canWrite ? (
+              <BooleanToggle
+                value={data.pocDone}
+                trueLabel="✓ POC Done"
+                falseLabel="POC Not Done"
+                onSave={(v) => updatePresalesProject(data.id, { pocDone: v })}
+              />
+            ) : (
+              <p className="text-sm text-slate-800">{data.pocDone ? "Yes" : "No"}</p>
+            )}
+          </div>
+          <div>
+            <p className="text-xs font-medium text-slate-500 mb-1">Forecast Category</p>
+            {canWrite ? (
+              <InlineSelect
+                value={data.forecastCategory ?? ""}
+                options={["", "COMMIT", "BEST_CASE", "PIPELINE"]}
+                renderOption={(v) => (v ? FORECAST_CATEGORY_COLORS[v as PresalesForecastCategory].label : "—")}
+                className="rounded-full border-0 px-2.5 py-0.5 text-xs font-semibold"
+                style={
+                  data.forecastCategory
+                    ? { backgroundColor: FORECAST_CATEGORY_COLORS[data.forecastCategory].bg, color: FORECAST_CATEGORY_COLORS[data.forecastCategory].text }
+                    : { backgroundColor: "#F1F5F9", color: "#64748B" }
+                }
+                onSave={(v) => updatePresalesProject(data.id, { forecastCategory: v ? (v as PresalesForecastCategory) : null })}
+              />
+            ) : data.forecastCategory ? (
+              <span
+                className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold"
+                style={{ backgroundColor: FORECAST_CATEGORY_COLORS[data.forecastCategory].bg, color: FORECAST_CATEGORY_COLORS[data.forecastCategory].text }}
+              >
+                {FORECAST_CATEGORY_COLORS[data.forecastCategory].label}
+              </span>
+            ) : (
+              <p className="text-sm text-slate-400">—</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {data.outcome === "OPEN" && (
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div>
+            <p className="text-xs font-medium text-slate-500 mb-1">Practice Area</p>
+            {canWrite ? (
+              <InlineText value={data.practiceArea ?? ""} onSave={(v) => updatePresalesProject(data.id, { practiceArea: v })} placeholder="e.g. XR, InsurTech" />
+            ) : (
+              <p className="text-sm text-slate-800">{data.practiceArea || "—"}</p>
+            )}
+          </div>
+          <div>
+            <p className="text-xs font-medium text-slate-500 mb-1">Industry</p>
+            {canWrite ? (
+              <InlineText value={data.industry ?? ""} onSave={(v) => updatePresalesProject(data.id, { industry: v })} placeholder="e.g. Education, Insurance" />
+            ) : (
+              <p className="text-sm text-slate-800">{data.industry || "—"}</p>
+            )}
+          </div>
+          <div>
+            <p className="text-xs font-medium text-slate-500 mb-1">Technology</p>
+            {canWrite ? (
+              <InlineText value={data.technology ?? ""} onSave={(v) => updatePresalesProject(data.id, { technology: v })} placeholder="e.g. AI/RAG, Mobile" />
+            ) : (
+              <p className="text-sm text-slate-800">{data.technology || "—"}</p>
+            )}
+          </div>
+          <div>
+            <p className="text-xs font-medium text-slate-500 mb-1">Source</p>
+            {canWrite ? (
+              <InlineSelect
+                value={data.source ?? ""}
+                options={["", ...SOURCE_ORDER]}
+                renderOption={(v) => (v ? SOURCE_LABELS[v as PresalesSource] : "—")}
+                onSave={(v) => updatePresalesProject(data.id, { source: v ? (v as PresalesSource) : null })}
+              />
+            ) : (
+              <p className="text-sm text-slate-800">{data.source ? SOURCE_LABELS[data.source] : "—"}</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {data.outcome === "OPEN" && (
+        <div className="grid sm:grid-cols-3 gap-4">
+          <div>
+            <p className="text-xs font-medium text-slate-500 mb-1">On Hold?</p>
+            {canWrite ? (
+              <BooleanToggle
+                value={data.onHold}
+                trueLabel="On Hold"
+                falseLabel="Active"
+                onSave={(v) => updatePresalesProject(data.id, { onHold: v })}
+              />
+            ) : (
+              <p className="text-sm text-slate-800">{data.onHold ? "On Hold" : "Active"}</p>
+            )}
+            {data.onHold && (
+              <div className="mt-1.5">
+                {canWrite ? (
+                  <InlineText value={data.holdReason ?? ""} onSave={(v) => updatePresalesProject(data.id, { holdReason: v })} placeholder="Why is this on hold?" />
+                ) : (
+                  data.holdReason && <p className="text-xs text-slate-500">{data.holdReason}</p>
+                )}
+              </div>
+            )}
+          </div>
+          <div className="sm:col-span-2">
+            <p className="text-xs font-medium text-slate-500 mb-1">Presale Folder Link</p>
+            <PresaleFolderLink
+              value={data.presaleFolderLink}
+              canWrite={canWrite}
+              onSave={(v) => updatePresalesProject(data.id, { presaleFolderLink: v })}
+            />
+          </div>
+        </div>
+      )}
 
       <div>
         <p className="text-xs font-medium text-slate-500 mb-1">Description</p>
@@ -157,6 +364,79 @@ function OutcomeActions({ data }: { data: PresalesOverviewData }) {
       >
         Mark as Lost
       </button>
+    </div>
+  );
+}
+
+// Same pill-toggle pattern as PresalesActionItemStatusToggle, generalized
+// for any boolean field on the opportunity itself (POC Done, Competitive Bid).
+function BooleanToggle({
+  value,
+  trueLabel,
+  falseLabel,
+  onSave,
+}: {
+  value: boolean;
+  trueLabel: string;
+  falseLabel: string;
+  onSave: (next: boolean) => Promise<void>;
+}) {
+  const [pending, startTransition] = useTransition();
+
+  return (
+    <button
+      onClick={() => startTransition(() => onSave(!value))}
+      disabled={pending}
+      className={
+        value
+          ? "inline-flex items-center rounded-full bg-emerald-50 text-emerald-700 px-2.5 py-0.5 text-xs font-medium hover:bg-emerald-100 disabled:opacity-50"
+          : "inline-flex items-center rounded-full bg-slate-100 text-slate-600 px-2.5 py-0.5 text-xs font-medium hover:bg-slate-200 disabled:opacity-50"
+      }
+    >
+      {pending ? "..." : value ? trueLabel : falseLabel}
+    </button>
+  );
+}
+
+// Same "pill with an inline edit + a separate open-in-new-tab icon" idea as
+// ChecklistLinkCell (components/checklist/checklist-table.tsx), simplified
+// to plain InlineText since this is a single detail-page field, not a dense
+// table cell that needs a floating editor.
+function PresaleFolderLink({
+  value,
+  canWrite,
+  onSave,
+}: {
+  value: string | null;
+  canWrite: boolean;
+  onSave: (v: string) => Promise<void>;
+}) {
+  if (!canWrite) {
+    return value ? (
+      <a
+        href={value}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline break-all"
+      >
+        <IconExternalLink className="h-3.5 w-3.5 shrink-0" />
+        {value}
+      </a>
+    ) : (
+      <p className="text-sm text-slate-400">—</p>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <div className="min-w-0 flex-1">
+        <InlineText value={value ?? ""} onSave={onSave} placeholder="Paste a SharePoint/Drive folder link" />
+      </div>
+      {value && (
+        <a href={value} target="_blank" rel="noopener noreferrer" title="Open link" className="shrink-0 text-slate-400 hover:text-slate-700">
+          <IconExternalLink className="h-4 w-4" />
+        </a>
+      )}
     </div>
   );
 }

@@ -18,6 +18,13 @@ function revalidateChecklist(presalesProjectId: string) {
   revalidatePath(`/presales/${presalesProjectId}`);
 }
 
+// Bumps the parent's updatedAt so it doubles as a "last activity" signal
+// (checklist/decision/action-item edits don't otherwise touch the parent
+// row) — used by the board's Stale badge and the Reminders system.
+function touchPresalesProject(presalesProjectId: string) {
+  return prisma.presalesProject.update({ where: { id: presalesProjectId }, data: { updatedAt: new Date() } });
+}
+
 type ChecklistUpdateData = Partial<{
   itemText: string;
   ownerPersonId: string | null;
@@ -45,6 +52,7 @@ export async function createPresalesChecklistItem(presalesProjectId: string) {
   const created = await prisma.presalesChecklistItem.create({
     data: { presalesProjectId, order: (_max.order ?? 0) + 1, itemText: "New checklist item — click to edit", isCustom: true },
   });
+  await touchPresalesProject(presalesProjectId);
 
   await writeAudit({
     actor: user,
@@ -68,6 +76,7 @@ export async function updatePresalesChecklistItem(id: string, presalesProjectId:
   }
 
   await prisma.presalesChecklistItem.update({ where: { id }, data: toPrismaData(data) });
+  await touchPresalesProject(existing.presalesProjectId);
 
   await writeAudit({
     actor: user,
@@ -90,6 +99,7 @@ export async function deletePresalesChecklistItem(id: string, _presalesProjectId
   }
 
   await prisma.presalesChecklistItem.delete({ where: { id } });
+  await touchPresalesProject(existing.presalesProjectId);
 
   await writeAudit({
     actor: user,

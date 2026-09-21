@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { reminderBand } from "@/lib/calculations";
 import { CHECKLIST_TYPE_BY_KEY, type ChecklistType } from "@/lib/checklist-types";
+import { PRESALES_STALE_DAYS } from "@/lib/presales-stage";
 import type { CurrentUser } from "@/lib/rbac";
 import type { Role } from "@prisma/client";
 
@@ -30,7 +31,7 @@ export type ReminderItem = {
   contextLabel: string; // project name, or the opportunity name for a presales reminder
   groupId: string; // groups reminders for the "grouped by project" view — a real project id, or the presales opportunity's id when there's no project
   projectId?: string; // present for CHECKLIST/ACTION_ITEM only — a presales reminder isn't scoped to a project
-  source: "CHECKLIST" | "ACTION_ITEM" | "PRESALES_OPPORTUNITY" | "PRESALES_ACTION_ITEM";
+  source: "CHECKLIST" | "ACTION_ITEM" | "PRESALES_OPPORTUNITY" | "PRESALES_ACTION_ITEM" | "PRESALES_STALE";
   context: string; // stage / owner / client — the subtitle's first segment
   itemText: string;
   plannedDate: Date;
@@ -52,6 +53,7 @@ type ReminderSource = {
   actionItems: Awaited<ReturnType<typeof fetchActionItems>>;
   presalesOpportunities: Awaited<ReturnType<typeof fetchPresalesOpportunities>>;
   presalesActionItems: Awaited<ReturnType<typeof fetchPresalesActionItems>>;
+  stalePresalesOpportunities: Awaited<ReturnType<typeof fetchStalePresalesOpportunities>>;
 };
 
 function fetchChecklistItems(projectIds: string[]) {
@@ -92,18 +94,29 @@ function fetchPresalesActionItems() {
   });
 }
 
+function fetchStalePresalesOpportunities() {
+  // Same no-membership-filtering rationale as fetchPresalesOpportunities.
+  // onHold: false — a deliberately-paused deal shouldn't trigger a "going
+  // cold" alarm the way one that's just been neglected should.
+  return prisma.presalesProject.findMany({
+    where: { outcome: "OPEN", deletedAt: null, onHold: false },
+    select: { id: true, name: true, client: true, updatedAt: true },
+  });
+}
+
 async function fetchReminderSource(user: CurrentUser): Promise<ReminderSource> {
   if (!REMINDER_ROLES.includes(user.role)) {
-    return { checklistItems: [], actionItems: [], presalesOpportunities: [], presalesActionItems: [] };
+    return { checklistItems: [], actionItems: [], presalesOpportunities: [], presalesActionItems: [], stalePresalesOpportunities: [] };
   }
   const projectIds = await visibleActiveProjectIds(user);
-  const [checklistItems, actionItems, presalesOpportunities, presalesActionItems] = await Promise.all([
+  const [checklistItems, actionItems, presalesOpportunities, presalesActionItems, stalePresalesOpportunities] = await Promise.all([
     fetchChecklistItems(projectIds),
     fetchActionItems(projectIds),
     fetchPresalesOpportunities(),
     fetchPresalesActionItems(),
+    fetchStalePresalesOpportunities(),
   ]);
-  return { checklistItems, actionItems, presalesOpportunities, presalesActionItems };
+  return { checklistItems, actionItems, presalesOpportunities, presalesActionItems, stalePresalesOpportunities };
 }
 
 function buildReminders(source: ReminderSource, today: Date): ReminderItem[] {
@@ -169,7 +182,29 @@ function buildReminders(source: ReminderSource, today: Date): ReminderItem[] {
       priority: reminderPriority(band, a.dueDate as Date, today),
     }));
 
-  return [...checklistReminders, ...actionItemReminders, ...presalesReminders, ...presalesActionItemReminders].sort((a, b) => {
+  // Reuses reminderBand unmodified by feeding it a synthetic "goes stale at"
+  // deadline (updatedAt + PRESALES_STALE_DAYS) instead of writing separate
+  // elapsed-since logic — OVERDUE once the deadline has passed (already
+  // stale), DUE_SOON within 7 days of going stale (about to go stale).
+  const staleReminders = source.stalePresalesOpportunities
+    .map((o) => {
+      const deadline = new Date(o.updatedAt.getTime() + PRESALES_STALE_DAYS * DAY_MS);
+      return { o, deadline, band: reminderBand(deadline, false, today) };
+    })
+    .filter((x): x is { o: (typeof source.stalePresalesOpportunities)[number]; deadline: Date; band: "OVERDUE" | "DUE_SOON" } => x.band !== null)
+    .map(({ o, deadline, band }) => ({
+      href: `/presales/${o.id}`,
+      contextLabel: o.name,
+      groupId: o.id,
+      source: "PRESALES_STALE" as const,
+      context: o.client ?? "No client set",
+      itemText: "No activity — decisions, action items, or checklist",
+      plannedDate: deadline,
+      band,
+      priority: reminderPriority(band, deadline, today),
+    }));
+
+  return [...checklistReminders, ...actionItemReminders, ...presalesReminders, ...presalesActionItemReminders, ...staleReminders].sort((a, b) => {
     if (a.band !== b.band) return a.band === "OVERDUE" ? -1 : 1;
     return a.plannedDate.getTime() - b.plannedDate.getTime();
   });

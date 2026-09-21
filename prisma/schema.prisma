@@ -192,6 +192,7 @@ model AuditLog {
   @@index([projectId])
   @@index([actorId])
   @@index([createdAt])
+  @@index([entityType, entityId])
 }
 
 /// TPM's dedicated write surface — deliberately never touches the 7 project-data
@@ -269,12 +270,12 @@ model MilestonePayment {
   // anchor (and checklistItemId relaxed to optional) in a later migration
   // once that backfill has been verified. See prisma/migrations backfill
   // script + schema.prisma history for the two-step plan.
-  milestoneId   String?    @unique
-  milestone     Milestone? @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
-  paymentPct    Float      @default(0)
-  invoiceStatus String     @default("Not Invoiced")
-  clientSignoff String     @default("Pending")
-  notes         String?
+  milestoneId     String?       @unique
+  milestone       Milestone?    @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+  paymentPct      Float         @default(0)
+  invoiceStatus   String        @default("Not Invoiced")
+  clientSignoff   String        @default("Pending")
+  notes           String?
 }
 
 model RiskItem {
@@ -493,12 +494,12 @@ model Sprint {
   endDate   DateTime
   createdAt DateTime @default(now())
 
-  startedAt           DateTime?
-  closedAt            DateTime?
-  frozenPlannedPoints Float?
-  frozenEarnedPoints  Float?
-  frozenActualValue   Float?
-  frozenTaskSnapshot  Json?
+  startedAt            DateTime?
+  closedAt             DateTime?
+  frozenPlannedPoints  Float?
+  frozenEarnedPoints   Float?
+  frozenActualValue    Float?
+  frozenTaskSnapshot   Json?
   // Tasks detached from this sprint (moved elsewhere, or uncommitted to the
   // backlog) *while it was still open* — each entry freezes that task's
   // contribution (points/pctComplete/its own actual hours/cost) at the
@@ -509,7 +510,7 @@ model Sprint {
   // with zero trace it was ever here. Folded into frozenTaskSnapshot's
   // union (with the still-live tasks) the moment this sprint is closed —
   // see closeSprint() and sprintContributionEntries() in calculations.ts.
-  departedTaskSnapshot Json @default("[]")
+  departedTaskSnapshot Json      @default("[]")
 
   tasks          WbsTask[]
   allocations    SprintAllocation[]
@@ -667,6 +668,7 @@ model Person {
   presalesDecisionsMade   PresalesDecisionItem[]
   presalesActionItemOwner PresalesActionItem[]
   presalesChecklistOwner  PresalesChecklistItem[]
+  presalesDealOwner       PresalesProject[]
   wbsTasks                WbsTask[]
   sprintAllocations       SprintAllocation[]
   milestoneOwner          Milestone[]
@@ -681,33 +683,81 @@ enum PresalesOutcome {
   LOST
 }
 
+/// Pipeline position while an opportunity is OPEN (irrelevant once
+/// WON/LOST, which are governed by `outcome` instead). Win probability is
+/// deliberately NOT stored — it's derived from stage via a fixed lookup
+/// table (lib/presales-stage.ts) so it can never drift out of sync with
+/// where a deal actually sits.
+enum PresalesStage {
+  LEAD
+  QUALIFYING
+  PROPOSAL
+  NEGOTIATION
+}
+
+/// A manual override on top of stage-derived win probability — the deal
+/// owner's own honest read on whether it closes this period, since stage
+/// alone can over-promise (see lib/presales-stage.ts).
+enum PresalesForecastCategory {
+  COMMIT
+  BEST_CASE
+  PIPELINE
+}
+
+enum PresalesCurrency {
+  USD
+  BDT
+}
+
+enum PresalesSource {
+  INBOUND
+  OUTBOUND
+  REFERRAL
+  COMPETITIVE_TENDER
+  EXISTING_CLIENT
+}
+
 /// A pre-contract opportunity — deliberately NOT a Project (no checklist,
 /// milestones, risk, budget, or PM Plan). Tracks just enough to reason about
 /// a deal before it's signed. On Win, createProject() (lib/create-project.ts)
 /// seeds a real Project the normal way and this row links to it via
 /// wonProjectId; on Lost, the row is kept (not deleted) as win/loss history.
 model PresalesProject {
-  id                String          @id @default(cuid())
-  name              String
-  client            String?
-  description       String?
-  estimatedValue    Float?
-  expectedCloseDate DateTime?
-  outcome           PresalesOutcome @default(OPEN)
-  lostReason        String? // set when outcome = LOST
-  wonProjectId      String?         @unique
-  wonProject        Project?        @relation(fields: [wonProjectId], references: [id], onDelete: SetNull)
-  createdById       String
-  createdBy         User            @relation(fields: [createdById], references: [id])
-  deletedAt         DateTime?
-  createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @updatedAt
+  id                     String                    @id @default(cuid())
+  name                   String
+  client                 String?
+  description            String?
+  estimatedValue         Float?
+  expectedCloseDate      DateTime?
+  outcome                PresalesOutcome           @default(OPEN)
+  lostReason             String? // set when outcome = LOST
+  stage                  PresalesStage             @default(QUALIFYING)
+  dealOwnerPersonId      String?
+  dealOwnerPerson        Person?                   @relation(fields: [dealOwnerPersonId], references: [id], onDelete: SetNull)
+  pocDone                Boolean                   @default(false)
+  forecastCategory       PresalesForecastCategory?
+  practiceArea           String?
+  industry               String?
+  technology             String?
+  estimatedValueCurrency PresalesCurrency          @default(USD)
+  presaleFolderLink      String?
+  source                 PresalesSource?
+  onHold                 Boolean                   @default(false)
+  holdReason             String?
+  wonProjectId           String?                   @unique
+  wonProject             Project?                  @relation(fields: [wonProjectId], references: [id], onDelete: SetNull)
+  createdById            String
+  createdBy              User                      @relation(fields: [createdById], references: [id])
+  deletedAt              DateTime?
+  createdAt              DateTime                  @default(now())
+  updatedAt              DateTime                  @updatedAt
 
   decisions      PresalesDecisionItem[]
   actionItems    PresalesActionItem[]
   checklistItems PresalesChecklistItem[]
 
   @@index([outcome])
+  @@index([stage])
 }
 
 model PresalesDecisionItem {
@@ -898,11 +948,11 @@ model Release {
   // accepted this build" is naturally an attribute of the release being
   // tested, not a freestanding concept. See UAT_SIGNOFF_STATUSES in
   // lib/constants.ts.
-  uatSignoffStatus String    @default("Pending")
-  uatSignoffDate   DateTime?
-  uatFeedback      String?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  uatSignoffStatus      String      @default("Pending")
+  uatSignoffDate        DateTime?
+  uatFeedback           String?
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
 
   sprints    ReleaseSprint[]
   wbsTasks   ReleaseWbsTask[]

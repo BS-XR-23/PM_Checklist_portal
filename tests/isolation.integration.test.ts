@@ -282,6 +282,61 @@ describe("isolation boundary", () => {
     }
   });
 
+  it("getReminderItems surfaces an OPEN presales opportunity with no activity in 10+ days as PRESALES_STALE, but not a fresh one", async () => {
+    const { getReminderItems } = await import("@/lib/notifications");
+    const elevenDaysAgo = new Date(Date.now() - 11 * 86400000);
+
+    // updatedAt is set explicitly here, which bypasses Prisma's @updatedAt
+    // auto-bump (that only fires when a write omits the field) — simulating
+    // an opportunity nobody has touched (no decision/action item/checklist
+    // edit, which would otherwise call touchPresalesProject) in 11 days.
+    const staleOpp = await prisma.presalesProject.create({
+      data: { name: "[TEST] stale presales opp", createdById: pmAUserId, client: "[TEST] Quiet Co", updatedAt: elevenDaysAgo },
+    });
+    const freshOpp = await prisma.presalesProject.create({
+      data: { name: "[TEST] fresh presales opp", createdById: pmAUserId },
+    });
+
+    try {
+      const items = await getReminderItems({ id: pmAUserId, email: "x@example.test", name: "Test PM A", role: "PM" });
+      const reminder = items.find((i) => i.source === "PRESALES_STALE" && i.groupId === staleOpp.id);
+      expect(reminder).toBeDefined();
+      expect(reminder?.band).toBe("OVERDUE");
+      expect(reminder?.href).toBe(`/presales/${staleOpp.id}`);
+      expect(reminder?.context).toBe("[TEST] Quiet Co");
+
+      expect(items.some((i) => i.source === "PRESALES_STALE" && i.groupId === freshOpp.id)).toBe(false);
+    } finally {
+      await prisma.presalesProject.delete({ where: { id: staleOpp.id } });
+      await prisma.presalesProject.delete({ where: { id: freshOpp.id } });
+    }
+  });
+
+  it("getReminderItems does NOT surface a stale opportunity that's on hold — a deliberate pause isn't 'going cold'", async () => {
+    const { getReminderItems } = await import("@/lib/notifications");
+    const elevenDaysAgo = new Date(Date.now() - 11 * 86400000);
+
+    const heldOpp = await prisma.presalesProject.create({
+      data: { name: "[TEST] on-hold presales opp", createdById: pmAUserId, updatedAt: elevenDaysAgo, onHold: true, holdReason: "[TEST] paused" },
+    });
+
+    try {
+      const items = await getReminderItems({ id: pmAUserId, email: "x@example.test", name: "Test PM A", role: "PM" });
+      expect(items.some((i) => i.source === "PRESALES_STALE" && i.groupId === heldOpp.id)).toBe(false);
+    } finally {
+      await prisma.presalesProject.delete({ where: { id: heldOpp.id } });
+    }
+  });
+
+  it("usdEquivalent/formatByCurrency convert and format BDT correctly, and pass USD through unchanged", async () => {
+    const { usdEquivalent, formatByCurrency, USD_TO_BDT_RATE } = await import("@/lib/presales-stage");
+
+    expect(usdEquivalent(1000, "USD")).toBe(1000);
+    expect(usdEquivalent(USD_TO_BDT_RATE * 2, "BDT")).toBeCloseTo(2, 5);
+    expect(formatByCurrency(1000, "USD")).toContain("1,000");
+    expect(formatByCurrency(2500000, "BDT")).toBe("৳2,500,000");
+  });
+
   it("getReminderItems returns nothing for CLIENT, LIMITED, or PROGRAM_MANAGER, regardless of membership", async () => {
     const { getReminderItems } = await import("@/lib/notifications");
     const overdue = new Date(Date.now() - 5 * 86400000);
@@ -577,6 +632,9 @@ describe("isolation boundary", () => {
     fd.set("name", "[TEST] should not be created");
     await expect(createPresalesProject(fd)).rejects.toThrow();
     await expect(updatePresalesProject(opp.id, { name: "hacked" })).rejects.toThrow();
+    await expect(updatePresalesProject(opp.id, { stage: "PROPOSAL" })).rejects.toThrow();
+    await expect(updatePresalesProject(opp.id, { pocDone: true })).rejects.toThrow();
+    await expect(updatePresalesProject(opp.id, { onHold: true })).rejects.toThrow();
     await expect(deletePresalesProject(opp.id)).rejects.toThrow();
 
     const stillThere = await prisma.presalesProject.findUniqueOrThrow({ where: { id: opp.id } });
@@ -591,10 +649,40 @@ describe("isolation boundary", () => {
       "@/app/presales/actions"
     );
     const opp = await prisma.presalesProject.create({ data: { name: "[TEST] presales pm-owned", createdById: pmAUserId } });
+    const dealOwner = await prisma.person.create({ data: { name: "[TEST] presales deal owner" } });
 
     actAs(pmAUserId);
     await updatePresalesProject(opp.id, { client: "[TEST] Acme Co", estimatedValue: 5000 });
     expect((await prisma.presalesProject.findUniqueOrThrow({ where: { id: opp.id } })).client).toBe("[TEST] Acme Co");
+
+    await updatePresalesProject(opp.id, { stage: "PROPOSAL", dealOwnerPersonId: dealOwner.id });
+    const staged = await prisma.presalesProject.findUniqueOrThrow({ where: { id: opp.id } });
+    expect(staged.stage).toBe("PROPOSAL");
+    expect(staged.dealOwnerPersonId).toBe(dealOwner.id);
+
+    await updatePresalesProject(opp.id, {
+      pocDone: true,
+      forecastCategory: "COMMIT",
+      practiceArea: "[TEST] XR",
+      industry: "[TEST] Education",
+      technology: "[TEST] Unity",
+      estimatedValueCurrency: "BDT",
+      presaleFolderLink: "https://example.test/[TEST]-folder",
+      source: "REFERRAL",
+      onHold: true,
+      holdReason: "[TEST] Waiting on client budget approval",
+    });
+    const enriched = await prisma.presalesProject.findUniqueOrThrow({ where: { id: opp.id } });
+    expect(enriched.pocDone).toBe(true);
+    expect(enriched.forecastCategory).toBe("COMMIT");
+    expect(enriched.practiceArea).toBe("[TEST] XR");
+    expect(enriched.industry).toBe("[TEST] Education");
+    expect(enriched.technology).toBe("[TEST] Unity");
+    expect(enriched.estimatedValueCurrency).toBe("BDT");
+    expect(enriched.presaleFolderLink).toBe("https://example.test/[TEST]-folder");
+    expect(enriched.source).toBe("REFERRAL");
+    expect(enriched.onHold).toBe(true);
+    expect(enriched.holdReason).toBe("[TEST] Waiting on client budget approval");
 
     await deletePresalesProject(opp.id);
     expect((await prisma.presalesProject.findUniqueOrThrow({ where: { id: opp.id } })).deletedAt).not.toBeNull();
@@ -609,6 +697,8 @@ describe("isolation boundary", () => {
     actAs(adminUserId);
     await permanentlyDeletePresalesProject(opp.id);
     expect(await prisma.presalesProject.findUnique({ where: { id: opp.id } })).toBeNull();
+
+    await prisma.person.delete({ where: { id: dealOwner.id } });
   });
 
   it("presales: Lost is reversible, Open->Lost requires the OPEN state, and Won creates a real project", async () => {
@@ -719,8 +809,16 @@ describe("isolation boundary", () => {
 
     try {
       actAs(pmAUserId);
+      // Presales child mutations (decisions/action items/checklist) don't
+      // touch their own timestamps — they instead bump the parent
+      // PresalesProject.updatedAt as a "last activity" signal, which the
+      // board's Stale badge and the Reminders system both read.
+      const beforeActivity = opp.updatedAt;
       await createPresalesDecision(opp.id);
       const decision = await prisma.presalesDecisionItem.findFirstOrThrow({ where: { presalesProjectId: opp.id } });
+      expect((await prisma.presalesProject.findUniqueOrThrow({ where: { id: opp.id } })).updatedAt.getTime()).toBeGreaterThan(
+        beforeActivity.getTime()
+      );
       await updatePresalesDecision(decision.id, opp.id, { decision: "[TEST] renamed" });
       expect((await prisma.presalesDecisionItem.findUniqueOrThrow({ where: { id: decision.id } })).decision).toBe("[TEST] renamed");
 
@@ -740,6 +838,33 @@ describe("isolation boundary", () => {
       await deletePresalesActionItem(action.id, opp.id);
       expect(await prisma.presalesDecisionItem.findUnique({ where: { id: decision.id } })).toBeNull();
       expect(await prisma.presalesActionItem.findUnique({ where: { id: action.id } })).toBeNull();
+    } finally {
+      await prisma.presalesProject.delete({ where: { id: opp.id } });
+    }
+  });
+
+  it("createPresalesProject parses POC/forecast/source/practice-area/industry/technology from the create form", async () => {
+    const { createPresalesProject } = await import("@/app/presales/actions");
+
+    actAs(pmAUserId);
+    const fd = new FormData();
+    fd.set("name", "[TEST] full-field create form");
+    fd.set("pocDone", "on");
+    fd.set("source", "REFERRAL");
+    fd.set("forecastCategory", "BEST_CASE");
+    fd.set("practiceArea", "[TEST] XR");
+    fd.set("industry", "[TEST] Education");
+    fd.set("technology", "[TEST] Unity");
+    await expect(createPresalesProject(fd)).rejects.toThrow(/REDIRECT/);
+
+    const opp = await prisma.presalesProject.findFirstOrThrow({ where: { name: "[TEST] full-field create form" } });
+    try {
+      expect(opp.pocDone).toBe(true);
+      expect(opp.source).toBe("REFERRAL");
+      expect(opp.forecastCategory).toBe("BEST_CASE");
+      expect(opp.practiceArea).toBe("[TEST] XR");
+      expect(opp.industry).toBe("[TEST] Education");
+      expect(opp.technology).toBe("[TEST] Unity");
     } finally {
       await prisma.presalesProject.delete({ where: { id: opp.id } });
     }

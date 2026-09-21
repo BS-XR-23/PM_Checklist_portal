@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/rbac";
 import { AppShell } from "@/components/layout/app-shell";
 import { StatTile } from "@/components/ui/stat-tile";
 import { IconTarget, IconDollar, IconChart } from "@/components/layout/icons";
+import { usdEquivalent } from "@/lib/presales-stage";
 import { NewPresalesForm } from "./new-presales-form";
 import { PresalesFilters } from "./presales-filters";
 
@@ -21,13 +22,26 @@ export default async function PresalesPage() {
 
   const canWrite = user.role === "ADMIN" || user.role === "PM";
 
-  const opportunities = await prisma.presalesProject.findMany({
-    orderBy: { createdAt: "desc" },
-    include: { wonProject: { select: { id: true, name: true } } },
-  });
+  const [opportunities, people] = await Promise.all([
+    prisma.presalesProject.findMany({
+      orderBy: { createdAt: "desc" },
+      include: {
+        wonProject: { select: { id: true, name: true } },
+        dealOwnerPerson: { select: { id: true, name: true } },
+        actionItems: {
+          where: { status: { not: "Done" } },
+          orderBy: { dueDate: "asc" },
+          take: 1,
+          select: { id: true, description: true, dueDate: true },
+        },
+      },
+    }),
+    canWrite ? prisma.person.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }) : Promise.resolve([]),
+  ]);
 
   const openCards = opportunities.filter((o) => o.outcome === "OPEN" && o.deletedAt === null);
-  const openPipelineValue = openCards.reduce((sum, o) => sum + (o.estimatedValue ?? 0), 0);
+  // USD-normalized so BDT-quoted deals don't get summed as if they were USD.
+  const openPipelineValue = openCards.reduce((sum, o) => sum + usdEquivalent(o.estimatedValue ?? 0, o.estimatedValueCurrency), 0);
   const closedCount = opportunities.filter((o) => o.outcome === "WON" || o.outcome === "LOST").length;
   const wonCount = opportunities.filter((o) => o.outcome === "WON").length;
   const winRate = closedCount ? wonCount / closedCount : null;
@@ -53,7 +67,7 @@ export default async function PresalesPage() {
           {opportunities.length === 0 ? (
             <p className="text-sm text-slate-500">{canWrite ? "No opportunities yet. Create one above to get started." : "No presales opportunities yet."}</p>
           ) : (
-            <PresalesFilters cards={opportunities} canWrite={canWrite} isAdmin={user.role === "ADMIN"} />
+            <PresalesFilters cards={opportunities} canWrite={canWrite} isAdmin={user.role === "ADMIN"} people={people} />
           )}
         </div>
       </main>

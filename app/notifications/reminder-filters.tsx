@@ -5,7 +5,7 @@ import Link from "next/link";
 import clsx from "clsx";
 import { formatDate } from "@/lib/format";
 import { RISK_SEVERITY_COLORS, REMINDER_SOURCE_STYLE, DEPENDENCY_PRIORITY_COLORS, tagPillStyle } from "@/lib/colors";
-import { IconSearch, IconChevronDown, IconFolder, IconTarget, IconClipboardList, IconCheckCircle, IconCalendar } from "@/components/layout/icons";
+import { IconSearch, IconChevronDown, IconFolder, IconTarget, IconClipboardList, IconCheckCircle, IconCalendar, IconClock } from "@/components/layout/icons";
 import type { ReminderItem } from "@/lib/notifications";
 
 const SOURCE_ICON: Record<ReminderItem["source"], (props: React.SVGProps<SVGSVGElement>) => React.JSX.Element> = {
@@ -13,6 +13,7 @@ const SOURCE_ICON: Record<ReminderItem["source"], (props: React.SVGProps<SVGSVGE
   ACTION_ITEM: IconCheckCircle,
   PRESALES_OPPORTUNITY: IconTarget,
   PRESALES_ACTION_ITEM: IconTarget,
+  PRESALES_STALE: IconClock,
 };
 
 type Group = {

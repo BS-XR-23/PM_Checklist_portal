@@ -26,6 +26,7 @@ export default async function PresalesDetailPage({ params }: { params: { id: str
       where: { id: params.id },
       include: {
         wonProject: { select: { id: true, name: true } },
+        dealOwnerPerson: { select: { id: true, name: true } },
         checklistItems: { orderBy: { order: "asc" }, include: { ownerPerson: { select: { id: true, name: true } } } },
         decisions: { orderBy: { order: "asc" }, include: { decidedByPerson: { select: { id: true, name: true } } } },
         actionItems: { orderBy: { order: "asc" }, include: { ownerPerson: { select: { id: true, name: true } } } },
@@ -43,12 +44,24 @@ export default async function PresalesDetailPage({ params }: { params: { id: str
   return (
     <AppShell user={user}>
       <header className="border-b border-slate-200 bg-white px-4 sm:px-6 py-4">
-        <Link href="/presales" className="text-xs text-slate-400 hover:text-slate-600">← Presales</Link>
-        <h1 className="text-lg font-semibold text-slate-900">{presales.name}</h1>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <Link href="/presales" className="text-xs text-slate-400 hover:text-slate-600">← Presales</Link>
+            <h1 className="text-lg font-semibold text-slate-900">{presales.name}</h1>
+          </div>
+          <Link
+            href={`/presales/${presales.id}/activity`}
+            prefetch={false}
+            title="Activity log"
+            className="shrink-0 mt-0.5 inline-flex items-center gap-1.5 rounded-md border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-500 hover:text-slate-800 hover:border-slate-300"
+          >
+            Activity
+          </Link>
+        </div>
       </header>
 
       <main className="max-w-3xl mx-auto p-4 sm:p-6 space-y-6">
-        <PresalesOverview data={presales} canWrite={canWrite} />
+        <PresalesOverview data={presales} canWrite={canWrite} people={people} />
 
         <div className="space-y-3">
           <div className="flex items-start justify-between">
