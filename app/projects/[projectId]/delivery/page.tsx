@@ -50,6 +50,7 @@ export default async function DeliveryOverviewPage({ params }: { params: { proje
       where: { projectId },
       orderBy: { startDate: "asc" },
       include: { tasks: { include: { person: { include: { roleRate: true } } } } },
+      relationLoadStrategy: "join",
     }),
     // payment: null — Overview's Milestone Summary reflects Delivery's own
     // development-checkpoint milestones only, never the unrelated

@@ -30,6 +30,7 @@ export default async function DeliverySprintsPage({ params }: { params: { projec
         tasks: { orderBy: { createdAt: "asc" }, include: { person: { include: { roleRate: true } } } },
         allocations: { include: { person: { include: { competency: true } } }, orderBy: { createdAt: "asc" } },
       },
+      relationLoadStrategy: "join",
     }),
     prisma.projectEngagement.findMany({
       where: { projectId: params.projectId },

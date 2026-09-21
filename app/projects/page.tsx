@@ -20,16 +20,20 @@ export default async function ProjectsPage() {
 
   const canSeeAll = user.role === "ADMIN" || user.role === "TPM" || user.role === "PROGRAM_MANAGER";
   const isAdmin = user.role === "ADMIN";
-  const projects = await prisma.project.findMany({
-    where: canSeeAll ? {} : { memberships: { some: { userId: user.id } }, deletedAt: null },
-    orderBy: { createdAt: "desc" },
-    include: PORTFOLIO_PROJECT_INCLUDE,
-  });
-
-  // Same reminder-worthy items the sidebar badge/Dashboard rollup use —
-  // already scoped to this viewer's role/projects (empty for Client/Limited/
-  // Program Manager), so the card tag below never leaks it to a Client.
-  const reminderItems = await getReminderItems(user);
+  // `projects` and `reminderItems` are independent of each other — fetched
+  // concurrently instead of as two serialized round trips.
+  const [projects, reminderItems] = await Promise.all([
+    prisma.project.findMany({
+      where: canSeeAll ? {} : { memberships: { some: { userId: user.id } }, deletedAt: null },
+      orderBy: { createdAt: "desc" },
+      include: PORTFOLIO_PROJECT_INCLUDE,
+      relationLoadStrategy: "join",
+    }),
+    // Same reminder-worthy items the sidebar badge/Dashboard rollup use —
+    // already scoped to this viewer's role/projects (empty for Client/Limited/
+    // Program Manager), so the card tag below never leaks it to a Client.
+    getReminderItems(user),
+  ]);
   const overdueCounts = new Map<string, number>();
   for (const r of reminderItems) {
     if (r.band === "OVERDUE" && r.projectId) overdueCounts.set(r.projectId, (overdueCounts.get(r.projectId) ?? 0) + 1);

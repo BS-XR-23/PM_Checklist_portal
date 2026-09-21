@@ -26,6 +26,7 @@ export async function getDashboardData(projectId: string) {
       where: { projectId },
       orderBy: { startDate: "asc" },
       include: { tasks: { include: { person: { include: { roleRate: true } } } } },
+      relationLoadStrategy: "join",
     }),
     prisma.milestonePayment.findMany({ where: { checklistItem: { projectId } }, include: { checklistItem: true } }),
     prisma.actionItem.findMany({ where: { projectId, dueDate: { not: null } }, include: { ownerPerson: { select: { name: true } } } }),

@@ -30,6 +30,7 @@ export default async function BudgetTrackerPage({ params }: { params: { projectI
       include: {
         tasks: { include: { person: { include: { roleRate: true } } } },
       },
+      relationLoadStrategy: "join",
     }),
   ]);
 

@@ -41,6 +41,7 @@ export default async function PortfolioPage() {
       where: { deletedAt: null },
       orderBy: { name: "asc" },
       include: PORTFOLIO_PROJECT_INCLUDE,
+      relationLoadStrategy: "join",
     }),
     showOverload
       ? prisma.person.findMany({
