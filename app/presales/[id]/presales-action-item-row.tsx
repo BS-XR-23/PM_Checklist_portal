@@ -24,11 +24,14 @@ export function PresalesActionItemRow({
   item,
   canWrite,
   people,
+  compact,
 }: {
   presalesProjectId: string;
   item: PresalesActionItemRowData;
   canWrite: boolean;
   people: { id: string; name: string }[];
+  // Narrower field grid for the sidebar column on the presales detail page.
+  compact?: boolean;
 }) {
   const [pending, startTransition] = useTransition();
 
@@ -64,7 +67,7 @@ export function PresalesActionItemRow({
         </div>
       </div>
 
-      <CardFieldGrid>
+      <CardFieldGrid className={compact ? "grid grid-cols-2 gap-3" : undefined}>
         <CardField label="Owner">
           {canWrite ? (
             <PersonPicker

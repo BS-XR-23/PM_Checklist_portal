@@ -60,54 +60,58 @@ export default async function PresalesDetailPage({ params }: { params: { id: str
         </div>
       </header>
 
-      <main className="max-w-3xl mx-auto p-4 sm:p-6 space-y-6">
+      <main className="p-4 sm:p-6 space-y-6">
         <PresalesOverview data={presales} canWrite={canWrite} people={people} />
 
-        <div className="space-y-3">
-          <div className="flex items-start justify-between">
-            <div>
-              <h2 className="text-base font-semibold text-slate-900">Presales Checklist</h2>
-              <p className="text-sm text-slate-500">The standard playbook for this deal. If Won, these carry into the project&apos;s PM Checklist.</p>
+        <div className="grid gap-6 xl:grid-cols-5">
+          <div className="xl:col-span-3 space-y-3">
+            <div className="flex items-start justify-between">
+              <div>
+                <h2 className="text-base font-semibold text-slate-900">Presales Checklist</h2>
+                <p className="text-sm text-slate-500">The standard playbook for this deal. If Won, these carry into the project&apos;s PM Checklist.</p>
+              </div>
+            </div>
+            <div className="space-y-3">
+              {checklistItems.map((c) => (
+                <PresalesChecklistRow key={c.id} presalesProjectId={presales.id} item={c} canWrite={canWrite} isAdmin={user.role === "ADMIN"} people={people} />
+              ))}
+              {checklistItems.length === 0 && <p className="text-sm text-slate-400">No checklist items yet.</p>}
+              {canWrite && <AddPresalesChecklistItemButton presalesProjectId={presales.id} />}
             </div>
           </div>
-          <div className="space-y-3">
-            {checklistItems.map((c) => (
-              <PresalesChecklistRow key={c.id} presalesProjectId={presales.id} item={c} canWrite={canWrite} isAdmin={user.role === "ADMIN"} people={people} />
-            ))}
-            {checklistItems.length === 0 && <p className="text-sm text-slate-400">No checklist items yet.</p>}
-            {canWrite && <AddPresalesChecklistItemButton presalesProjectId={presales.id} />}
-          </div>
-        </div>
 
-        <div className="space-y-3">
-          <div className="flex items-start justify-between">
-            <div>
-              <h2 className="text-base font-semibold text-slate-900">Decision Log</h2>
-              <p className="text-sm text-slate-500">What&apos;s being decided, and why, before this becomes a real project.</p>
+          <div className="xl:col-span-2 space-y-6">
+            <div className="space-y-3">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h2 className="text-base font-semibold text-slate-900">Decision Log</h2>
+                  <p className="text-sm text-slate-500">What&apos;s being decided, and why, before this becomes a real project.</p>
+                </div>
+                {canWrite && <AddPresalesDecisionButton presalesProjectId={presales.id} />}
+              </div>
+              <div className="space-y-3">
+                {decisions.map((d) => (
+                  <PresalesDecisionRow key={d.id} presalesProjectId={presales.id} item={d} canWrite={canWrite} compact />
+                ))}
+                {decisions.length === 0 && <p className="text-sm text-slate-400">No decisions logged yet.</p>}
+              </div>
             </div>
-            {canWrite && <AddPresalesDecisionButton presalesProjectId={presales.id} />}
-          </div>
-          <div className="space-y-3">
-            {decisions.map((d) => (
-              <PresalesDecisionRow key={d.id} presalesProjectId={presales.id} item={d} canWrite={canWrite} />
-            ))}
-            {decisions.length === 0 && <p className="text-sm text-slate-400">No decisions logged yet.</p>}
-          </div>
-        </div>
 
-        <div className="space-y-3">
-          <div className="flex items-start justify-between">
-            <div>
-              <h2 className="text-base font-semibold text-slate-900">Action Items</h2>
-              <p className="text-sm text-slate-500">Follow-ups that fell out of a call — too easy to forget otherwise.</p>
+            <div className="space-y-3">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h2 className="text-base font-semibold text-slate-900">Action Items</h2>
+                  <p className="text-sm text-slate-500">Follow-ups that fell out of a call — too easy to forget otherwise.</p>
+                </div>
+                {canWrite && <AddPresalesActionItemButton presalesProjectId={presales.id} />}
+              </div>
+              <div className="space-y-3">
+                {actionItems.map((a) => (
+                  <PresalesActionItemRow key={a.id} presalesProjectId={presales.id} item={a} canWrite={canWrite} people={people} compact />
+                ))}
+                {actionItems.length === 0 && <p className="text-sm text-slate-400">No action items yet.</p>}
+              </div>
             </div>
-            {canWrite && <AddPresalesActionItemButton presalesProjectId={presales.id} />}
-          </div>
-          <div className="space-y-3">
-            {actionItems.map((a) => (
-              <PresalesActionItemRow key={a.id} presalesProjectId={presales.id} item={a} canWrite={canWrite} people={people} />
-            ))}
-            {actionItems.length === 0 && <p className="text-sm text-slate-400">No action items yet.</p>}
           </div>
         </div>
       </main>

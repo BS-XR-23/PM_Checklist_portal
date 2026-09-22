@@ -843,8 +843,9 @@ describe("isolation boundary", () => {
     }
   });
 
-  it("createPresalesProject parses POC/forecast/source/practice-area/industry/technology from the create form", async () => {
+  it("createPresalesProject parses POC/forecast/source/practice-area/industry/technology/deal-owner/stage/description from the create form", async () => {
     const { createPresalesProject } = await import("@/app/presales/actions");
+    const dealOwner = await prisma.person.create({ data: { name: "[TEST] create-form deal owner" } });
 
     actAs(pmAUserId);
     const fd = new FormData();
@@ -855,6 +856,9 @@ describe("isolation boundary", () => {
     fd.set("practiceArea", "[TEST] XR");
     fd.set("industry", "[TEST] Education");
     fd.set("technology", "[TEST] Unity");
+    fd.set("dealOwnerPersonId", dealOwner.id);
+    fd.set("stage", "PROPOSAL");
+    fd.set("description", "[TEST] Why this opportunity might happen.");
     await expect(createPresalesProject(fd)).rejects.toThrow(/REDIRECT/);
 
     const opp = await prisma.presalesProject.findFirstOrThrow({ where: { name: "[TEST] full-field create form" } });
@@ -865,8 +869,12 @@ describe("isolation boundary", () => {
       expect(opp.practiceArea).toBe("[TEST] XR");
       expect(opp.industry).toBe("[TEST] Education");
       expect(opp.technology).toBe("[TEST] Unity");
+      expect(opp.dealOwnerPersonId).toBe(dealOwner.id);
+      expect(opp.stage).toBe("PROPOSAL");
+      expect(opp.description).toBe("[TEST] Why this opportunity might happen.");
     } finally {
       await prisma.presalesProject.delete({ where: { id: opp.id } });
+      await prisma.person.delete({ where: { id: dealOwner.id } });
     }
   });
 

@@ -31,9 +31,13 @@ export async function createPresalesProject(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   if (!name) throw new Error("Opportunity name is required.");
   const client = String(formData.get("client") ?? "").trim();
+  const description = String(formData.get("description") ?? "").trim() || null;
   const estimatedValueRaw = formData.get("estimatedValue");
   const estimatedValue = estimatedValueRaw ? Number(estimatedValueRaw) : null;
   const expectedCloseDate = parseDateInput(String(formData.get("expectedCloseDate") ?? "") || null);
+  const stageRaw = String(formData.get("stage") ?? "");
+  const stage = stageRaw ? (stageRaw as PresalesStage) : undefined;
+  const dealOwnerPersonId = String(formData.get("dealOwnerPersonId") ?? "").trim() || null;
   const pocDone = formData.get("pocDone") === "on";
   const forecastCategoryRaw = String(formData.get("forecastCategory") ?? "");
   const forecastCategory = forecastCategoryRaw ? (forecastCategoryRaw as PresalesForecastCategory) : null;
@@ -49,9 +53,12 @@ export async function createPresalesProject(formData: FormData) {
     data: {
       name,
       client: client || null,
+      description,
       estimatedValue,
       estimatedValueCurrency,
       expectedCloseDate,
+      ...(stage ? { stage } : {}),
+      dealOwnerPersonId,
       createdById: user.id,
       pocDone,
       forecastCategory,

@@ -21,10 +21,13 @@ export function PresalesDecisionRow({
   presalesProjectId,
   item,
   canWrite,
+  compact,
 }: {
   presalesProjectId: string;
   item: PresalesDecisionRowData;
   canWrite: boolean;
+  // Narrower field grid for the sidebar column on the presales detail page.
+  compact?: boolean;
 }) {
   const [pending, startTransition] = useTransition();
 
@@ -45,7 +48,7 @@ export function PresalesDecisionRow({
         )}
       </div>
 
-      <CardFieldGrid>
+      <CardFieldGrid className={compact ? "grid grid-cols-2 gap-3" : undefined}>
         <CardField label="Date">
           {canWrite ? (
             <InlineDate value={toDateInputValue(item.date)} onSave={(v) => updatePresalesDecision(item.id, presalesProjectId, { date: v })} />

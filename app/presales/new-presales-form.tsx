@@ -1,37 +1,52 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { FORECAST_CATEGORY_COLORS } from "@/lib/colors";
-import { SOURCE_ORDER, SOURCE_LABELS } from "@/lib/presales-stage";
+import { useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { FORECAST_CATEGORY_COLORS, PRESALES_STAGE_COLORS } from "@/lib/colors";
+import { STAGE_ORDER, SOURCE_ORDER, SOURCE_LABELS } from "@/lib/presales-stage";
+import { IconFileText } from "@/components/layout/icons";
 import { createPresalesProject } from "./actions";
+import type { PresalesStage } from "@prisma/client";
 
-export function NewPresalesForm() {
-  const [open, setOpen] = useState(false);
+export function NewPresalesForm({ people }: { people: { id: string; name: string }[] }) {
   const [pending, startTransition] = useTransition();
-
-  if (!open) {
-    return (
-      <button onClick={() => setOpen(true)} className="rounded-md bg-slate-900 text-white text-sm font-medium px-4 py-2 hover:bg-slate-800">
-        + New Opportunity
-      </button>
-    );
-  }
+  const router = useRouter();
 
   return (
     <form
       action={(formData) => startTransition(() => createPresalesProject(formData))}
-      className="rounded-lg border border-slate-200 bg-white p-4 space-y-3"
+      className="rounded-lg border border-slate-200 bg-white p-5 space-y-4"
     >
-      <h2 className="text-sm font-semibold text-slate-700">New Opportunity</h2>
-      <div className="grid sm:grid-cols-2 gap-3">
+      <div className="flex items-center gap-2">
+        <span className="inline-flex items-center justify-center h-7 w-7 rounded-full bg-blue-50 text-blue-600">
+          <IconFileText className="h-4 w-4" />
+        </span>
+        <h2 className="text-sm font-semibold text-slate-700">Presale Details</h2>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">Opportunity Name *</label>
+          <label className="block text-xs font-medium text-slate-600 mb-1">Project / Opportunity Name *</label>
           <input name="name" required className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
         </div>
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">Client</label>
           <input name="client" className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
         </div>
+        <div>
+          <label className="block text-xs font-medium text-slate-600 mb-1">Deal Owner</label>
+          <select name="dealOwnerPersonId" defaultValue="" className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
+            <option value="">—</option>
+            {people.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">Estimated Value</label>
           <div className="flex gap-1.5">
@@ -47,12 +62,43 @@ export function NewPresalesForm() {
           <input name="expectedCloseDate" type="date" className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
         </div>
         <div>
+          <label className="block text-xs font-medium text-slate-600 mb-1">Stage</label>
+          <select name="stage" defaultValue="QUALIFYING" className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
+            {STAGE_ORDER.map((s) => (
+              <option key={s} value={s}>
+                {PRESALES_STAGE_COLORS[s as PresalesStage].label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <div>
+          <label className="block text-xs font-medium text-slate-600 mb-1">POC Done?</label>
+          <label className="flex items-center gap-1.5 text-sm text-slate-600 h-[38px]">
+            <input type="checkbox" name="pocDone" className="rounded border-slate-300" />
+            Yes
+          </label>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-slate-600 mb-1">Forecast Category</label>
+          <select name="forecastCategory" defaultValue="" className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
+            <option value="">—</option>
+            {(Object.keys(FORECAST_CATEGORY_COLORS) as (keyof typeof FORECAST_CATEGORY_COLORS)[]).map((k) => (
+              <option key={k} value={k}>
+                {FORECAST_CATEGORY_COLORS[k].label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">Practice Area</label>
-          <input name="practiceArea" className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" placeholder="e.g. XR, InsurTech, MERN" />
+          <input name="practiceArea" className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" placeholder="e.g. XR, InsurTech" />
         </div>
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">Industry</label>
-          <input name="industry" className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" placeholder="e.g. Education, Insurance" />
+          <input name="industry" className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" placeholder="e.g. Education, Healthcare" />
         </div>
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">Technology</label>
@@ -69,37 +115,24 @@ export function NewPresalesForm() {
             ))}
           </select>
         </div>
-        <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">Presale Folder Link</label>
-          <input name="presaleFolderLink" className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" placeholder="SharePoint/Drive folder URL" />
-        </div>
       </div>
 
-      {/* A brand-new Lead realistically hasn't had a POC or been forecast
-          yet — de-emphasized so it doesn't compete with the fields above
-          that matter at creation time. */}
-      <div className="pt-2 border-t border-slate-100 space-y-2">
-        <p className="text-[11px] text-slate-400">Optional — usually set later</p>
-        <div className="flex flex-wrap items-center gap-4">
-          <label className="flex items-center gap-1.5 text-xs text-slate-600">
-            <input type="checkbox" name="pocDone" className="rounded border-slate-300" />
-            POC Done?
-          </label>
-          <label className="flex items-center gap-1.5 text-xs text-slate-600">
-            Forecast Category
-            <select name="forecastCategory" className="rounded-md border border-slate-300 px-2 py-1 text-xs">
-              <option value="">—</option>
-              {(Object.keys(FORECAST_CATEGORY_COLORS) as (keyof typeof FORECAST_CATEGORY_COLORS)[]).map((k) => (
-                <option key={k} value={k}>
-                  {FORECAST_CATEGORY_COLORS[k].label}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
+      <div>
+        <label className="block text-xs font-medium text-slate-600 mb-1">Presale Folder Link</label>
+        <input name="presaleFolderLink" className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" placeholder="SharePoint/Drive folder URL" />
       </div>
 
-      <div className="flex gap-2">
+      <div>
+        <label className="block text-xs font-medium text-slate-600 mb-1">Description</label>
+        <textarea
+          name="description"
+          rows={3}
+          className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+          placeholder="What is this opportunity, and why might it happen?"
+        />
+      </div>
+
+      <div className="flex gap-2 pt-1">
         <button
           type="submit"
           disabled={pending}
@@ -109,7 +142,7 @@ export function NewPresalesForm() {
         </button>
         <button
           type="button"
-          onClick={() => setOpen(false)}
+          onClick={() => router.push("/presales")}
           className="rounded-md border border-slate-300 text-slate-600 text-sm font-medium px-4 py-2 hover:bg-slate-50"
         >
           Cancel

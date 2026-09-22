@@ -10,8 +10,17 @@ export function DataCard({ children, className = "" }: { children: React.ReactNo
   );
 }
 
-export function CardFieldGrid({ children }: { children: React.ReactNode }) {
-  return <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">{children}</div>;
+export function CardFieldGrid({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  // Override for a narrower container (e.g. the Presales sidebar) where the
+  // default's lg:grid-cols-4 — sized for the viewport, not the container —
+  // would cram fields into columns too narrow to use.
+  className?: string;
+}) {
+  return <div className={className ?? "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3"}>{children}</div>;
 }
 
 export function CardField({ label, children, className = "" }: { label: string; children: React.ReactNode; className?: string }) {

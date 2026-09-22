@@ -5,7 +5,7 @@ import Link from "next/link";
 import { InlineText, InlineTextarea, InlineNumber, InlineDate, InlineSelect } from "@/components/ui/inline-edit";
 import { PersonPicker } from "@/components/resourcing/person-picker";
 import { InfoTooltip } from "@/components/ui/info-tooltip";
-import { IconExternalLink } from "@/components/layout/icons";
+import { IconExternalLink, IconFileText } from "@/components/layout/icons";
 import { formatDate, toDateInputValue } from "@/lib/format";
 import { RAG_COLORS } from "@/lib/rag";
 import { PRESALES_STAGE_COLORS, FORECAST_CATEGORY_COLORS } from "@/lib/colors";
@@ -57,25 +57,53 @@ export function PresalesOverview({
 
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-5 space-y-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1 space-y-1">
-          {canWrite ? (
-            <InlineText value={data.name} onSave={(v) => updatePresalesProject(data.id, { name: v })} />
-          ) : (
-            <h1 className="text-lg font-semibold text-slate-900">{data.name}</h1>
-          )}
-          {canWrite ? (
-            <InlineText value={data.client ?? ""} onSave={(v) => updatePresalesProject(data.id, { client: v })} placeholder="Client" />
-          ) : (
-            data.client && <p className="text-sm text-slate-500">{data.client}</p>
-          )}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <span className="inline-flex items-center justify-center h-7 w-7 rounded-full bg-blue-50 text-blue-600">
+            <IconFileText className="h-4 w-4" />
+          </span>
+          <h2 className="text-sm font-semibold text-slate-700">Presale Details</h2>
         </div>
         <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold shrink-0" style={{ backgroundColor: badge.bg, color: badge.text }}>
-          {data.outcome === "OPEN" ? "Open" : data.outcome === "WON" ? "Won" : "Lost"}
+          {data.outcome === "OPEN" ? "In Progress" : data.outcome === "WON" ? "Won" : "Lost"}
         </span>
       </div>
 
-      <div className="grid sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div>
+          <p className="text-xs font-medium text-slate-500 mb-1">Project / Opportunity Name</p>
+          {canWrite ? (
+            <InlineText value={data.name} onSave={(v) => updatePresalesProject(data.id, { name: v })} />
+          ) : (
+            <p className="text-sm text-slate-800">{data.name}</p>
+          )}
+        </div>
+        <div>
+          <p className="text-xs font-medium text-slate-500 mb-1">Client</p>
+          {canWrite ? (
+            <InlineText value={data.client ?? ""} onSave={(v) => updatePresalesProject(data.id, { client: v })} placeholder="Client" />
+          ) : (
+            <p className="text-sm text-slate-800">{data.client || "—"}</p>
+          )}
+        </div>
+        <div>
+          <p className="text-xs font-medium text-slate-500 mb-1">Deal Owner</p>
+          {canWrite ? (
+            <div className="rounded border border-slate-200">
+              <PersonPicker
+                personId={data.dealOwnerPersonId}
+                legacyText={null}
+                people={people}
+                onSave={(id) => updatePresalesProject(data.id, { dealOwnerPersonId: id })}
+              />
+            </div>
+          ) : (
+            <p className="text-sm text-slate-800">{data.dealOwnerPerson?.name ?? "—"}</p>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div>
           <p className="text-xs font-medium text-slate-500 mb-1">Estimated Value</p>
           {canWrite ? (
@@ -111,10 +139,7 @@ export function PresalesOverview({
             <p className="text-sm text-slate-800">{formatDate(data.expectedCloseDate)}</p>
           )}
         </div>
-      </div>
-
-      {data.outcome === "OPEN" && (
-        <div className="grid sm:grid-cols-2 gap-4">
+        {data.outcome === "OPEN" && (
           <div>
             <p className="text-xs font-medium text-slate-500 mb-1 flex items-center gap-1">
               Stage
@@ -138,24 +163,11 @@ export function PresalesOverview({
               </span>
             )}
           </div>
-          <div>
-            <p className="text-xs font-medium text-slate-500 mb-1">Deal Owner</p>
-            {canWrite ? (
-              <PersonPicker
-                personId={data.dealOwnerPersonId}
-                legacyText={null}
-                people={people}
-                onSave={(id) => updatePresalesProject(data.id, { dealOwnerPersonId: id })}
-              />
-            ) : (
-              <p className="text-sm text-slate-800">{data.dealOwnerPerson?.name ?? "—"}</p>
-            )}
-          </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {data.outcome === "OPEN" && (
-        <div className="grid sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
           <div>
             <p className="text-xs font-medium text-slate-500 mb-1">POC Done?</p>
             {canWrite ? (
@@ -195,11 +207,6 @@ export function PresalesOverview({
               <p className="text-sm text-slate-400">—</p>
             )}
           </div>
-        </div>
-      )}
-
-      {data.outcome === "OPEN" && (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div>
             <p className="text-xs font-medium text-slate-500 mb-1">Practice Area</p>
             {canWrite ? (
