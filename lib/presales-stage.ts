@@ -1,4 +1,4 @@
-import type { PresalesStage, PresalesCurrency, PresalesSource } from "@prisma/client";
+import type { PresalesStage, PresalesCurrency, PresalesSource, PresalesLeadType } from "@prisma/client";
 import { formatMoney, formatBDT } from "@/lib/format";
 
 export const STAGE_ORDER: PresalesStage[] = ["LEAD", "QUALIFYING", "PROPOSAL", "NEGOTIATION"];
@@ -45,4 +45,12 @@ export const SOURCE_LABELS: Record<PresalesSource, string> = {
   REFERRAL: "Referral",
   COMPETITIVE_TENDER: "Competitive Tender",
   EXISTING_CLIENT: "Existing Client",
+};
+
+export const LEAD_TYPE_ORDER: PresalesLeadType[] = ["FIXED_BUDGET", "RESOURCE_AUGMENTATION", "TIME_AND_MATERIAL"];
+
+export const LEAD_TYPE_LABELS: Record<PresalesLeadType, string> = {
+  FIXED_BUDGET: "Fixed Budget",
+  RESOURCE_AUGMENTATION: "Resource Augmentation",
+  TIME_AND_MATERIAL: "Time & Material",
 };

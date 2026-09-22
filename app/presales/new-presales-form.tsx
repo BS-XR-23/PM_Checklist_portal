@@ -3,7 +3,7 @@
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { FORECAST_CATEGORY_COLORS, PRESALES_STAGE_COLORS } from "@/lib/colors";
-import { STAGE_ORDER, SOURCE_ORDER, SOURCE_LABELS } from "@/lib/presales-stage";
+import { STAGE_ORDER, SOURCE_ORDER, SOURCE_LABELS, LEAD_TYPE_ORDER, LEAD_TYPE_LABELS } from "@/lib/presales-stage";
 import { IconFileText } from "@/components/layout/icons";
 import { createPresalesProject } from "./actions";
 import type { PresalesStage } from "@prisma/client";
@@ -67,6 +67,32 @@ export function NewPresalesForm({ people }: { people: { id: string; name: string
             {STAGE_ORDER.map((s) => (
               <option key={s} value={s}>
                 {PRESALES_STAGE_COLORS[s as PresalesStage].label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div>
+          <label className="block text-xs font-medium text-slate-600 mb-1">Start Date</label>
+          <input name="startDate" type="date" className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-slate-600 mb-1">Sales Contact</label>
+          <input name="salesContact" className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" placeholder="Who brought in this lead" />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-slate-600 mb-1">Estimated By</label>
+          <input name="estimatedBy" className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" placeholder="Who scoped the estimate" />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-slate-600 mb-1">Lead Type</label>
+          <select name="leadType" defaultValue="" className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
+            <option value="">—</option>
+            {LEAD_TYPE_ORDER.map((t) => (
+              <option key={t} value={t}>
+                {LEAD_TYPE_LABELS[t]}
               </option>
             ))}
           </select>

@@ -717,6 +717,12 @@ enum PresalesSource {
   EXISTING_CLIENT
 }
 
+enum PresalesLeadType {
+  FIXED_BUDGET
+  RESOURCE_AUGMENTATION
+  TIME_AND_MATERIAL
+}
+
 /// A pre-contract opportunity — deliberately NOT a Project (no checklist,
 /// milestones, risk, budget, or PM Plan). Tracks just enough to reason about
 /// a deal before it's signed. On Win, createProject() (lib/create-project.ts)
@@ -742,6 +748,10 @@ model PresalesProject {
   estimatedValueCurrency PresalesCurrency          @default(USD)
   presaleFolderLink      String?
   source                 PresalesSource?
+  startDate              DateTime?
+  salesContact           String?
+  estimatedBy            String?
+  leadType               PresalesLeadType?
   onHold                 Boolean                   @default(false)
   holdReason             String?
   wonProjectId           String?                   @unique

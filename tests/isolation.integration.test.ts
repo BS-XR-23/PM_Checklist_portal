@@ -859,6 +859,10 @@ describe("isolation boundary", () => {
     fd.set("dealOwnerPersonId", dealOwner.id);
     fd.set("stage", "PROPOSAL");
     fd.set("description", "[TEST] Why this opportunity might happen.");
+    fd.set("startDate", "2026-01-15");
+    fd.set("salesContact", "[TEST] Sales Contact");
+    fd.set("estimatedBy", "[TEST] Estimator");
+    fd.set("leadType", "TIME_AND_MATERIAL");
     await expect(createPresalesProject(fd)).rejects.toThrow(/REDIRECT/);
 
     const opp = await prisma.presalesProject.findFirstOrThrow({ where: { name: "[TEST] full-field create form" } });
@@ -872,6 +876,11 @@ describe("isolation boundary", () => {
       expect(opp.dealOwnerPersonId).toBe(dealOwner.id);
       expect(opp.stage).toBe("PROPOSAL");
       expect(opp.description).toBe("[TEST] Why this opportunity might happen.");
+      const { toDateInputValue } = await import("@/lib/format");
+      expect(toDateInputValue(opp.startDate)).toBe("2026-01-15");
+      expect(opp.salesContact).toBe("[TEST] Sales Contact");
+      expect(opp.estimatedBy).toBe("[TEST] Estimator");
+      expect(opp.leadType).toBe("TIME_AND_MATERIAL");
     } finally {
       await prisma.presalesProject.delete({ where: { id: opp.id } });
       await prisma.person.delete({ where: { id: dealOwner.id } });

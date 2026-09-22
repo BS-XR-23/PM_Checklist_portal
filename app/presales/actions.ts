@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { parseDateInput } from "@/lib/format";
 import { requireUser, writeAudit, type CurrentUser } from "@/lib/rbac";
 import { createProject } from "@/lib/create-project";
-import type { PresalesForecastCategory, PresalesStage, PresalesCurrency, PresalesSource } from "@prisma/client";
+import type { PresalesForecastCategory, PresalesStage, PresalesCurrency, PresalesSource, PresalesLeadType } from "@prisma/client";
 
 // Presales isn't a module of a project — it's its own entity — so
 // authorization here is a plain role check, the same shape the top-level
@@ -48,6 +48,11 @@ export async function createPresalesProject(formData: FormData) {
   const presaleFolderLink = String(formData.get("presaleFolderLink") ?? "").trim() || null;
   const sourceRaw = String(formData.get("source") ?? "");
   const source = sourceRaw ? (sourceRaw as PresalesSource) : null;
+  const startDate = parseDateInput(String(formData.get("startDate") ?? "") || null);
+  const salesContact = String(formData.get("salesContact") ?? "").trim() || null;
+  const estimatedBy = String(formData.get("estimatedBy") ?? "").trim() || null;
+  const leadTypeRaw = String(formData.get("leadType") ?? "");
+  const leadType = leadTypeRaw ? (leadTypeRaw as PresalesLeadType) : null;
 
   const created = await prisma.presalesProject.create({
     data: {
@@ -67,6 +72,10 @@ export async function createPresalesProject(formData: FormData) {
       technology,
       presaleFolderLink,
       source,
+      startDate,
+      salesContact,
+      estimatedBy,
+      leadType,
     },
   });
 
@@ -110,6 +119,10 @@ export async function updatePresalesProject(
     estimatedValueCurrency: PresalesCurrency;
     presaleFolderLink: string;
     source: PresalesSource | null;
+    startDate: string | null;
+    salesContact: string;
+    estimatedBy: string;
+    leadType: PresalesLeadType | null;
     onHold: boolean;
     holdReason: string;
   }>
@@ -135,6 +148,10 @@ export async function updatePresalesProject(
       ...(data.estimatedValueCurrency !== undefined ? { estimatedValueCurrency: data.estimatedValueCurrency } : {}),
       ...(data.presaleFolderLink !== undefined ? { presaleFolderLink: data.presaleFolderLink || null } : {}),
       ...(data.source !== undefined ? { source: data.source } : {}),
+      ...(data.startDate !== undefined ? { startDate: parseDateInput(data.startDate) } : {}),
+      ...(data.salesContact !== undefined ? { salesContact: data.salesContact || null } : {}),
+      ...(data.estimatedBy !== undefined ? { estimatedBy: data.estimatedBy || null } : {}),
+      ...(data.leadType !== undefined ? { leadType: data.leadType } : {}),
       ...(data.onHold !== undefined ? { onHold: data.onHold } : {}),
       ...(data.holdReason !== undefined ? { holdReason: data.holdReason || null } : {}),
     },

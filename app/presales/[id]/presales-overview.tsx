@@ -9,9 +9,19 @@ import { IconExternalLink, IconFileText } from "@/components/layout/icons";
 import { formatDate, toDateInputValue } from "@/lib/format";
 import { RAG_COLORS } from "@/lib/rag";
 import { PRESALES_STAGE_COLORS, FORECAST_CATEGORY_COLORS } from "@/lib/colors";
-import { STAGE_ORDER, STAGE_INFO, SOURCE_ORDER, SOURCE_LABELS, usdEquivalent, formatByCurrency, USD_TO_BDT_RATE } from "@/lib/presales-stage";
+import {
+  STAGE_ORDER,
+  STAGE_INFO,
+  SOURCE_ORDER,
+  SOURCE_LABELS,
+  LEAD_TYPE_ORDER,
+  LEAD_TYPE_LABELS,
+  usdEquivalent,
+  formatByCurrency,
+  USD_TO_BDT_RATE,
+} from "@/lib/presales-stage";
 import { updatePresalesProject, winPresalesProject, markPresalesLost, reopenPresalesProject } from "../actions";
-import type { PresalesOutcome, PresalesStage, PresalesForecastCategory, PresalesCurrency, PresalesSource } from "@prisma/client";
+import type { PresalesOutcome, PresalesStage, PresalesForecastCategory, PresalesCurrency, PresalesSource, PresalesLeadType } from "@prisma/client";
 
 export type PresalesOverviewData = {
   id: string;
@@ -32,6 +42,10 @@ export type PresalesOverviewData = {
   technology: string | null;
   presaleFolderLink: string | null;
   source: PresalesSource | null;
+  startDate: Date | null;
+  salesContact: string | null;
+  estimatedBy: string | null;
+  leadType: PresalesLeadType | null;
   onHold: boolean;
   holdReason: string | null;
   lostReason: string | null;
@@ -165,6 +179,48 @@ export function PresalesOverview({
           </div>
         )}
       </div>
+
+      {data.outcome === "OPEN" && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div>
+            <p className="text-xs font-medium text-slate-500 mb-1">Start Date</p>
+            {canWrite ? (
+              <InlineDate value={toDateInputValue(data.startDate)} onSave={(v) => updatePresalesProject(data.id, { startDate: v })} />
+            ) : (
+              <p className="text-sm text-slate-800">{formatDate(data.startDate)}</p>
+            )}
+          </div>
+          <div>
+            <p className="text-xs font-medium text-slate-500 mb-1">Sales Contact</p>
+            {canWrite ? (
+              <InlineText value={data.salesContact ?? ""} onSave={(v) => updatePresalesProject(data.id, { salesContact: v })} placeholder="Who brought in this lead" />
+            ) : (
+              <p className="text-sm text-slate-800">{data.salesContact || "—"}</p>
+            )}
+          </div>
+          <div>
+            <p className="text-xs font-medium text-slate-500 mb-1">Estimated By</p>
+            {canWrite ? (
+              <InlineText value={data.estimatedBy ?? ""} onSave={(v) => updatePresalesProject(data.id, { estimatedBy: v })} placeholder="Who scoped the estimate" />
+            ) : (
+              <p className="text-sm text-slate-800">{data.estimatedBy || "—"}</p>
+            )}
+          </div>
+          <div>
+            <p className="text-xs font-medium text-slate-500 mb-1">Lead Type</p>
+            {canWrite ? (
+              <InlineSelect
+                value={data.leadType ?? ""}
+                options={["", ...LEAD_TYPE_ORDER]}
+                renderOption={(v) => (v ? LEAD_TYPE_LABELS[v as PresalesLeadType] : "—")}
+                onSave={(v) => updatePresalesProject(data.id, { leadType: v ? (v as PresalesLeadType) : null })}
+              />
+            ) : (
+              <p className="text-sm text-slate-800">{data.leadType ? LEAD_TYPE_LABELS[data.leadType] : "—"}</p>
+            )}
+          </div>
+        </div>
+      )}
 
       {data.outcome === "OPEN" && (
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
