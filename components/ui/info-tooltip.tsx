@@ -6,7 +6,17 @@ import { IconInfo } from "@/components/layout/icons";
 /** Small hover-triggered note for a page/section heading — reusable so every
  * "what does this mean" aside on the app lands the same way instead of each
  * page inventing its own placement. */
-export function InfoTooltip({ text }: { text: string }) {
+export function InfoTooltip({
+  text,
+  // Opens below the trigger by default. A table column header near the top
+  // of a short table has little room below it before the tooltip overlaps
+  // (and fights hover state with) the rows underneath — "top" opens it
+  // upward instead, clear of the table body.
+  placement = "bottom",
+}: {
+  text: string;
+  placement?: "top" | "bottom";
+}) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -17,7 +27,11 @@ export function InfoTooltip({ text }: { text: string }) {
       {open && (
         <span
           role="tooltip"
-          className="absolute left-1/2 top-full z-20 mt-2 w-64 -translate-x-1/2 rounded-lg bg-slate-900 px-3 py-2 text-xs leading-relaxed text-white shadow-lg"
+          className={
+            placement === "top"
+              ? "absolute left-1/2 bottom-full z-20 mb-2 w-64 -translate-x-1/2 whitespace-pre-line rounded-lg bg-slate-900 px-3 py-2 text-xs leading-relaxed text-white shadow-lg"
+              : "absolute left-1/2 top-full z-20 mt-2 w-64 -translate-x-1/2 whitespace-pre-line rounded-lg bg-slate-900 px-3 py-2 text-xs leading-relaxed text-white shadow-lg"
+          }
         >
           {text}
         </span>

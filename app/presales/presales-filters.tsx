@@ -6,9 +6,10 @@ import clsx from "clsx";
 import { formatShortDate, formatDate, initials } from "@/lib/format";
 import { RAG_COLORS } from "@/lib/rag";
 import { PRESALES_STAGE_COLORS, avatarColorFromString } from "@/lib/colors";
-import { STAGE_ORDER, formatByCurrency } from "@/lib/presales-stage";
+import { STAGE_ORDER, STAGE_INFO, formatByCurrency } from "@/lib/presales-stage";
 import { InlineSelect } from "@/components/ui/inline-edit";
 import { PersonPicker } from "@/components/resourcing/person-picker";
+import { InfoTooltip } from "@/components/ui/info-tooltip";
 import { IconSearch, IconCalendar } from "@/components/layout/icons";
 import { RowActionsMenu, type RowAction } from "@/components/ui/row-actions-menu";
 import { updatePresalesProject, deletePresalesProject, restorePresalesProject, permanentlyDeletePresalesProject } from "./actions";
@@ -44,6 +45,13 @@ const OUTCOME_BADGE: Record<PresalesOutcome, { bg: string; text: string; label: 
   WON: RAG_COLORS.GREEN,
   LOST: RAG_COLORS.RED,
 };
+
+// One combined tooltip for the whole Stage column — unlike the detail page's
+// per-field tooltip (which only needs to explain the one stage a deal is
+// currently in), a column header isn't tied to a single row's value, so this
+// lists all four so a reader doesn't have to open each opportunity to recall
+// what "Proposal" vs "Negotiation" means.
+const STAGE_LEGEND = STAGE_ORDER.map((s) => `${PRESALES_STAGE_COLORS[s].label}: ${STAGE_INFO[s]}`).join("\n\n");
 
 type Filter = "ALL" | "OPEN" | "WON" | "LOST" | "DELETED";
 type SortKey = "updatedAt" | "value" | "closeDate" | "name";
@@ -197,7 +205,12 @@ export function PresalesFilters({
               <th className="px-4 py-2.5 font-medium whitespace-nowrap">Opportunity</th>
               <th className="px-4 py-2.5 font-medium whitespace-nowrap">Client</th>
               <th className="px-4 py-2.5 font-medium whitespace-nowrap">Deal Owner</th>
-              <th className="px-4 py-2.5 font-medium whitespace-nowrap">Stage</th>
+              <th className="px-4 py-2.5 font-medium whitespace-nowrap">
+                <span className="inline-flex items-center gap-1">
+                  Stage
+                  <InfoTooltip text={STAGE_LEGEND} placement="top" />
+                </span>
+              </th>
               <th className="px-4 py-2.5 font-medium whitespace-nowrap">Value</th>
               <th className="px-4 py-2.5 font-medium whitespace-nowrap">Close Date</th>
               <th className="px-4 py-2.5 font-medium whitespace-nowrap">Status</th>
