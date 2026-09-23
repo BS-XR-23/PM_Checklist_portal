@@ -1,5 +1,4 @@
 import { prisma } from "@/lib/prisma";
-import { PM_STAGES } from "@/lib/seed-data";
 import { ITEM_STATUSES, type ItemStatus } from "@/lib/constants";
 import { CHECKLIST_TYPES, CHECKLIST_TYPE_BY_KEY, type ChecklistType } from "@/lib/checklist-types";
 import { computeProjectRag } from "@/lib/rag";
@@ -7,12 +6,10 @@ import {
   riskScore,
   computeEvm,
   trancheAmount,
-  currentStage,
   reminderBand,
   checklistCompletionPct,
   budgetEntriesFromSprints,
   toSprintsForBudget,
-  COMPLETED_STAGE_LABEL,
 } from "@/lib/calculations";
 
 export async function getDashboardData(projectId: string) {
@@ -41,7 +38,6 @@ export async function getDashboardData(projectId: string) {
     decidedByName: d.decidedByPerson?.name ?? d.decidedBy ?? null,
   }));
 
-  const pmItems = allItems.filter((i) => i.type === "PM");
   // N/A items don't count toward completion at all — not the numerator
   // (obviously not completed) and not the denominator either (they're not
   // part of this project's plan, same as if the template item weren't there).
@@ -69,7 +65,7 @@ export async function getDashboardData(projectId: string) {
     return { name: c.label, total: applicable.length, completed, pct: applicable.length ? completed / applicable.length : 0 };
   }).filter((c) => c.total > 0);
 
-  function stageSummary(items: typeof pmItems, stages: readonly string[]) {
+  function stageSummary(items: typeof allItems, stages: readonly string[]) {
     return stages.map((stage) => {
       const rows = items.filter((i) => i.stage === stage);
       const applicable = rows.filter((i) => i.status !== "NOT_APPLICABLE");
@@ -94,11 +90,12 @@ export async function getDashboardData(projectId: string) {
     return { key: c.key, label: c.label, stageLabel: c.stageLabel, stages };
   }).filter((c) => c.stages.some((s) => s.total > 0));
 
-  // Derived, not stored — the current stage (per the resolved PM-Checklist-
-  // is-canonical definition, same as the Projects list) and the project's
-  // "end date" (latest Actual Date across every checklist item), so
-  // neither can drift out of sync with the checklist itself.
-  const pmStage = currentStage(pmItems, PM_STAGES) ?? COMPLETED_STAGE_LABEL;
+  // Derived, not stored — the project's "end date" (latest Actual Date
+  // across every checklist item), so it can't drift out of sync with the
+  // checklist itself. (A "Current Stage (PM Checklist)" figure used to live
+  // here too; dropped — a single stage name pooled from just one of the
+  // project's checklist types didn't earn its place next to Health/Next
+  // Milestone, which are real "where are we" signals.)
   const endDate = applicableItems.reduce<Date | null>((latest, i) => {
     if (!i.actualDate) return latest;
     return !latest || i.actualDate > latest ? i.actualDate : latest;
@@ -210,7 +207,6 @@ export async function getDashboardData(projectId: string) {
     totalItems,
     completedItems,
     overallPct,
-    pmStage,
     endDate,
     rag,
     nextMilestone,

@@ -23,6 +23,7 @@ import {
   IconTarget,
 } from "@/components/layout/icons";
 import { SpiSparkline } from "@/components/charts/spi-sparkline";
+import { DeliveryProgressGauge } from "@/components/charts/delivery-progress-gauge";
 import { DetailedReporting } from "./detailed-reporting";
 
 export default async function DashboardPage({ params }: { params: { projectId: string } }) {
@@ -52,18 +53,20 @@ export default async function DashboardPage({ params }: { params: { projectId: s
 
   return (
     <div className="space-y-6">
-      <div className="rounded-xl border border-slate-200 bg-white p-5">
-        <div className="flex flex-wrap items-start justify-between gap-6">
-          <div className="min-w-[220px]">
-            <p className="text-sm text-slate-500">Overall % Complete</p>
-            <p className="text-4xl font-bold text-slate-900">{formatPct(data.overallPct)}</p>
-            <div className="mt-3 h-2 w-full rounded-full bg-slate-100 overflow-hidden">
-              <div className="h-full bg-slate-800" style={{ width: `${data.overallPct * 100}%` }} />
-            </div>
-            <p className="mt-2 text-sm text-slate-500">
+      <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className="flex flex-wrap items-center justify-between gap-6">
+          {/* Circular diagram carries the % itself now — the old flat
+              "Overall % Complete" number+bar was pure duplication once the
+              gauge existed. */}
+          <div className="flex flex-col items-center gap-1 shrink-0">
+            <DeliveryProgressGauge value={data.overallPct} label="Complete" size={140} />
+            <p className="text-center text-xs text-slate-500">
               {data.completedItems} / {data.totalItems} checklist items complete
             </p>
           </div>
+
+          {/* Raw item counts — moved here from their own row below to fill
+              the hero's middle column. */}
           <div className="grid grid-cols-2 gap-x-8 gap-y-3">
             <HeroStat icon={<IconGrid />} iconWrapClass="bg-blue-50 text-blue-600" label="Total Items" value={data.totalItems} />
             <HeroStat icon={<IconCircle />} iconWrapClass="bg-slate-100 text-slate-500" label="Not Started" value={statusCount("NOT_STARTED")} />
@@ -72,13 +75,30 @@ export default async function DashboardPage({ params }: { params: { projectId: s
             <HeroStat icon={<IconClock />} iconWrapClass="bg-blue-50 text-blue-600" label="In Progress" value={statusCount("IN_PROGRESS")} />
             <HeroStat icon={<IconAlertTriangle />} iconWrapClass="bg-amber-50 text-amber-600" label="At Risk" value={statusCount("AT_RISK")} />
           </div>
+
+          {/* Per-checklist completion, not raw counts — the pooled % above
+              answers "overall," this answers "which checklist is behind."
+              Narrower now that the middle column claims most of the row. */}
+          {data.perChecklistSummary.length > 0 && (
+            <div className="grid grid-cols-2 gap-3 min-w-[220px] max-w-[320px]">
+              {data.perChecklistSummary.map((c) => (
+                <div key={c.name} className="rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2">
+                  <p className="text-xs text-slate-500 truncate">{c.name.replace(/ Checklist$/, "")}</p>
+                  <p className="text-lg font-bold text-slate-900">{formatPct(c.pct)}</p>
+                  <div className="mt-1 h-1 rounded-full bg-slate-200 overflow-hidden">
+                    <div className="h-full bg-slate-800" style={{ width: `${c.pct * 100}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
       {/* Not financial data — visible to every role with dashboard access, same as the completion hero above.
           The "where are we" strip: health, stage, end date, next milestone — none of this existed as a single
           glanceable row before (Health/Next Milestone weren't shown anywhere on this page at all). */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <StatTile
           icon={<IconShield />}
           iconWrapClass="bg-slate-100"
@@ -88,7 +108,6 @@ export default async function DashboardPage({ params }: { params: { projectId: s
           value={RAG_COLORS[data.rag].label}
           valueColor={RAG_COLORS[data.rag].text}
         />
-        <StatTile icon={<IconLayers />} iconWrapClass="bg-blue-50 text-blue-600" label="Current Stage (PM Checklist)" value={data.pmStage} />
         <StatTile icon={<IconClock />} iconWrapClass="bg-emerald-50 text-emerald-600" label="End Date" value={data.endDate ? formatDate(data.endDate) : "—"} />
         <StatTile
           icon={<IconTarget />}
