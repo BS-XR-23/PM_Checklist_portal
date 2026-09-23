@@ -13,22 +13,18 @@ export default async function ReleasesPage({ params }: { params: { projectId: st
   const access = await requireModuleAccess(projectId, "RELEASE", "READ_LIMITED");
   const canWrite = access === "WRITE";
 
-  const [releases, milestones, sprints, wbsTasks, people] = await Promise.all([
+  const [releases, milestones, people] = await Promise.all([
     prisma.release.findMany({
       where: { projectId },
       orderBy: { createdAt: "desc" },
       include: {
         ownerPerson: true,
         relatedMilestone: true,
-        sprints: { include: { sprint: true } },
-        wbsTasks: { include: { wbsTask: true } },
       },
     }),
     // payment: null — a Release only links to Delivery's own development
     // milestones, never the unrelated payment-tranche-linked ones.
     prisma.milestone.findMany({ where: { projectId, payment: null }, orderBy: { plannedDate: "asc" } }),
-    prisma.sprint.findMany({ where: { projectId }, orderBy: { startDate: "asc" } }),
-    prisma.wbsTask.findMany({ where: { projectId }, orderBy: { createdAt: "asc" } }),
     prisma.person.findMany({ orderBy: { name: "asc" } }),
   ]);
 
@@ -54,7 +50,7 @@ export default async function ReleasesPage({ params }: { params: { projectId: st
         title="How to fill this in"
         points={[
           <>A Release is a shipped version/build — &quot;1.4.0 deployed to UAT&quot; — distinct from a Milestone, which is a checkpoint like &quot;Development Complete&quot;.</>,
-          <>Link a release to the Sprints and WBS tasks it actually contains, and optionally to the Milestone it fulfills, so its scope is traceable.</>,
+          <>Optionally link a release to the Milestone it fulfills, so its scope is traceable.</>,
           <><strong>Deployment Status</strong> and <strong>Approval Status</strong> are tracked independently — a build can be deployed before it&apos;s formally approved, or vice versa, depending on your process.</>,
         ]}
       />
@@ -70,8 +66,6 @@ export default async function ReleasesPage({ params }: { params: { projectId: st
         projectId={projectId}
         canWrite={canWrite}
         milestones={milestones.map((m) => ({ id: m.id, name: m.name }))}
-        sprints={sprints.map((s) => ({ id: s.id, name: s.name }))}
-        wbsTasks={wbsTasks.map((t) => ({ id: t.id, wbsNumber: t.wbsNumber, title: t.title }))}
         people={people.map((p) => ({ id: p.id, name: p.name }))}
         rows={releases.map((r) => ({
           id: r.id,
@@ -94,8 +88,6 @@ export default async function ReleasesPage({ params }: { params: { projectId: st
           uatSignoffStatus: r.uatSignoffStatus,
           uatSignoffDate: r.uatSignoffDate,
           uatFeedback: r.uatFeedback,
-          sprintIds: r.sprints.map((s) => s.sprintId),
-          wbsTaskIds: r.wbsTasks.map((t) => t.wbsTaskId),
         }))}
       />
     </div>

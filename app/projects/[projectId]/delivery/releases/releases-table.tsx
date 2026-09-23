@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { InlineDate, InlineSelect, InlineText, InlineTextarea } from "@/components/ui/inline-edit";
 import { RowActionsMenu } from "@/components/ui/row-actions-menu";
 import { PersonPicker } from "@/components/resourcing/person-picker";
@@ -14,7 +14,7 @@ import {
 } from "@/lib/constants";
 import { RELEASE_DEPLOYMENT_STATUS_COLORS, RELEASE_APPROVAL_STATUS_COLORS } from "@/lib/colors";
 import { formatDate } from "@/lib/format";
-import { updateRelease, deleteRelease, toggleReleaseSprint, toggleReleaseWbsTask } from "./release-actions";
+import { updateRelease, deleteRelease } from "./release-actions";
 import type { ReleaseType } from "@prisma/client";
 
 export type ReleaseTableRow = {
@@ -38,8 +38,6 @@ export type ReleaseTableRow = {
   uatSignoffStatus: string;
   uatSignoffDate: Date | null;
   uatFeedback: string | null;
-  sprintIds: string[];
-  wbsTaskIds: string[];
 };
 
 function toDateInput(d: Date | null): string | null {
@@ -54,16 +52,12 @@ export function ReleasesTable({
   projectId,
   canWrite,
   milestones,
-  sprints,
-  wbsTasks,
   people,
   rows,
 }: {
   projectId: string;
   canWrite: boolean;
   milestones: { id: string; name: string }[];
-  sprints: { id: string; name: string }[];
-  wbsTasks: { id: string; wbsNumber: string; title: string }[];
   people: { id: string; name: string }[];
   rows: ReleaseTableRow[];
 }) {
@@ -220,23 +214,6 @@ export function ReleasesTable({
                     )}
                   </Field>
                 </div>
-
-                <div className="grid sm:grid-cols-2 gap-4">
-                  <LinkPicker
-                    title="Related Sprint(s)"
-                    options={sprints}
-                    selectedIds={r.sprintIds}
-                    canWrite={canWrite}
-                    onToggle={(id, linked) => toggleReleaseSprint(r.id, id, linked, projectId)}
-                  />
-                  <LinkPicker
-                    title="Included WBS"
-                    options={wbsTasks.map((t) => ({ id: t.id, name: `${t.wbsNumber} — ${t.title}` }))}
-                    selectedIds={r.wbsTaskIds}
-                    canWrite={canWrite}
-                    onToggle={(id, linked) => toggleReleaseWbsTask(r.id, id, linked, projectId)}
-                  />
-                </div>
               </div>
             )}
           </div>
@@ -251,48 +228,6 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <div>
       <p className="text-xs font-medium text-slate-500 mb-1">{label}</p>
       {children}
-    </div>
-  );
-}
-
-function LinkPicker({
-  title,
-  options,
-  selectedIds,
-  canWrite,
-  onToggle,
-}: {
-  title: string;
-  options: { id: string; name: string }[];
-  selectedIds: string[];
-  canWrite: boolean;
-  onToggle: (id: string, linked: boolean) => Promise<void>;
-}) {
-  const [pending, startTransition] = useTransition();
-  const selected = new Set(selectedIds);
-
-  return (
-    <div className="rounded-lg border border-slate-200 bg-white p-3">
-      <p className="text-xs font-medium text-slate-500 mb-2">
-        {title} ({selectedIds.length})
-      </p>
-      {options.length === 0 ? (
-        <p className="text-xs text-slate-400">None available.</p>
-      ) : (
-        <div className="max-h-40 overflow-y-auto space-y-1">
-          {options.map((o) => (
-            <label key={o.id} className="flex items-center gap-2 text-xs text-slate-700">
-              <input
-                type="checkbox"
-                disabled={!canWrite || pending}
-                checked={selected.has(o.id)}
-                onChange={(e) => startTransition(() => onToggle(o.id, e.target.checked))}
-              />
-              <span className="truncate">{o.name}</span>
-            </label>
-          ))}
-        </div>
-      )}
     </div>
   );
 }

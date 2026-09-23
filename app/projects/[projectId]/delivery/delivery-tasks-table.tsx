@@ -289,6 +289,18 @@ export function WbsTasksTable({
   const [pendingFocusId, setPendingFocusId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<(typeof PAGE_SIZES)[number]>(10);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleting, startBulkDelete] = useTransition();
+
+  // Drop any selected id that no longer exists in `tasks` (deleted elsewhere,
+  // or this table is the Completed split and the task moved out of it) —
+  // otherwise the "N selected" count would include rows that aren't there.
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      const next = new Set(Array.from(prev).filter((id) => tasks.some((t) => t.id === id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [tasks]);
 
   // Escape closes whichever modal is open (Add Task, History) — both had a
   // backdrop and an X button but no keyboard way out, which every other
@@ -365,7 +377,51 @@ export function WbsTasksTable({
     setPage(1);
   };
 
-  const colCount = 8 + (taskHistory ? 1 : 0) + (canWrite ? 1 : 0);
+  const colCount = 8 + (taskHistory ? 1 : 0) + (canWrite ? 2 : 0);
+
+  const pageIds = pageTasks.map((t) => t.id);
+  const allOnPageSelected = pageIds.length > 0 && pageIds.every((id) => selectedIds.has(id));
+  const toggleSelectAllOnPage = () => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allOnPageSelected) pageIds.forEach((id) => next.delete(id));
+      else pageIds.forEach((id) => next.add(id));
+      return next;
+    });
+  };
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const deleteSelected = () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    if (!window.confirm(`Delete ${ids.length} task${ids.length === 1 ? "" : "s"}? This can't be undone.`)) return;
+    startBulkDelete(async () => {
+      const results = await Promise.allSettled(ids.map((id) => deleteWbsTask(id, projectId)));
+      const failed = results
+        .map((r, i) => (r.status === "rejected" ? { id: ids[i], reason: r.reason } : null))
+        .filter((x): x is { id: string; reason: unknown } => x !== null);
+      const succeededIds = ids.filter((id) => !failed.some((f) => f.id === id));
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        succeededIds.forEach((id) => next.delete(id));
+        return next;
+      });
+      if (failed.length > 0) {
+        const firstReason = failed[0].reason instanceof Error ? failed[0].reason.message : "Something went wrong.";
+        window.alert(
+          `Deleted ${succeededIds.length} of ${ids.length} task${ids.length === 1 ? "" : "s"}. ` +
+            `${failed.length} couldn't be deleted: ${firstReason}${failed.length > 1 ? ` (and ${failed.length - 1} more)` : ""}`
+        );
+      }
+    });
+  };
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
@@ -431,6 +487,27 @@ export function WbsTasksTable({
                   Clear filters
                 </button>
               )}
+              {canWrite && selectedIds.size > 0 && (
+                <div className="flex items-center gap-2 rounded-md bg-indigo-50 px-2 py-1">
+                  <span className="text-xs font-medium text-indigo-700">{selectedIds.size} selected</span>
+                  <button
+                    type="button"
+                    disabled={bulkDeleting}
+                    onClick={deleteSelected}
+                    className="text-xs font-medium text-red-600 hover:text-red-700 disabled:opacity-50"
+                  >
+                    {bulkDeleting ? "Deleting…" : "Delete selected"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={bulkDeleting}
+                    onClick={() => setSelectedIds(new Set())}
+                    className="text-xs text-slate-500 hover:text-slate-700 disabled:opacity-50"
+                  >
+                    Clear
+                  </button>
+                </div>
+              )}
             </>
           )}
           {(exportAction || (canWrite && showAddRow)) && (
@@ -468,6 +545,16 @@ export function WbsTasksTable({
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50">
+              {canWrite && (
+                <th className="px-4 py-3 w-8">
+                  <input
+                    type="checkbox"
+                    aria-label="Select all on this page"
+                    checked={allOnPageSelected}
+                    onChange={toggleSelectAllOnPage}
+                  />
+                </th>
+              )}
               <SortHeader label="WBS#" sortKey="wbsNumber" active={sort?.key === "wbsNumber"} dir={sort?.dir ?? "asc"} onClick={toggleSort} className="px-4 py-3 w-24" />
               <th className="px-4 py-3">Title</th>
               <SortHeader label="Story Pts" sortKey="storyPoints" active={sort?.key === "storyPoints"} dir={sort?.dir ?? "asc"} onClick={toggleSort} className="px-4 py-3 w-24" />
@@ -495,6 +582,16 @@ export function WbsTasksTable({
               const assigneeRoster = roster.find((p) => p.personId === t.personId);
               return (
               <tr key={t.id} className="border-b border-slate-100 last:border-0">
+                {canWrite && (
+                  <td className="px-4 py-2">
+                    <input
+                      type="checkbox"
+                      aria-label={`Select ${t.wbsNumber || t.title}`}
+                      checked={selectedIds.has(t.id)}
+                      onChange={() => toggleSelect(t.id)}
+                    />
+                  </td>
+                )}
                 <td className="px-4 py-2">
                   {canWrite ? (
                     <InlineText value={t.wbsNumber} onSave={(v) => updateWbsTask(t.id, projectId, { wbsNumber: v })} />
