@@ -1,0 +1,184 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import clsx from "clsx";
+import { formatPct, formatDate } from "@/lib/format";
+import { STATUS_COLORS } from "@/lib/colors";
+import { SectionHeader } from "@/components/ui/section-header";
+import { IconChevronDown, IconChart, IconGrid, IconDollar, IconLayers, IconClock, IconClipboardList } from "@/components/layout/icons";
+import { StatusPieChart } from "@/components/charts/status-pie-chart";
+import { CompletionBarChart } from "@/components/charts/completion-bar-chart";
+import { EvmLineChart } from "@/components/charts/evm-line-chart";
+import { TimelineStrip } from "@/components/dashboard/timeline-strip";
+import type { getDashboardData } from "@/lib/dashboard-data";
+
+type DashboardData = Awaited<ReturnType<typeof getDashboardData>>;
+
+/**
+ * Everything that's reporting/analysis depth rather than "where is this
+ * project right now" — charts, the full per-stage breakdown, the milestones
+ * table. Collapsed by default (opposite of components/ui/page-guide.tsx,
+ * which defaults open on first visit) since the complaint this responds to
+ * was "too much visible at once," not "I need onboarding help" — then
+ * remembers the viewer's preference the same way PageGuide does.
+ */
+export function DetailedReporting({
+  projectId,
+  financialsVisible,
+  showMilestonesLink,
+  statusBreakdown,
+  perChecklistSummary,
+  evmChartData,
+  stageSummaryByType,
+  timelineStrip,
+  milestonesList,
+}: {
+  projectId: string;
+  financialsVisible: boolean;
+  showMilestonesLink: boolean;
+  statusBreakdown: DashboardData["statusBreakdown"];
+  perChecklistSummary: DashboardData["perChecklistSummary"];
+  evmChartData: DashboardData["evmChartData"];
+  stageSummaryByType: DashboardData["stageSummaryByType"];
+  timelineStrip: DashboardData["timelineStrip"];
+  milestonesList: DashboardData["milestonesList"];
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    try {
+      const pref = localStorage.getItem(`dashboardDetailedReporting:${projectId}:expanded`);
+      if (pref === "1") setExpanded(true);
+    } catch {
+      // localStorage unavailable — stays collapsed.
+    }
+  }, [projectId]);
+
+  function toggle() {
+    setExpanded((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(`dashboardDetailedReporting:${projectId}:expanded`, next ? "1" : "0");
+      } catch {
+        // ignore — the toggle still works for this session
+      }
+      return next;
+    });
+  }
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white">
+      <button
+        type="button"
+        onClick={toggle}
+        className="w-full flex items-center justify-between gap-2 px-4 py-3 text-left"
+        aria-expanded={expanded}
+      >
+        <span className="text-sm font-semibold text-slate-700">Detailed Reporting</span>
+        <span className="flex items-center gap-1.5 text-xs text-slate-400">
+          {expanded ? "Hide" : "Show"} charts, breakdowns &amp; milestones
+          <IconChevronDown className={clsx("h-4 w-4 transition-transform", expanded && "rotate-180")} />
+        </span>
+      </button>
+
+      {expanded && (
+        <div className="px-4 pb-4 pt-1 space-y-4 border-t border-slate-100">
+          <div className={financialsVisible ? "grid lg:grid-cols-3 gap-4" : "grid lg:grid-cols-2 gap-4"}>
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <SectionHeader icon={<IconChart />} iconWrapClass="bg-blue-50 text-blue-600" title="Status Breakdown (All Checklists)" className="mb-2" />
+              <StatusPieChart data={statusBreakdown} />
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <SectionHeader icon={<IconGrid />} iconWrapClass="bg-violet-50 text-violet-600" title="% Complete by Checklist" className="mb-2" />
+              <CompletionBarChart data={perChecklistSummary.map((c) => ({ name: c.name, pct: c.pct }))} />
+            </div>
+            {financialsVisible && (
+              <div className="rounded-xl border border-slate-200 bg-white p-4">
+                <SectionHeader icon={<IconDollar />} iconWrapClass="bg-amber-50 text-amber-600" title="Budget Burn (PV / EV / AC)" className="mb-2" />
+                <EvmLineChart data={evmChartData} />
+              </div>
+            )}
+          </div>
+
+          <div className="grid lg:grid-cols-2 gap-4">
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <SectionHeader icon={<IconLayers />} iconWrapClass="bg-blue-50 text-blue-600" title="Stage / Category Breakdown" />
+              <div className="space-y-3">
+                {stageSummaryByType.map((c) => (
+                  <div key={c.key}>
+                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">{c.label}</p>
+                    {c.stages.map((s) => (
+                      <StageRow key={s.stage} stage={s.stage} total={s.total} completed={s.completed} pct={s.pct} />
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <SectionHeader icon={<IconClock />} iconWrapClass="bg-emerald-50 text-emerald-600" title="Timeline (Planned → Actual, by Stage/Category)" />
+              <TimelineStrip rows={timelineStrip} />
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+            <div className="px-4 py-3 border-b border-slate-100">
+              <SectionHeader icon={<IconClipboardList />} iconWrapClass="bg-emerald-50 text-emerald-600" title="Key Milestones" className="" />
+            </div>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-slate-500 border-b border-slate-100 bg-slate-50">
+                  <th className="px-3 py-2 font-medium">Checklist</th>
+                  <th className="px-3 py-2 font-medium">Stage / Category</th>
+                  <th className="px-3 py-2 font-medium">Milestone</th>
+                  <th className="px-3 py-2 font-medium">Actual Date</th>
+                  <th className="px-3 py-2 font-medium">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {milestonesList.map((m) => (
+                  <tr key={m.id} className="border-b border-slate-50 last:border-0">
+                    <td className="px-3 py-1.5 text-slate-500 whitespace-nowrap">{m.source}</td>
+                    <td className="px-3 py-1.5 text-slate-500 whitespace-nowrap">{m.stage}</td>
+                    <td className="px-3 py-1.5 text-slate-800 font-medium whitespace-nowrap">{m.milestoneName}</td>
+                    <td className="px-3 py-1.5 text-slate-500 whitespace-nowrap">{formatDate(m.actualDate)}</td>
+                    <td className="px-3 py-1.5">
+                      <span
+                        className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap"
+                        style={{ backgroundColor: STATUS_COLORS[m.status].bg, color: STATUS_COLORS[m.status].text }}
+                      >
+                        {STATUS_COLORS[m.status].label}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {showMilestonesLink && (
+              <div className="px-4 py-2.5 border-t border-slate-100 text-right">
+                <Link href={`/projects/${projectId}/milestones`} prefetch={false} className="text-xs font-medium text-indigo-600 hover:text-indigo-700">
+                  View all milestones →
+                </Link>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StageRow({ stage, total, completed, pct }: { stage: string; total: number; completed: number; pct: number }) {
+  return (
+    <div className="flex items-center gap-3 py-1 text-sm">
+      <div className="w-40 shrink-0 text-slate-600 truncate">{stage}</div>
+      <div className="flex-1 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+        <div className="h-full bg-slate-800" style={{ width: `${pct * 100}%` }} />
+      </div>
+      <div className="w-24 shrink-0 text-right text-xs text-slate-500">
+        {completed}/{total} ({formatPct(pct)})
+      </div>
+    </div>
+  );
+}

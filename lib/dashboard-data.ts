@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { PM_STAGES } from "@/lib/seed-data";
 import { ITEM_STATUSES, type ItemStatus } from "@/lib/constants";
 import { CHECKLIST_TYPES, CHECKLIST_TYPE_BY_KEY, type ChecklistType } from "@/lib/checklist-types";
+import { computeProjectRag } from "@/lib/rag";
 import {
   riskScore,
   computeEvm,
@@ -57,12 +58,16 @@ export async function getDashboardData(projectId: string) {
     count: allItems.filter((i) => i.status === status).length,
   }));
 
+  // Checklist types this project has no items in at all (e.g. a project that
+  // never turned on Engineering/QA/Dev checklists) are dropped rather than
+  // shown as a permanent 0/0 row — dead rows were the biggest source of
+  // "disorganized" scroll depth on this page.
   const perChecklistSummary = CHECKLIST_TYPES.map((c) => {
     const items = allItems.filter((i) => i.type === c.key);
     const applicable = items.filter((i) => i.status !== "NOT_APPLICABLE");
     const completed = applicable.filter((i) => i.status === "COMPLETED").length;
     return { name: c.label, total: applicable.length, completed, pct: applicable.length ? completed / applicable.length : 0 };
-  });
+  }).filter((c) => c.total > 0);
 
   function stageSummary(items: typeof pmItems, stages: readonly string[]) {
     return stages.map((stage) => {
@@ -87,7 +92,7 @@ export async function getDashboardData(projectId: string) {
     let stages = stageSummary(items, c.stageOrder);
     if (c.key === "PM") stages = stages.filter((s) => s.stage !== "Presales" || s.total > 0);
     return { key: c.key, label: c.label, stageLabel: c.stageLabel, stages };
-  });
+  }).filter((c) => c.stages.some((s) => s.total > 0));
 
   // Derived, not stored — the current stage (per the resolved PM-Checklist-
   // is-canonical definition, same as the Projects list) and the project's
@@ -157,6 +162,23 @@ export async function getDashboardData(projectId: string) {
     (r) => r.type === "Risk" && r.status !== "Closed" && r.status !== "Mitigated" && riskScore(r.probability, r.impact) >= 6
   ).length;
 
+  // Same health definition Portfolio/Projects already use — this page never
+  // surfaced it before, despite it being exactly a "where are we" signal.
+  const { rag } = computeProjectRag({
+    contractValue: project.contractValue,
+    budgetEntries: budgetEntriesFromSprints(toSprintsForBudget(sprints), project.plannedStoryPoints),
+    risks,
+  });
+
+  // Next not-yet-done milestone by Planned Date — same definition as
+  // lib/portfolio-data.ts's nextMilestone, kept local rather than shared.
+  const upcomingMilestones = milestones
+    .filter((m) => m.checklistItem.status !== "COMPLETED" && m.checklistItem.status !== "NOT_APPLICABLE" && m.checklistItem.plannedDate)
+    .sort((a, b) => a.checklistItem.plannedDate!.getTime() - b.checklistItem.plannedDate!.getTime());
+  const nextMilestone = upcomingMilestones[0]
+    ? { name: upcomingMilestones[0].checklistItem.milestoneName ?? upcomingMilestones[0].checklistItem.itemText, date: upcomingMilestones[0].checklistItem.plannedDate as Date }
+    : null;
+
   const activeCRValue = crs
     .filter((c) => c.status === "Approved" || c.status === "In Progress")
     .reduce((sum, c) => sum + (c.billableManDays ?? 0), 0);
@@ -190,6 +212,8 @@ export async function getDashboardData(projectId: string) {
     overallPct,
     pmStage,
     endDate,
+    rag,
+    nextMilestone,
     reminders,
     recentDecisions,
     statusBreakdown,

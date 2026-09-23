@@ -8,7 +8,7 @@ import { COMPLETED_STAGE_LABEL } from "@/lib/calculations";
 import { PM_STAGES } from "@/lib/seed-data";
 import { RAG_COLORS, type Rag } from "@/lib/rag";
 import { StatTile } from "@/components/ui/stat-tile";
-import { IconSearch, IconGrid, IconClipboardList, IconFilter, IconLayers, IconCheckCircle, IconAlertTriangle, IconAlertCircle, IconDollar } from "@/components/layout/icons";
+import { IconSearch, IconGrid, IconClipboardList, IconFilter, IconLayers, IconGauge, IconDollar } from "@/components/layout/icons";
 import { ProjectActionsMenu } from "./project-actions-menu";
 import { NewProjectForm } from "./new-project-form";
 import type { ProjectStatus } from "@prisma/client";
@@ -25,20 +25,23 @@ export type ProjectCardData = {
   rag: Rag;
   latestSpi: number | null;
   latestCpi: number | null;
-  openRisks: number;
   createdAt: Date;
   endDate: Date | null; // derived — latest Actual Date across the checklist
   deletedAt: Date | null;
   overdueCount: number; // items past their Planned Date, empty for viewers who can't see Reminders
+  // Governance = pooled completion across every checklist type except Dev;
+  // Development = completion of just the Dev Checklist; Overall Delivery is
+  // the straight average of the two (see app/projects/page.tsx).
+  governancePct: number;
+  developmentPct: number;
+  overallDeliveryPct: number;
 };
 
 export type ProjectStats = {
   totalProjects: number;
   activeCount: number;
-  healthy: number;
-  atRisk: number;
-  critical: number;
   totalContractValue: number;
+  avgOverallDelivery: number;
   newIn30Days: number;
 };
 
@@ -113,12 +116,10 @@ function Trend({ text }: { text: string }) {
 export function ProjectFilters({
   cards,
   isAdmin,
-  canSeeAll,
   stats,
 }: {
   cards: ProjectCardData[];
   isAdmin: boolean;
-  canSeeAll: boolean;
   stats: ProjectStats;
 }) {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
@@ -128,7 +129,7 @@ export function ProjectFilters({
   const [healthFilter, setHealthFilter] = useState<"ALL" | Rag>("ALL");
   const [search, setSearch] = useState("");
   const [view, setView] = useState<"grid" | "list">("grid");
-  const [showFilterRow, setShowFilterRow] = useState(true);
+  const [showFilterRow, setShowFilterRow] = useState(false);
 
   const pmOptions = Array.from(new Set(cards.map((c) => c.pmName).filter((n): n is string => !!n))).sort();
   const clientOptions = Array.from(new Set(cards.map((c) => c.client).filter((n): n is string => !!n))).sort();
@@ -151,11 +152,6 @@ export function ProjectFilters({
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          {canSeeAll && (
-            <Link href="/portfolio" prefetch={false} className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 mb-1">
-              ← Portfolio
-            </Link>
-          )}
           <h1 className="text-xl font-bold text-slate-900">Projects</h1>
           <p className="text-sm text-slate-500 max-w-xl">Manage and track all projects across different stages — from presales to delivery.</p>
         </div>
@@ -185,7 +181,7 @@ export function ProjectFilters({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatTile
           icon={<IconGrid />}
           iconWrapClass="bg-blue-100 text-blue-700"
@@ -205,39 +201,20 @@ export function ProjectFilters({
           subtitle={stats.totalProjects ? <Trend text={`${formatPct(stats.activeCount / stats.totalProjects)} of total`} /> : undefined}
         />
         <StatTile
-          icon={<IconCheckCircle />}
-          iconWrapClass="bg-emerald-100 text-emerald-700"
-          bgClass="bg-emerald-50/60"
-          accentColor="#10b981"
-          label="Healthy"
-          value={String(stats.healthy)}
-          subtitle={stats.activeCount ? <Trend text={`${formatPct(stats.healthy / stats.activeCount)} of active`} /> : undefined}
-        />
-        <StatTile
-          icon={<IconAlertTriangle />}
-          iconWrapClass="bg-amber-100 text-amber-700"
-          bgClass="bg-amber-50/60"
-          accentColor="#f59e0b"
-          label="At Risk"
-          value={String(stats.atRisk)}
-          subtitle={stats.activeCount ? <Trend text={`${formatPct(stats.atRisk / stats.activeCount)} of active`} /> : undefined}
-        />
-        <StatTile
-          icon={<IconAlertCircle />}
-          iconWrapClass="bg-red-100 text-red-700"
-          bgClass="bg-red-50/60"
-          accentColor="#ef4444"
-          label="Critical"
-          value={String(stats.critical)}
-          subtitle={stats.activeCount ? <Trend text={`${formatPct(stats.critical / stats.activeCount)} of active`} /> : undefined}
-        />
-        <StatTile
           icon={<IconDollar />}
           iconWrapClass="bg-violet-100 text-violet-700"
           bgClass="bg-violet-50/60"
           accentColor="#8b5cf6"
           label="Total Contract Value"
           value={formatMoney(stats.totalContractValue)}
+        />
+        <StatTile
+          icon={<IconGauge />}
+          iconWrapClass="bg-emerald-100 text-emerald-700"
+          bgClass="bg-emerald-50/60"
+          accentColor="#10b981"
+          label="Overall Delivery"
+          value={formatPct(stats.avgOverallDelivery)}
         />
       </div>
 
@@ -365,32 +342,27 @@ function ProjectCard({ p, isAdmin }: { p: ProjectCardData; isAdmin: boolean }) {
   const color = avatarColor(p.id);
   const isDeleted = p.deletedAt !== null;
   const health = HEALTH_BADGE[p.rag];
-  // Left-edge stripe in the project's own RAG color — reuses RAG_COLORS'
-  // text color (already the progress bar's fill color below) rather than
-  // introducing a new hue, so a card's health reads at a glance across a
-  // whole grid of them. Inline style, not a border-l-{color} utility: a
-  // `border-l-{color}` class can lose to this card's own `border-slate-200`
-  // depending on Tailwind's generated CSS order — inline style always wins.
-  const ragBorder = { borderLeftColor: RAG_COLORS[p.rag].text, borderLeftWidth: 4 };
 
   const cardBody = (
     <>
       <div className="flex items-start justify-between gap-2">
-        <div className="flex items-start gap-3 min-w-0">
+        <div className="flex items-center gap-2.5 min-w-0">
           <span
             className="flex items-center justify-center w-9 h-9 rounded-full text-sm font-semibold shrink-0"
             style={{ backgroundColor: color.bg, color: color.text }}
           >
             {p.name.trim().charAt(0).toUpperCase()}
           </span>
-          <div className="min-w-0">
-            <h3 className="font-medium text-slate-900 truncate" title={p.name}>
-              {p.name}
-            </h3>
-            <p className="text-xs text-slate-400 truncate">
-              Client: {p.client ?? "—"} | PM: {p.pmName ?? "Unassigned"}
-            </p>
-          </div>
+          <h3 className="font-medium text-slate-900 truncate" title={p.name}>
+            {p.name}
+          </h3>
+          {isDeleted ? (
+            <span className="shrink-0 inline-flex items-center rounded-full bg-red-50 text-red-600 px-2 py-0.5 text-xs font-medium">Deleted</span>
+          ) : p.status === "ARCHIVED" ? (
+            <span className="shrink-0 inline-flex items-center rounded-full bg-slate-100 text-slate-500 px-2 py-0.5 text-xs font-medium">Archived</span>
+          ) : (
+            <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: health.text }} title={health.label} />
+          )}
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           {p.overdueCount > 0 && (
@@ -402,70 +374,58 @@ function ProjectCard({ p, isAdmin }: { p: ProjectCardData; isAdmin: boolean }) {
               ⚠ {p.overdueCount} overdue
             </span>
           )}
-          {isDeleted ? (
-            <span className="inline-flex items-center rounded-full bg-red-50 text-red-600 px-2 py-0.5 text-xs font-medium">Deleted</span>
-          ) : p.status === "ARCHIVED" ? (
-            <span className="inline-flex items-center rounded-full bg-slate-100 text-slate-500 px-2 py-0.5 text-xs font-medium">Archived</span>
-          ) : (
-            <span
-              className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap"
-              style={{ backgroundColor: health.bg, color: health.text }}
-            >
-              {health.label}
-            </span>
-          )}
           {isAdmin && <ProjectActionsMenu projectId={p.id} projectName={p.name} status={p.status} isDeleted={isDeleted} />}
         </div>
       </div>
 
-      <div className="mt-2.5 h-0.5 w-12 rounded-full" style={{ backgroundColor: RAG_COLORS[p.rag].text }} />
+      <p className="mt-1.5 text-xs text-slate-400 truncate">
+        Client: {p.client ?? "—"} · PM: {p.pmName ?? "Unassigned"}
+      </p>
 
-      <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+      {/* A full-panel color wash here read as too loud against the rest of
+          the card — pulled back to a plain neutral box. The bar fill and
+          the status dot up top are the color signal now, same restrained
+          "color = health," not decoration, treatment used everywhere else
+          in this app (progress bars, RAG pills). */}
+      <div className="mt-3 rounded-lg bg-slate-50 p-2.5">
+        <div className="flex items-center justify-between text-xs">
+          <span className="font-medium uppercase tracking-wide text-slate-400">Overall Delivery</span>
+          <span className="font-semibold text-slate-700">{formatPct(p.overallDeliveryPct)}</span>
+        </div>
+        <div className="mt-1.5 h-1.5 rounded-full bg-slate-200 overflow-hidden">
+          <div className="h-full" style={{ width: `${p.overallDeliveryPct * 100}%`, backgroundColor: RAG_COLORS[p.rag].text }} />
+        </div>
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
         <div>
-          <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Stage</p>
-          <p className="text-slate-700 font-medium truncate mt-0.5">{p.stage}</p>
+          <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Governance</p>
+          <p className="text-slate-700 font-medium mt-0.5">{formatPct(p.governancePct)}</p>
         </div>
         <div>
-          <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Progress</p>
-          <div className="mt-1.5 flex items-center gap-1.5">
-            <div className="h-1.5 flex-1 rounded-full bg-slate-100 overflow-hidden">
-              <div className="h-full" style={{ width: `${p.progress * 100}%`, backgroundColor: RAG_COLORS[p.rag].text }} />
-            </div>
-            <span className="text-slate-500 shrink-0">{formatPct(p.progress)}</span>
-          </div>
+          <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Development</p>
+          <p className="text-slate-700 font-medium mt-0.5">{formatPct(p.developmentPct)}</p>
         </div>
+      </div>
+
+      <div className="mt-3 flex items-center justify-between gap-2 text-xs">
         <div>
           <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Contract Value</p>
-          <p className="text-slate-700 font-medium truncate mt-0.5">{p.contractValue > 0 ? formatMoney(p.contractValue) : "—"}</p>
+          <p className="text-slate-700 font-medium mt-0.5">{p.contractValue > 0 ? formatMoney(p.contractValue) : "—"}</p>
         </div>
-      </div>
-
-      <div className="mt-2.5 grid grid-cols-3 gap-2 text-xs">
-        <StatChip label="SPI" value={p.latestSpi != null ? p.latestSpi.toFixed(2) : "—"} />
-        <StatChip label="CPI" value={p.latestCpi != null ? p.latestCpi.toFixed(2) : "—"} />
-        <StatChip label="Open Risks" value={String(p.openRisks)} />
-      </div>
-
-      <div className="mt-3 flex items-center justify-between gap-2">
-        <span className="text-xs text-slate-400" title={formatDate(p.createdAt)}>
-          {formatShortDate(p.createdAt)} → {p.endDate ? formatShortDate(p.endDate) : "—"}
-        </span>
-        {/* Visual affordance only, not a separate interactive element — the
-            whole card is already the <Link>; nesting a real <a>/<button>
-            inside it would be invalid HTML and would fight the card's own
-            click target. */}
-        {!isDeleted && (
-          <span className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600">
-            View Project →
-          </span>
-        )}
+        <div className="text-right">
+          <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Project Timeline</p>
+          <p className="text-slate-700 font-medium mt-0.5" title={formatDate(p.createdAt)}>
+            {formatShortDate(p.createdAt)} → {p.endDate ? formatShortDate(p.endDate) : "—"}
+          </p>
+        </div>
       </div>
     </>
   );
 
   if (isDeleted) {
     return (
-      <div className="rounded-lg border border-slate-200 bg-white p-4 opacity-60" style={ragBorder}>
+      <div className="rounded-lg border border-slate-200 bg-white p-4 opacity-60">
         {cardBody}
       </div>
     );
@@ -475,7 +435,6 @@ function ProjectCard({ p, isAdmin }: { p: ProjectCardData; isAdmin: boolean }) {
     <Link
       href={`/projects/${p.id}/dashboard`}
       prefetch={false}
-      style={ragBorder}
       className={clsx(
         "block rounded-lg border border-slate-200 bg-white p-4 hover:border-slate-400 hover:shadow-sm transition-all",
         p.status === "ARCHIVED" && "opacity-60"
@@ -490,6 +449,9 @@ function ProjectListRow({ p, isAdmin }: { p: ProjectCardData; isAdmin: boolean }
   const color = avatarColor(p.id);
   const isDeleted = p.deletedAt !== null;
   const health = HEALTH_BADGE[p.rag];
+  // Unlike the card (see ProjectCard), the left-edge accent still works well
+  // here — a dense single-line row doesn't have room for a tinted panel, and
+  // the stripe is a cheap glanceable health cue down a whole list of rows.
   const ragBorder = { borderLeftColor: RAG_COLORS[p.rag].text, borderLeftWidth: 4 };
 
   const rowBody = (
@@ -507,29 +469,23 @@ function ProjectListRow({ p, isAdmin }: { p: ProjectCardData; isAdmin: boolean }
         <p className="text-xs text-slate-400 truncate">{p.client ?? "No client"}</p>
       </div>
       <p className="w-20 shrink-0 truncate text-xs text-slate-500">{p.pmName ?? "Unassigned"}</p>
-      <p className="w-20 shrink-0 truncate text-xs text-slate-500">{p.stage}</p>
+      <p className="w-64 shrink-0 truncate text-xs text-slate-500">
+        Governance {formatPct(p.governancePct)} · Development {formatPct(p.developmentPct)}
+      </p>
       <div className="flex-1 min-w-[70px] flex items-center gap-1.5">
         <div className="h-1.5 flex-1 rounded-full bg-slate-100 overflow-hidden">
-          <div className="h-full" style={{ width: `${p.progress * 100}%`, backgroundColor: RAG_COLORS[p.rag].text }} />
+          <div className="h-full" style={{ width: `${p.overallDeliveryPct * 100}%`, backgroundColor: RAG_COLORS[p.rag].text }} />
         </div>
-        <span className="text-xs font-medium text-slate-500 shrink-0 w-8 text-right">{formatPct(p.progress)}</span>
+        <span className="text-xs font-medium text-slate-500 shrink-0 w-8 text-right">{formatPct(p.overallDeliveryPct)}</span>
       </div>
-      <p className="w-20 shrink-0 text-right text-xs text-slate-500" title={`SPI ${p.latestSpi != null ? p.latestSpi.toFixed(2) : "—"} / CPI ${p.latestCpi != null ? p.latestCpi.toFixed(2) : "—"}`}>
-        {p.latestSpi != null ? p.latestSpi.toFixed(2) : "—"}/{p.latestCpi != null ? p.latestCpi.toFixed(2) : "—"}
-      </p>
       <p className="w-20 shrink-0 text-right text-xs font-medium text-slate-700">{p.contractValue > 0 ? formatMoney(p.contractValue) : "—"}</p>
-      <div className="w-20 shrink-0 flex justify-end">
+      <div className="w-14 shrink-0 flex justify-end">
         {isDeleted ? (
           <span className="inline-flex items-center rounded-full bg-red-50 text-red-600 px-2 py-0.5 text-[11px] font-medium">Deleted</span>
         ) : p.status === "ARCHIVED" ? (
           <span className="inline-flex items-center rounded-full bg-slate-100 text-slate-500 px-2 py-0.5 text-[11px] font-medium">Archived</span>
         ) : (
-          <span
-            className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap"
-            style={{ backgroundColor: health.bg, color: health.text }}
-          >
-            {health.label}
-          </span>
+          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: health.text }} title={health.label} />
         )}
       </div>
       {isAdmin && <ProjectActionsMenu projectId={p.id} projectName={p.name} status={p.status} isDeleted={isDeleted} />}
@@ -578,14 +534,5 @@ function FilterPill({ label, active, onClick, count }: { label: string; active: 
         {count}
       </span>
     </button>
-  );
-}
-
-function StatChip({ label, value, title }: { label: string; value: string; title?: string }) {
-  return (
-    <div className="rounded-md bg-slate-50 px-2 py-1.5" title={title}>
-      <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">{label}</p>
-      <p className="text-slate-700 font-medium truncate">{value}</p>
-    </div>
   );
 }

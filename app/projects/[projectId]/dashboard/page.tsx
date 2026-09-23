@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { getDashboardData } from "@/lib/dashboard-data";
 import { formatPct, formatMoney, formatDate } from "@/lib/format";
-import { STATUS_COLORS, RISK_SEVERITY_COLORS, INDEX_BAND_COLORS, indexBand } from "@/lib/colors";
+import { RISK_SEVERITY_COLORS, INDEX_BAND_COLORS, indexBand } from "@/lib/colors";
+import { RAG_COLORS } from "@/lib/rag";
 import { requireModuleAccess, getModuleAccess } from "@/lib/rbac";
 import { StatTile } from "@/components/ui/stat-tile";
 import { SectionHeader } from "@/components/ui/section-header";
@@ -13,19 +14,16 @@ import {
   IconClock,
   IconDollar,
   IconGrid,
-  IconClipboardList,
   IconBell,
   IconBadge,
   IconCircle,
   IconCheckCircle,
   IconAlertCircle,
   IconAlertTriangle,
+  IconTarget,
 } from "@/components/layout/icons";
-import { StatusPieChart } from "@/components/charts/status-pie-chart";
-import { CompletionBarChart } from "@/components/charts/completion-bar-chart";
-import { EvmLineChart } from "@/components/charts/evm-line-chart";
 import { SpiSparkline } from "@/components/charts/spi-sparkline";
-import { TimelineStrip } from "@/components/dashboard/timeline-strip";
+import { DetailedReporting } from "./detailed-reporting";
 
 export default async function DashboardPage({ params }: { params: { projectId: string } }) {
   const [access, decisionLogAccess, riskRegisterAccess, milestonesAccess] = await Promise.all([
@@ -44,6 +42,13 @@ export default async function DashboardPage({ params }: { params: { projectId: s
   const statusCount = (status: (typeof data.statusBreakdown)[number]["status"]) =>
     data.statusBreakdown.find((s) => s.status === status)?.count ?? 0;
   const overdueCount = data.reminders.filter((r) => r.band === "OVERDUE").length;
+
+  // Both cards are often short (a handful of rows at most) — side by side
+  // instead of each stacked full-width avoids a tall column of mostly-empty
+  // white space. Falls back to one full-width card when only one of the two
+  // has anything to show, rather than leaving it alone in a half-width column.
+  const showOverdue = financialsVisible && data.reminders.length > 0;
+  const showDecisions = decisionLogAccess !== "NONE" && data.recentDecisions.length > 0;
 
   return (
     <div className="space-y-6">
@@ -70,99 +75,124 @@ export default async function DashboardPage({ params }: { params: { projectId: s
         </div>
       </div>
 
-      {/* Not financial data — visible to every role with dashboard access, same as the completion hero above. */}
-      <div className="grid sm:grid-cols-2 gap-4">
+      {/* Not financial data — visible to every role with dashboard access, same as the completion hero above.
+          The "where are we" strip: health, stage, end date, next milestone — none of this existed as a single
+          glanceable row before (Health/Next Milestone weren't shown anywhere on this page at all). */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatTile
+          icon={<IconShield />}
+          iconWrapClass="bg-slate-100"
+          bgClass="bg-white"
+          accentColor={RAG_COLORS[data.rag].text}
+          label="Health"
+          value={RAG_COLORS[data.rag].label}
+          valueColor={RAG_COLORS[data.rag].text}
+        />
         <StatTile icon={<IconLayers />} iconWrapClass="bg-blue-50 text-blue-600" label="Current Stage (PM Checklist)" value={data.pmStage} />
         <StatTile icon={<IconClock />} iconWrapClass="bg-emerald-50 text-emerald-600" label="End Date" value={data.endDate ? formatDate(data.endDate) : "—"} />
+        <StatTile
+          icon={<IconTarget />}
+          iconWrapClass="bg-violet-50 text-violet-600"
+          label="Next Milestone"
+          value={data.nextMilestone?.name ?? "—"}
+          subtitle={data.nextMilestone ? formatDate(data.nextMilestone.date) : undefined}
+        />
       </div>
 
-      {/* Same visibility as the financial stat tiles below — an overdue-item
-          list is a PM/TPM/Admin safety net, not something to surface to a
-          Client. */}
-      {financialsVisible && data.reminders.length > 0 && (
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <SectionHeader
-            icon={<IconBell />}
-            iconWrapClass="bg-rose-50 text-rose-600"
-            title="Overdue & Due Soon"
-            action={
-              overdueCount > 0 && (
-                <span className="inline-flex items-center rounded-full bg-rose-50 px-2.5 py-0.5 text-xs font-semibold text-rose-700">
-                  {overdueCount} Overdue
-                </span>
-              )
-            }
-            className="mb-2"
-          />
-          <div className="space-y-1.5">
-            {data.reminders.map((r) => {
-              const color = r.band === "OVERDUE" ? RISK_SEVERITY_COLORS.high : RISK_SEVERITY_COLORS.medium;
-              return (
-                <Link
-                  key={r.id}
-                  href={`/projects/${data.project.id}/${r.route}`}
-                  prefetch={false}
-                  className="flex items-center justify-between gap-3 rounded-md px-2 py-1.5 hover:bg-slate-50"
-                >
-                  <div className="min-w-0">
-                    <p className="text-sm text-slate-800 truncate">{r.itemText}</p>
-                    <p className="text-xs text-slate-400">{r.context} · {r.source === "ACTION_ITEM" ? "Due" : "Planned"} {formatDate(r.plannedDate)}</p>
-                  </div>
-                  <span
-                    className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium shrink-0"
-                    style={{ backgroundColor: color.bg, color: color.text }}
-                  >
-                    {r.band === "OVERDUE" ? "Overdue" : "Due Soon"}
-                  </span>
+      {(showOverdue || showDecisions) && (
+        <div className={showOverdue && showDecisions ? "grid lg:grid-cols-2 gap-4 items-start" : undefined}>
+          {/* Same visibility as the financial stat tiles below — an overdue-item
+              list is a PM/TPM/Admin safety net, not something to surface to a
+              Client. */}
+          {showOverdue && (
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <SectionHeader
+                icon={<IconBell />}
+                iconWrapClass="bg-rose-50 text-rose-600"
+                title="Overdue & Due Soon"
+                action={
+                  overdueCount > 0 && (
+                    <span className="inline-flex items-center rounded-full bg-rose-50 px-2.5 py-0.5 text-xs font-semibold text-rose-700">
+                      {overdueCount} Overdue
+                    </span>
+                  )
+                }
+                className="mb-2"
+              />
+              <div className="space-y-1.5">
+                {data.reminders.map((r) => {
+                  const color = r.band === "OVERDUE" ? RISK_SEVERITY_COLORS.high : RISK_SEVERITY_COLORS.medium;
+                  return (
+                    <Link
+                      key={r.id}
+                      href={`/projects/${data.project.id}/${r.route}`}
+                      prefetch={false}
+                      className="flex items-center justify-between gap-3 rounded-md px-2 py-1.5 hover:bg-slate-50"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm text-slate-800 truncate">{r.itemText}</p>
+                        <p className="text-xs text-slate-400">{r.context} · {r.source === "ACTION_ITEM" ? "Due" : "Planned"} {formatDate(r.plannedDate)}</p>
+                      </div>
+                      <span
+                        className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium shrink-0"
+                        style={{ backgroundColor: color.bg, color: color.text }}
+                      >
+                        {r.band === "OVERDUE" ? "Overdue" : "Due Soon"}
+                      </span>
+                    </Link>
+                  );
+                })}
+              </div>
+              <div className="mt-2 pt-2 border-t border-slate-100 text-right">
+                <Link href="/notifications" prefetch={false} className="text-xs font-medium text-indigo-600 hover:text-indigo-700">
+                  View all tasks →
                 </Link>
-              );
-            })}
-          </div>
-          <div className="mt-2 pt-2 border-t border-slate-100 text-right">
-            <Link href="/notifications" prefetch={false} className="text-xs font-medium text-indigo-600 hover:text-indigo-700">
-              View all tasks →
-            </Link>
-          </div>
+              </div>
+            </div>
+          )}
+
+          {showDecisions && (
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <SectionHeader
+                icon={<IconBadge />}
+                iconWrapClass="bg-violet-50 text-violet-600"
+                title="Recent Decisions"
+                action={
+                  <Link
+                    href={`/projects/${data.project.id}/decisions`}
+                    prefetch={false}
+                    className="text-xs font-medium text-indigo-600 hover:text-indigo-700"
+                  >
+                    View all →
+                  </Link>
+                }
+                className="mb-2"
+              />
+              <div className="space-y-1.5">
+                {data.recentDecisions.map((d) => (
+                  <Link
+                    key={d.id}
+                    href={`/projects/${data.project.id}/decisions`}
+                    prefetch={false}
+                    className="flex items-center justify-between gap-3 rounded-md px-2 py-1.5 hover:bg-slate-50"
+                  >
+                    <p className="text-sm text-slate-800 truncate">{d.decision}</p>
+                    <p className="text-xs text-slate-400 shrink-0">
+                      {d.decidedByName ?? "—"}{d.date ? ` · ${formatDate(d.date)}` : ""}
+                    </p>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
-      {decisionLogAccess !== "NONE" && data.recentDecisions.length > 0 && (
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <SectionHeader
-            icon={<IconBadge />}
-            iconWrapClass="bg-violet-50 text-violet-600"
-            title="Recent Decisions"
-            action={
-              <Link
-                href={`/projects/${data.project.id}/decisions`}
-                prefetch={false}
-                className="text-xs font-medium text-indigo-600 hover:text-indigo-700"
-              >
-                View all →
-              </Link>
-            }
-            className="mb-2"
-          />
-          <div className="space-y-1.5">
-            {data.recentDecisions.map((d) => (
-              <Link
-                key={d.id}
-                href={`/projects/${data.project.id}/decisions`}
-                prefetch={false}
-                className="flex items-center justify-between gap-3 rounded-md px-2 py-1.5 hover:bg-slate-50"
-              >
-                <p className="text-sm text-slate-800 truncate">{d.decision}</p>
-                <p className="text-xs text-slate-400 shrink-0">
-                  {d.decidedByName ?? "—"}{d.date ? ` · ${formatDate(d.date)}` : ""}
-                </p>
-              </Link>
-            ))}
-          </div>
-        </div>
-      )}
-
+      {/* One consistent grid instead of a 5-tile row followed by a
+          mismatched 3-tile row — the ragged second row left a chunk of
+          empty width on anything wide enough for 5 columns. */}
       {financialsVisible && (
-        <div className="grid sm:grid-cols-3 lg:grid-cols-5 gap-4">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatTile
             icon={<IconChart />}
             iconWrapClass="bg-blue-50 text-blue-600"
@@ -211,100 +241,23 @@ export default async function DashboardPage({ params }: { params: { projectId: s
             value={financial.nextPaymentDue ? formatDate(financial.nextPaymentDue) : "—"}
             subtitle={financial.nextPaymentDue ? formatMoney(financial.nextPaymentAmount) : undefined}
           />
-        </div>
-      )}
-
-      {financialsVisible && (
-        <div className="grid sm:grid-cols-3 gap-4">
           <StatTile icon={<IconDollar />} iconWrapClass="bg-blue-50 text-blue-600" label="Total Contract Value" value={formatMoney(financial.contractValue)} />
           <StatTile icon={<IconDollar />} iconWrapClass="bg-emerald-50 text-emerald-600" label="Paid to Date" value={formatMoney(financial.paidAmount)} />
           <StatTile icon={<IconDollar />} iconWrapClass="bg-amber-50 text-amber-600" label="Invoiced (Awaiting Payment)" value={formatMoney(financial.invoicedAmount)} />
         </div>
       )}
 
-      <div className={financialsVisible ? "grid lg:grid-cols-3 gap-4" : "grid lg:grid-cols-2 gap-4"}>
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <SectionHeader icon={<IconChart />} iconWrapClass="bg-blue-50 text-blue-600" title="Status Breakdown (All Checklists)" className="mb-2" />
-          <StatusPieChart data={data.statusBreakdown} />
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <SectionHeader icon={<IconGrid />} iconWrapClass="bg-violet-50 text-violet-600" title="% Complete by Checklist" className="mb-2" />
-          <CompletionBarChart data={data.perChecklistSummary.map((c) => ({ name: c.name, pct: c.pct }))} />
-        </div>
-        {financialsVisible && (
-          <div className="rounded-xl border border-slate-200 bg-white p-4">
-            <SectionHeader icon={<IconDollar />} iconWrapClass="bg-amber-50 text-amber-600" title="Budget Burn (PV / EV / AC)" className="mb-2" />
-            <EvmLineChart data={data.evmChartData} />
-          </div>
-        )}
-      </div>
-
-      <div className="grid lg:grid-cols-2 gap-4">
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <SectionHeader icon={<IconLayers />} iconWrapClass="bg-blue-50 text-blue-600" title="Stage / Category Breakdown" />
-          <div className="space-y-3">
-            {data.stageSummaryByType.map((c) => (
-              <div key={c.key}>
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">{c.label}</p>
-                {c.stages.map((s) => (
-                  <StageRow key={s.stage} stage={s.stage} total={s.total} completed={s.completed} pct={s.pct} />
-                ))}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <SectionHeader icon={<IconClock />} iconWrapClass="bg-emerald-50 text-emerald-600" title="Timeline (Planned → Actual, by Stage/Category)" />
-          <TimelineStrip rows={data.timelineStrip} />
-        </div>
-      </div>
-
-      <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-        <div className="px-4 py-3 border-b border-slate-100">
-          <SectionHeader icon={<IconClipboardList />} iconWrapClass="bg-emerald-50 text-emerald-600" title="Key Milestones" className="" />
-        </div>
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-xs text-slate-500 border-b border-slate-100 bg-slate-50">
-              <th className="px-3 py-2 font-medium">Checklist</th>
-              <th className="px-3 py-2 font-medium">Stage / Category</th>
-              <th className="px-3 py-2 font-medium">Milestone</th>
-              <th className="px-3 py-2 font-medium">Actual Date</th>
-              <th className="px-3 py-2 font-medium">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.milestonesList.map((m) => (
-              <tr key={m.id} className="border-b border-slate-50 last:border-0">
-                <td className="px-3 py-1.5 text-slate-500 whitespace-nowrap">{m.source}</td>
-                <td className="px-3 py-1.5 text-slate-500 whitespace-nowrap">{m.stage}</td>
-                <td className="px-3 py-1.5 text-slate-800 font-medium whitespace-nowrap">{m.milestoneName}</td>
-                <td className="px-3 py-1.5 text-slate-500 whitespace-nowrap">{formatDate(m.actualDate)}</td>
-                <td className="px-3 py-1.5">
-                  <span
-                    className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap"
-                    style={{ backgroundColor: STATUS_COLORS[m.status].bg, color: STATUS_COLORS[m.status].text }}
-                  >
-                    {STATUS_COLORS[m.status].label}
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {milestonesAccess !== "NONE" && (
-          <div className="px-4 py-2.5 border-t border-slate-100 text-right">
-            <Link
-              href={`/projects/${data.project.id}/milestones`}
-              prefetch={false}
-              className="text-xs font-medium text-indigo-600 hover:text-indigo-700"
-            >
-              View all milestones →
-            </Link>
-          </div>
-        )}
-      </div>
+      <DetailedReporting
+        projectId={data.project.id}
+        financialsVisible={financialsVisible}
+        showMilestonesLink={milestonesAccess !== "NONE"}
+        statusBreakdown={data.statusBreakdown}
+        perChecklistSummary={data.perChecklistSummary}
+        evmChartData={data.evmChartData}
+        stageSummaryByType={data.stageSummaryByType}
+        timelineStrip={data.timelineStrip}
+        milestonesList={data.milestonesList}
+      />
     </div>
   );
 }
@@ -318,20 +271,6 @@ function HeroStat({ icon, iconWrapClass, label, value }: { icon: React.ReactNode
       <div>
         <p className="text-xs text-slate-500">{label}</p>
         <p className="text-base font-bold leading-tight text-slate-900">{value}</p>
-      </div>
-    </div>
-  );
-}
-
-function StageRow({ stage, total, completed, pct }: { stage: string; total: number; completed: number; pct: number }) {
-  return (
-    <div className="flex items-center gap-3 py-1 text-sm">
-      <div className="w-40 shrink-0 text-slate-600 truncate">{stage}</div>
-      <div className="flex-1 h-1.5 rounded-full bg-slate-100 overflow-hidden">
-        <div className="h-full bg-slate-800" style={{ width: `${pct * 100}%` }} />
-      </div>
-      <div className="w-24 shrink-0 text-right text-xs text-slate-500">
-        {completed}/{total} ({formatPct(pct)})
       </div>
     </div>
   );
