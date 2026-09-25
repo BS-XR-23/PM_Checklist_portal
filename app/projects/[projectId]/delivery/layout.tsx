@@ -23,7 +23,6 @@ export default function DeliveryLayout({
           { href: "/delivery", label: "Overview" },
           { href: "/delivery/tasks", label: "Tasks" },
           { href: "/delivery/sprints", label: "Sprints" },
-          { href: "/delivery/milestones", label: "Milestones" },
           { href: "/delivery/checklist", label: "Dev Checklist" },
           { href: "/delivery/releases", label: "Releases" },
           { href: "/delivery/uat", label: "UAT" },

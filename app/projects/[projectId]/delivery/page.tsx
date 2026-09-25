@@ -274,7 +274,7 @@ export default async function DeliveryOverviewPage({ params }: { params: { proje
             <SummaryRow label="Upcoming" value={upcomingMilestone?.name} date={upcomingMilestone?.plannedDate ?? null} />
             <SummaryRow label="Delayed" value={delayedMilestones.length ? `${delayedMilestones.length} milestone(s)` : "None"} />
             <SummaryRow label="Recently Completed" value={recentlyCompleted?.name} date={recentlyCompleted?.actualDate ?? null} />
-            <Link href={`/projects/${projectId}/delivery/milestones`} className="text-xs font-medium text-indigo-600 hover:underline block pt-1">
+            <Link href={`/projects/${projectId}/pm-plan`} className="text-xs font-medium text-indigo-600 hover:underline block pt-1">
               View all milestones →
             </Link>
           </div>

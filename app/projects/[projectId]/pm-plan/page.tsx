@@ -14,6 +14,9 @@ import { FieldLinkView } from "@/components/pm-plan/field-link-editor";
 import { StakeholdersTable } from "@/components/pm-plan/stakeholders-table";
 import { CommsTable } from "@/components/pm-plan/comms-table";
 import { RaciTable } from "@/components/pm-plan/raci-table";
+import { DeliverableTable } from "@/components/pm-plan/deliverable-table";
+import { PmPlanMilestonesTable } from "@/components/pm-plan/pm-plan-milestones-table";
+import { TimelineTable } from "@/components/pm-plan/timeline-table";
 import { ResourceTable } from "@/components/pm-plan/resource-table";
 import { GateTable } from "@/components/pm-plan/gate-table";
 import type { PmPlanLinkableField } from "./pmplan-actions";
@@ -41,12 +44,14 @@ export default async function PmPlanPage({ params }: { params: { projectId: stri
   // than duplicated into PMPlan — those tabs stay the single editable copy.
   // Each has its own RBAC module, so a PM_PLAN viewer without access to one
   // simply doesn't get that section here either.
-  // Milestones (Scope & Deliverables Baseline / Schedule & Milestones) are
-  // likewise sourced live from the Delivery tab's Milestone table — same
-  // reasoning and same RBAC-gating pattern as Risk/Dependencies above.
-  // Resource & Responsibility Plan and the PMO Gate checklist have no
-  // existing home elsewhere in the app, so those two stay PMPlan-owned,
-  // editable rows (like Stakeholders/Comms/RACI) rather than a live join.
+  // Schedule & Milestones is likewise sourced live from the Delivery tab's
+  // Milestone table, same reasoning as Risk/Dependencies — including its
+  // add/delete, which reuses Delivery's own milestone actions rather than
+  // duplicating them, so a milestone added here is the same real row
+  // Delivery tracks for EV/AV. Scope & Deliverables Baseline, Resource &
+  // Responsibility Plan, and the PMO Gate checklist have no existing home
+  // elsewhere in the app, so those three stay PMPlan-owned, editable rows
+  // (like Stakeholders/Comms/RACI) rather than a live join.
   const [riskAccess, depAccess, deliveryAccess] = await Promise.all([
     getModuleAccess(params.projectId, "RISK_REGISTER"),
     getModuleAccess(params.projectId, "DEPENDENCIES"),
@@ -55,6 +60,7 @@ export default async function PmPlanPage({ params }: { params: { projectId: stri
   const canSeeRisks = meetsLevel(riskAccess, "READ_LIMITED");
   const canSeeDeps = meetsLevel(depAccess, "READ_LIMITED");
   const canSeeMilestones = meetsLevel(deliveryAccess, "READ_LIMITED");
+  const canWriteMilestones = deliveryAccess === "WRITE";
 
   const [pmPlan, people, risks, dependencies, milestones] = await Promise.all([
     prisma.pMPlan.findUniqueOrThrow({
@@ -63,12 +69,14 @@ export default async function PmPlanPage({ params }: { params: { projectId: stri
         stakeholders: { orderBy: { order: "asc" } },
         commsRows: { orderBy: { order: "asc" } },
         raciRows: { orderBy: { order: "asc" } },
+        deliverableRows: { orderBy: { order: "asc" } },
+        timelineRows: { orderBy: { order: "asc" } },
         resourceRows: { orderBy: { order: "asc" } },
         gateRows: { orderBy: { order: "asc" } },
         links: true,
       },
     }),
-    canWrite ? prisma.person.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }) : Promise.resolve([]),
+    canWrite || canWriteMilestones ? prisma.person.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }) : Promise.resolve([]),
     canSeeRisks ? prisma.riskItem.findMany({ where: { projectId: params.projectId }, orderBy: { order: "asc" } }) : Promise.resolve([]),
     canSeeDeps ? prisma.dependencyItem.findMany({ where: { projectId: params.projectId }, orderBy: { order: "asc" } }) : Promise.resolve([]),
     canSeeMilestones
@@ -500,52 +508,74 @@ export default async function PmPlanPage({ params }: { params: { projectId: stri
     });
   }
 
-  // Scope & Deliverables Baseline and Schedule & Milestones both read the
-  // same live Milestone rows, just framed differently (contractual
-  // acceptance-evidence view vs. execution-tracking view) — deliberately
-  // mirrors how the source PMP template itself frames the same milestones
-  // twice across its own Section 4 and Section 5.
+  // Scope & Deliverables Baseline is its own PMPlan-owned table (see
+  // DeliverableRow) — a scope deliverable and a Delivery-tracking milestone
+  // are different concerns that a prior version of this section conflated
+  // by deriving it from Milestone; that meant it could only ever show
+  // whatever Delivery already had, with no way to add a deliverable that
+  // isn't also a tracked milestone.
+  sections.push({
+    id: "scope-deliverables-baseline",
+    number: sections.length + 1,
+    title: "Scope & Deliverables Baseline",
+    hint: "The contractual acceptance baseline: what gets delivered, and what evidence proves it's done.",
+    itemCountLabel: `${pmPlan.deliverableRows.length} ${pmPlan.deliverableRows.length === 1 ? "deliverable" : "deliverables"}`,
+    status: statusFromCounts(pmPlan.deliverableRows.length, 1),
+    view: (
+      <ReadOnlyTable
+        columns={["Deliverable", "Acceptance Evidence", "Owner", "Target"]}
+        rows={pmPlan.deliverableRows.map((d) => [d.deliverable, d.acceptanceEvidence, d.owner, d.target])}
+      />
+    ),
+    edit: canWrite ? <DeliverableTable pmPlanId={pmPlanId} projectId={projectId} rows={pmPlan.deliverableRows} /> : undefined,
+  });
+
+  // Milestone stays sourced live from Delivery's Milestone table (not a
+  // PMPlan copy) so it stays accurate for EV/AV tracking, but unlike
+  // Risk/Dependencies it gets real add/delete/edit here too, reusing
+  // Delivery's own milestone actions — a milestone added from this section
+  // is the same real row Delivery sees, not a second, driftable copy. There
+  // is no separate Delivery > Milestones page anymore; this is the one
+  // place milestones get edited.
   if (canSeeMilestones) {
     sections.push({
-      id: "scope-deliverables-baseline",
+      id: "milestone",
       number: sections.length + 1,
-      title: "Scope & Deliverables Baseline",
-      hint: "Sourced live from the Delivery tab's milestones. Edit entries on the Delivery tab.",
-      itemCountLabel: `${milestones.length} ${milestones.length === 1 ? "deliverable" : "deliverables"}`,
-      status: statusFromCounts(milestones.length > 0 ? 1 : 0, 1),
-      view: (
-        <div className="space-y-3">
-          <a href={`/projects/${projectId}/delivery`} className="inline-flex items-center text-xs font-medium text-indigo-600 hover:text-indigo-700">
-            Open Delivery to add or edit milestones &rarr;
-          </a>
-          <ReadOnlyTable
-            columns={["Deliverable", "Type", "Acceptance Evidence", "Owner", "Target"]}
-            rows={milestones.map((m) => [m.name, m.type, m.acceptanceCriteria ?? "", m.ownerPerson?.name ?? "", formatShortDate(m.plannedDate)])}
-          />
-        </div>
-      ),
-    });
-
-    sections.push({
-      id: "schedule-milestones",
-      number: sections.length + 1,
-      title: "Schedule & Milestones",
-      hint: "Sourced live from the Delivery tab's milestones. Edit entries on the Delivery tab.",
+      title: "Milestone",
+      hint: canWriteMilestones
+        ? "Sourced live from Delivery's milestone data — add, edit, and delete here; the Delivery tab's own tracking (EV/AV, sprints) stays in sync."
+        : "Sourced live from Delivery's milestone data. You have read-only access to Delivery, so editing isn't available here.",
       itemCountLabel: `${milestones.length} ${milestones.length === 1 ? "milestone" : "milestones"}`,
       status: statusFromCounts(milestones.length > 0 ? 1 : 0, 1),
       view: (
-        <div className="space-y-3">
-          <a href={`/projects/${projectId}/delivery`} className="inline-flex items-center text-xs font-medium text-indigo-600 hover:text-indigo-700">
-            Open Delivery to add or edit milestones &rarr;
-          </a>
-          <ReadOnlyTable
-            columns={["Milestone", "Baseline Date", "Owner", "Exit Criteria", "Status"]}
-            rows={milestones.map((m) => [m.name, formatShortDate(m.plannedDate), m.ownerPerson?.name ?? "", m.acceptanceCriteria ?? "", milestoneStatusLabel(m.status)])}
-          />
-        </div>
+        <ReadOnlyTable
+          columns={["Milestone", "Baseline Date", "Owner", "Exit Criteria", "Status"]}
+          rows={milestones.map((m) => [m.name, formatShortDate(m.plannedDate), m.ownerPerson?.name ?? "", m.acceptanceCriteria ?? "", milestoneStatusLabel(m.status)])}
+        />
       ),
+      edit: canWriteMilestones ? <PmPlanMilestonesTable projectId={projectId} rows={milestones} people={people} /> : undefined,
     });
   }
+
+  // Timeline is its own PMPlan-owned table (see TimelineRow), same reasoning
+  // as Scope & Deliverables Baseline: a timeline phase has a start/end
+  // range, which doesn't fit Milestone's single checkpoint date, so this
+  // isn't derived from Milestone — it's freely addable on its own.
+  sections.push({
+    id: "timeline",
+    number: sections.length + 1,
+    title: "Timeline",
+    hint: "Project phases with their own start/end range — independent of the Milestone section above.",
+    itemCountLabel: `${pmPlan.timelineRows.length} ${pmPlan.timelineRows.length === 1 ? "phase" : "phases"}`,
+    status: statusFromCounts(pmPlan.timelineRows.length, 1),
+    view: (
+      <ReadOnlyTable
+        columns={["Phase", "Start", "End", "Status"]}
+        rows={pmPlan.timelineRows.map((t) => [t.phase, t.start, t.end, t.status])}
+      />
+    ),
+    edit: canWrite ? <TimelineTable pmPlanId={pmPlanId} projectId={projectId} rows={pmPlan.timelineRows} /> : undefined,
+  });
 
   // Resource & Responsibility Plan and PMO Health & Control Gates have no
   // existing home elsewhere in the app (unlike the four sections above),
@@ -593,6 +623,8 @@ export default async function PmPlanPage({ params }: { params: { projectId: stri
     risks.length +
     dependencies.length +
     milestones.length +
+    pmPlan.deliverableRows.length +
+    pmPlan.timelineRows.length +
     pmPlan.resourceRows.length +
     pmPlan.gateRows.length;
 
@@ -647,7 +679,7 @@ export default async function PmPlanPage({ params }: { params: { projectId: stri
 
       <p className="flex items-center gap-1.5 text-xs text-slate-400">
         <IconClipboardList className="h-3.5 w-3.5" />
-        Generated from the BS23 PMP_Template.docx — {dataRows} data rows across Stakeholders, Communications, RACI, Risks, Dependencies, Milestones, Resources, and Gates.
+        Generated from the BS23 PMP_Template.docx — {dataRows} data rows across Stakeholders, Communications, RACI, Risks, Dependencies, Milestones, Deliverables, Timeline, Resources, and Gates.
       </p>
     </div>
   );

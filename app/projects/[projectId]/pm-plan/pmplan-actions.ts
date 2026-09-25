@@ -205,6 +205,70 @@ export async function deleteRaciRow(id: string, _projectId: string) {
   revalidatePmPlan(existing.pmPlan.projectId);
 }
 
+// --- Timeline rows ---
+
+export async function addTimelineRow(pmPlanId: string, _projectId: string) {
+  const { user, projectId: realProjectId } = await authorizeByPmPlanId(pmPlanId);
+  const count = await prisma.timelineRow.count({ where: { pmPlanId } });
+  await prisma.timelineRow.create({
+    data: { pmPlanId, order: count, phase: "New phase", start: "", end: "" },
+  });
+  await writeAudit({ actor: user, projectId: realProjectId, action: "create", entityType: "TimelineRow", summary: "Added a timeline row" });
+  revalidatePmPlan(realProjectId);
+}
+
+export async function updateTimelineRow(
+  id: string,
+  projectId: string,
+  data: Partial<{ phase: string; start: string; end: string; status: string }>
+) {
+  const existing = await prisma.timelineRow.findUniqueOrThrow({ where: { id }, include: { pmPlan: true } });
+  const user = await requireModuleWrite(existing.pmPlan.projectId, "PM_PLAN");
+  await prisma.timelineRow.update({ where: { id }, data });
+  await writeAudit({ actor: user, projectId: existing.pmPlan.projectId, action: "update", entityType: "TimelineRow", entityId: id, summary: "Updated a timeline row", diff: { before: existing, changes: data } });
+  revalidatePmPlan(existing.pmPlan.projectId);
+}
+
+export async function deleteTimelineRow(id: string, _projectId: string) {
+  const existing = await prisma.timelineRow.findUniqueOrThrow({ where: { id }, include: { pmPlan: true } });
+  const user = await requireModuleWrite(existing.pmPlan.projectId, "PM_PLAN");
+  await prisma.timelineRow.delete({ where: { id } });
+  await writeAudit({ actor: user, projectId: existing.pmPlan.projectId, action: "delete", entityType: "TimelineRow", entityId: id, summary: "Deleted a timeline row", diff: { before: existing } });
+  revalidatePmPlan(existing.pmPlan.projectId);
+}
+
+// --- Deliverable rows ---
+
+export async function addDeliverableRow(pmPlanId: string, _projectId: string) {
+  const { user, projectId: realProjectId } = await authorizeByPmPlanId(pmPlanId);
+  const count = await prisma.deliverableRow.count({ where: { pmPlanId } });
+  await prisma.deliverableRow.create({
+    data: { pmPlanId, order: count, deliverable: "New deliverable", acceptanceEvidence: "", owner: "", target: "" },
+  });
+  await writeAudit({ actor: user, projectId: realProjectId, action: "create", entityType: "DeliverableRow", summary: "Added a deliverable row" });
+  revalidatePmPlan(realProjectId);
+}
+
+export async function updateDeliverableRow(
+  id: string,
+  projectId: string,
+  data: Partial<{ deliverable: string; acceptanceEvidence: string; owner: string; target: string }>
+) {
+  const existing = await prisma.deliverableRow.findUniqueOrThrow({ where: { id }, include: { pmPlan: true } });
+  const user = await requireModuleWrite(existing.pmPlan.projectId, "PM_PLAN");
+  await prisma.deliverableRow.update({ where: { id }, data });
+  await writeAudit({ actor: user, projectId: existing.pmPlan.projectId, action: "update", entityType: "DeliverableRow", entityId: id, summary: "Updated a deliverable row", diff: { before: existing, changes: data } });
+  revalidatePmPlan(existing.pmPlan.projectId);
+}
+
+export async function deleteDeliverableRow(id: string, _projectId: string) {
+  const existing = await prisma.deliverableRow.findUniqueOrThrow({ where: { id }, include: { pmPlan: true } });
+  const user = await requireModuleWrite(existing.pmPlan.projectId, "PM_PLAN");
+  await prisma.deliverableRow.delete({ where: { id } });
+  await writeAudit({ actor: user, projectId: existing.pmPlan.projectId, action: "delete", entityType: "DeliverableRow", entityId: id, summary: "Deleted a deliverable row", diff: { before: existing } });
+  revalidatePmPlan(existing.pmPlan.projectId);
+}
+
 // --- Resource rows ---
 
 export async function addResourceRow(pmPlanId: string, _projectId: string) {

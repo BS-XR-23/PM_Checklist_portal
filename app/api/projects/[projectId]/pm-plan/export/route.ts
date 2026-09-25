@@ -13,9 +13,9 @@ export async function GET(_req: NextRequest, { params }: { params: { projectId: 
 
   // Risks/Dependencies/Milestones are separate RBAC modules from PM_PLAN —
   // only include them in the export if this viewer actually has access to
-  // those tabs too, same rule the page itself applies. Resources/Gates have
-  // no separate module (PMPlan-owned data), so they follow PM_PLAN access
-  // alone, same as Stakeholders/Comms/RACI below.
+  // those tabs too, same rule the page itself applies. Deliverables/
+  // Resources/Gates have no separate module (PMPlan-owned data), so they
+  // follow PM_PLAN access alone, same as Stakeholders/Comms/RACI below.
   const [riskAccess, depAccess, deliveryAccess] = await Promise.all([
     getModuleAccess(params.projectId, "RISK_REGISTER"),
     getModuleAccess(params.projectId, "DEPENDENCIES"),
@@ -30,7 +30,7 @@ export async function GET(_req: NextRequest, { params }: { params: { projectId: 
 
   const pmPlan = await prisma.pMPlan.findUnique({
     where: { projectId: params.projectId },
-    include: { stakeholders: true, commsRows: true, raciRows: true, resourceRows: true, gateRows: true },
+    include: { stakeholders: true, commsRows: true, raciRows: true, deliverableRows: true, timelineRows: true, resourceRows: true, gateRows: true },
   });
   if (!pmPlan) return new NextResponse("PM Plan not found", { status: 404 });
 
@@ -55,6 +55,8 @@ export async function GET(_req: NextRequest, { params }: { params: { projectId: 
     risks,
     dependencies,
     milestones,
+    deliverables: pmPlan.deliverableRows,
+    timeline: pmPlan.timelineRows,
     resources: pmPlan.resourceRows,
     gates: pmPlan.gateRows,
   });

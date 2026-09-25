@@ -6,7 +6,7 @@ import { formatDate, formatShortDate } from "@/lib/format";
 import { riskScore } from "@/lib/calculations";
 import { STATUS_COLORS } from "@/lib/colors";
 import type { ItemStatus } from "@/lib/constants";
-import type { Project, PMPlan, StakeholderRow, CommsRow, RaciRow, RiskItem, DependencyItem, Milestone, ResourceRow, GateRow } from "@prisma/client";
+import type { Project, PMPlan, StakeholderRow, CommsRow, RaciRow, RiskItem, DependencyItem, Milestone, DeliverableRow, TimelineRow, ResourceRow, GateRow } from "@prisma/client";
 
 function milestoneStatusLabel(status: string): string {
   return STATUS_COLORS[status as ItemStatus]?.label ?? status;
@@ -23,11 +23,13 @@ export type PmPlanExportData = {
   risks: RiskItem[];
   dependencies: DependencyItem[];
   milestones: (Milestone & { ownerPerson: { name: string } | null })[];
+  deliverables: DeliverableRow[];
+  timeline: TimelineRow[];
   resources: ResourceRow[];
   gates: GateRow[];
 };
 
-export function renderPmPlanDocx({ project, pmPlan, stakeholders, comms, raci, risks, dependencies, milestones, resources, gates }: PmPlanExportData): Buffer {
+export function renderPmPlanDocx({ project, pmPlan, stakeholders, comms, raci, risks, dependencies, milestones, deliverables, timeline, resources, gates }: PmPlanExportData): Buffer {
   const content = fs.readFileSync(TEMPLATE_PATH, "binary");
   const zip = new PizZip(content);
   const doc = new Docxtemplater(zip, {
@@ -109,13 +111,9 @@ export function renderPmPlanDocx({ project, pmPlan, stakeholders, comms, raci, r
         expectedDate: formatShortDate(d.expectedDate),
         status: d.status,
       })),
-    deliverables: milestones.map((m) => ({
-      name: m.name,
-      type: m.type,
-      acceptanceCriteria: m.acceptanceCriteria ?? "",
-      owner: m.ownerPerson?.name ?? "",
-      target: formatShortDate(m.plannedDate),
-    })),
+    deliverables: deliverables
+      .sort((a, b) => a.order - b.order)
+      .map((d) => ({ deliverable: d.deliverable, acceptanceEvidence: d.acceptanceEvidence, owner: d.owner, target: d.target })),
     milestones: milestones.map((m) => ({
       name: m.name,
       target: formatShortDate(m.plannedDate),
@@ -123,6 +121,9 @@ export function renderPmPlanDocx({ project, pmPlan, stakeholders, comms, raci, r
       exitCriteria: m.acceptanceCriteria ?? "",
       status: milestoneStatusLabel(m.status),
     })),
+    timeline: timeline
+      .sort((a, b) => a.order - b.order)
+      .map((t) => ({ phase: t.phase, start: t.start, end: t.end, status: t.status })),
     resources: resources
       .sort((a, b) => a.order - b.order)
       .map((r) => ({ role: r.role, allocation: r.allocation, responsibility: r.responsibility, backup: r.backup })),

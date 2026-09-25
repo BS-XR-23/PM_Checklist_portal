@@ -64,13 +64,14 @@ export default async function ProjectLayout({
   // pattern as Checklist/Risk & CR/Team above. Deliberately does NOT include
   // MILESTONES: "Milestones & Payments" above is a separate, unrelated
   // feature (payment tranches tied to checklist sign-off) from Delivery's
-  // own Milestones sub-tab (development checkpoints) — different goals, not
-  // to be conflated in nav or gating.
+  // own Milestone data (development checkpoints, now edited from PM Plan
+  // rather than a dedicated Delivery sub-page) — different goals, not to be
+  // conflated in nav or gating.
   if ((["DELIVERY", "DEV_CHECKLIST", "RELEASE", "UAT"] as const).some((m) => moduleAccess[m] !== "NONE")) {
     visibleTabs.push({
       href: "/delivery",
       label: "Delivery",
-      matchHrefs: ["/delivery/tasks", "/delivery/sprints", "/delivery/milestones", "/delivery/checklist", "/delivery/releases", "/delivery/uat"],
+      matchHrefs: ["/delivery/tasks", "/delivery/sprints", "/delivery/checklist", "/delivery/releases", "/delivery/uat"],
     });
   }
   if (moduleAccess.PM_PLAN !== "NONE") visibleTabs.push({ href: "/pm-plan", label: "PM Plan" });

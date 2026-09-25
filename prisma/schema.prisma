@@ -584,12 +584,14 @@ model PMPlan {
 
   escalationPath String?
 
-  stakeholders StakeholderRow[]
-  commsRows    CommsRow[]
-  raciRows     RaciRow[]
-  resourceRows ResourceRow[]
-  gateRows     GateRow[]
-  links        PmPlanLink[]
+  stakeholders    StakeholderRow[]
+  commsRows       CommsRow[]
+  raciRows        RaciRow[]
+  deliverableRows DeliverableRow[]
+  timelineRows    TimelineRow[]
+  resourceRows    ResourceRow[]
+  gateRows        GateRow[]
+  links           PmPlanLink[]
 }
 
 /// One optional reference link per scalar PMPlan field — kept as a side
@@ -642,6 +644,39 @@ model RaciRow {
   ba           String
   leadEng      String
   creativeLead String
+}
+
+/// Deliverable acceptance baseline for the PMP's Scope & Deliverables
+/// Baseline section — deliberately freestanding, not derived from Milestone
+/// (Delivery tab). A scope deliverable and a delivery-tracking milestone are
+/// different concerns that happened to share a demo table in the source
+/// template; forcing them to share real rows meant this section could only
+/// ever show whatever Delivery already had, with no way to add a
+/// deliverable that isn't also a tracked milestone.
+model DeliverableRow {
+  id                 String @id @default(cuid())
+  pmPlanId           String
+  pmPlan             PMPlan @relation(fields: [pmPlanId], references: [id], onDelete: Cascade)
+  order              Int
+  deliverable        String
+  acceptanceEvidence String
+  owner              String
+  target             String
+}
+
+/// Freestanding phase/timeline entries for the PMP's Timeline section —
+/// deliberately not derived from Milestone (a single checkpoint date), since
+/// a timeline phase has a start/end range. Same reasoning as DeliverableRow:
+/// its own addable table rather than a view forced to reuse Delivery's data.
+model TimelineRow {
+  id       String @id @default(cuid())
+  pmPlanId String
+  pmPlan   PMPlan @relation(fields: [pmPlanId], references: [id], onDelete: Cascade)
+  order    Int
+  phase    String
+  start    String
+  end      String
+  status   String @default("Not Started")
 }
 
 /// Static role-level staffing plan (e.g. "1.0 FTE") for the PMP's Resource &

@@ -11,9 +11,14 @@ import type { MilestoneType } from "@prisma/client";
 // tracks payment tranches tied to checklist sign-off. Different goals, not
 // to be conflated: gated on DELIVERY (not MILESTONES), and never touches
 // MilestonePayment/ChecklistItem.
+//
+// There is no dedicated Delivery > Milestones page anymore — editing moved
+// to PM Plan's Milestone section (components/pm-plan/pm-plan-milestones-table.tsx),
+// which imports these same actions directly. These stay gated on DELIVERY
+// write access, not PM_PLAN, since a milestone is still Delivery's data.
 
 function revalidateMilestones(projectId: string) {
-  revalidatePath(`/projects/${projectId}/delivery/milestones`);
+  revalidatePath(`/projects/${projectId}/pm-plan`);
   revalidatePath(`/projects/${projectId}/delivery`);
   revalidatePath(`/projects/${projectId}/activity`);
 }
