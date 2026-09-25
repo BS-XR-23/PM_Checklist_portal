@@ -204,3 +204,92 @@ export async function deleteRaciRow(id: string, _projectId: string) {
   await writeAudit({ actor: user, projectId: existing.pmPlan.projectId, action: "delete", entityType: "RaciRow", entityId: id, summary: "Deleted a RACI row", diff: { before: existing } });
   revalidatePmPlan(existing.pmPlan.projectId);
 }
+
+// --- Resource rows ---
+
+export async function addResourceRow(pmPlanId: string, _projectId: string) {
+  const { user, projectId: realProjectId } = await authorizeByPmPlanId(pmPlanId);
+  const count = await prisma.resourceRow.count({ where: { pmPlanId } });
+  await prisma.resourceRow.create({
+    data: { pmPlanId, order: count, role: "New role", allocation: "", responsibility: "", backup: "" },
+  });
+  await writeAudit({ actor: user, projectId: realProjectId, action: "create", entityType: "ResourceRow", summary: "Added a resource row" });
+  revalidatePmPlan(realProjectId);
+}
+
+export async function updateResourceRow(
+  id: string,
+  projectId: string,
+  data: Partial<{ role: string; allocation: string; responsibility: string; backup: string }>
+) {
+  const existing = await prisma.resourceRow.findUniqueOrThrow({ where: { id }, include: { pmPlan: true } });
+  const user = await requireModuleWrite(existing.pmPlan.projectId, "PM_PLAN");
+  await prisma.resourceRow.update({ where: { id }, data });
+  await writeAudit({ actor: user, projectId: existing.pmPlan.projectId, action: "update", entityType: "ResourceRow", entityId: id, summary: "Updated a resource row", diff: { before: existing, changes: data } });
+  revalidatePmPlan(existing.pmPlan.projectId);
+}
+
+export async function deleteResourceRow(id: string, _projectId: string) {
+  const existing = await prisma.resourceRow.findUniqueOrThrow({ where: { id }, include: { pmPlan: true } });
+  const user = await requireModuleWrite(existing.pmPlan.projectId, "PM_PLAN");
+  await prisma.resourceRow.delete({ where: { id } });
+  await writeAudit({ actor: user, projectId: existing.pmPlan.projectId, action: "delete", entityType: "ResourceRow", entityId: id, summary: "Deleted a resource row", diff: { before: existing } });
+  revalidatePmPlan(existing.pmPlan.projectId);
+}
+
+// --- Gate rows ---
+
+const DEFAULT_GATES = [
+  { gate: "G0 Initiation", requiredEvidence: "Charter, sponsor, PO, PM, initial scope", exitCondition: "Approved" },
+  { gate: "G1 Planning", requiredEvidence: "Scope, schedule, resources, risks, budget, comms, RACI", exitCondition: "Baseline approved" },
+  { gate: "G2 Build Ready", requiredEvidence: "Requirements/design baseline, environment, DoR", exitCondition: "Ready" },
+  { gate: "G3 QA Ready", requiredEvidence: "Feature complete, test plan, staging ready", exitCondition: "QA accepts build" },
+  { gate: "G4 UAT Ready", requiredEvidence: "Release candidate, test evidence, UAT plan/users", exitCondition: "PO accepts UAT entry" },
+  { gate: "G5 Release Ready", requiredEvidence: "UAT sign-off, release/rollback checklist, production readiness", exitCondition: "Release approved" },
+  { gate: "G6 Closure", requiredEvidence: "Handover, final acceptance, financial/contract closure, lessons learned", exitCondition: "Closure approved" },
+] as const;
+
+export async function addGateRow(pmPlanId: string, _projectId: string) {
+  const { user, projectId: realProjectId } = await authorizeByPmPlanId(pmPlanId);
+  const count = await prisma.gateRow.count({ where: { pmPlanId } });
+  await prisma.gateRow.create({
+    data: { pmPlanId, order: count, gate: "New gate", requiredEvidence: "", exitCondition: "" },
+  });
+  await writeAudit({ actor: user, projectId: realProjectId, action: "create", entityType: "GateRow", summary: "Added a gate row" });
+  revalidatePmPlan(realProjectId);
+}
+
+// Bulk-seeds the standard PMO G0-G6 gates in one go, so nobody has to
+// hand-type the same 7 rows every project — only offered while the table is
+// still empty (the caller checks rows.length === 0), so it can't be used to
+// duplicate an already-customized list.
+export async function seedDefaultGateRows(pmPlanId: string, _projectId: string) {
+  const { user, projectId: realProjectId } = await authorizeByPmPlanId(pmPlanId);
+  const count = await prisma.gateRow.count({ where: { pmPlanId } });
+  if (count > 0) return;
+  await prisma.gateRow.createMany({
+    data: DEFAULT_GATES.map((g, i) => ({ pmPlanId, order: i, ...g })),
+  });
+  await writeAudit({ actor: user, projectId: realProjectId, action: "create", entityType: "GateRow", summary: "Loaded the standard G0-G6 PMO gates" });
+  revalidatePmPlan(realProjectId);
+}
+
+export async function updateGateRow(
+  id: string,
+  projectId: string,
+  data: Partial<{ gate: string; requiredEvidence: string; exitCondition: string; status: string }>
+) {
+  const existing = await prisma.gateRow.findUniqueOrThrow({ where: { id }, include: { pmPlan: true } });
+  const user = await requireModuleWrite(existing.pmPlan.projectId, "PM_PLAN");
+  await prisma.gateRow.update({ where: { id }, data });
+  await writeAudit({ actor: user, projectId: existing.pmPlan.projectId, action: "update", entityType: "GateRow", entityId: id, summary: "Updated a gate row", diff: { before: existing, changes: data } });
+  revalidatePmPlan(existing.pmPlan.projectId);
+}
+
+export async function deleteGateRow(id: string, _projectId: string) {
+  const existing = await prisma.gateRow.findUniqueOrThrow({ where: { id }, include: { pmPlan: true } });
+  const user = await requireModuleWrite(existing.pmPlan.projectId, "PM_PLAN");
+  await prisma.gateRow.delete({ where: { id } });
+  await writeAudit({ actor: user, projectId: existing.pmPlan.projectId, action: "delete", entityType: "GateRow", entityId: id, summary: "Deleted a gate row", diff: { before: existing } });
+  revalidatePmPlan(existing.pmPlan.projectId);
+}

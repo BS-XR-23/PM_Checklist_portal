@@ -2,8 +2,15 @@ import fs from "fs";
 import path from "path";
 import PizZip from "pizzip";
 import Docxtemplater from "docxtemplater";
-import { formatDate } from "@/lib/format";
-import type { Project, PMPlan, StakeholderRow, CommsRow, RaciRow } from "@prisma/client";
+import { formatDate, formatShortDate } from "@/lib/format";
+import { riskScore } from "@/lib/calculations";
+import { STATUS_COLORS } from "@/lib/colors";
+import type { ItemStatus } from "@/lib/constants";
+import type { Project, PMPlan, StakeholderRow, CommsRow, RaciRow, RiskItem, DependencyItem, Milestone, ResourceRow, GateRow } from "@prisma/client";
+
+function milestoneStatusLabel(status: string): string {
+  return STATUS_COLORS[status as ItemStatus]?.label ?? status;
+}
 
 const TEMPLATE_PATH = path.join(process.cwd(), "templates", "pmp-plan-template.docx");
 
@@ -13,9 +20,14 @@ export type PmPlanExportData = {
   stakeholders: StakeholderRow[];
   comms: CommsRow[];
   raci: RaciRow[];
+  risks: RiskItem[];
+  dependencies: DependencyItem[];
+  milestones: (Milestone & { ownerPerson: { name: string } | null })[];
+  resources: ResourceRow[];
+  gates: GateRow[];
 };
 
-export function renderPmPlanDocx({ project, pmPlan, stakeholders, comms, raci }: PmPlanExportData): Buffer {
+export function renderPmPlanDocx({ project, pmPlan, stakeholders, comms, raci, risks, dependencies, milestones, resources, gates }: PmPlanExportData): Buffer {
   const content = fs.readFileSync(TEMPLATE_PATH, "binary");
   const zip = new PizZip(content);
   const doc = new Docxtemplater(zip, {
@@ -73,6 +85,50 @@ export function renderPmPlanDocx({ project, pmPlan, stakeholders, comms, raci }:
     raci: raci
       .sort((a, b) => a.order - b.order)
       .map((r) => ({ activity: r.activity, pm: r.pm, tl: r.tl, ba: r.ba, leadEng: r.leadEng, creativeLead: r.creativeLead })),
+    risks: risks
+      .sort((a, b) => a.order - b.order)
+      .map((r, i) => ({
+        num: String(i + 1),
+        type: r.type,
+        description: r.description,
+        probability: r.probability,
+        impact: r.impact,
+        score: String(riskScore(r.probability, r.impact)),
+        response: r.mitigation ?? "",
+        owner: r.owner ?? "",
+        status: r.status,
+      })),
+    dependencies: dependencies
+      .sort((a, b) => a.order - b.order)
+      .map((d, i) => ({
+        num: String(i + 1),
+        category: d.category ?? "",
+        description: d.description,
+        responsible: d.responsible ?? "",
+        priority: d.priority,
+        expectedDate: formatShortDate(d.expectedDate),
+        status: d.status,
+      })),
+    deliverables: milestones.map((m) => ({
+      name: m.name,
+      type: m.type,
+      acceptanceCriteria: m.acceptanceCriteria ?? "",
+      owner: m.ownerPerson?.name ?? "",
+      target: formatShortDate(m.plannedDate),
+    })),
+    milestones: milestones.map((m) => ({
+      name: m.name,
+      target: formatShortDate(m.plannedDate),
+      owner: m.ownerPerson?.name ?? "",
+      exitCriteria: m.acceptanceCriteria ?? "",
+      status: milestoneStatusLabel(m.status),
+    })),
+    resources: resources
+      .sort((a, b) => a.order - b.order)
+      .map((r) => ({ role: r.role, allocation: r.allocation, responsibility: r.responsibility, backup: r.backup })),
+    gates: gates
+      .sort((a, b) => a.order - b.order)
+      .map((g) => ({ gate: g.gate, requiredEvidence: g.requiredEvidence, exitCondition: g.exitCondition, status: g.status })),
   });
 
   return doc.getZip().generate({ type: "nodebuffer" });

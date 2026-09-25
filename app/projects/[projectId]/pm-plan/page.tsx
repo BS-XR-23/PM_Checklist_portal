@@ -1,6 +1,9 @@
 import { prisma } from "@/lib/prisma";
-import { toDateInputValue } from "@/lib/format";
-import { requireModuleAccess } from "@/lib/rbac";
+import { toDateInputValue, formatShortDate } from "@/lib/format";
+import { requireModuleAccess, getModuleAccess, meetsLevel } from "@/lib/rbac";
+import { riskScore } from "@/lib/calculations";
+import { STATUS_COLORS } from "@/lib/colors";
+import type { ItemStatus } from "@/lib/constants";
 import { StatTile } from "@/components/ui/stat-tile";
 import { PageGuide } from "@/components/ui/page-guide";
 import { IconLayers, IconCheckCircle, IconClock, IconCircle, IconClipboardList } from "@/components/layout/icons";
@@ -11,6 +14,8 @@ import { FieldLinkView } from "@/components/pm-plan/field-link-editor";
 import { StakeholdersTable } from "@/components/pm-plan/stakeholders-table";
 import { CommsTable } from "@/components/pm-plan/comms-table";
 import { RaciTable } from "@/components/pm-plan/raci-table";
+import { ResourceTable } from "@/components/pm-plan/resource-table";
+import { GateTable } from "@/components/pm-plan/gate-table";
 import type { PmPlanLinkableField } from "./pmplan-actions";
 
 // filled/total -> a status band, reused by every section below: 0 filled is
@@ -23,21 +28,56 @@ function statusFromCounts(filled: number, total: number): PmPlanSectionStatus {
   return "IN_PROGRESS";
 }
 
+function milestoneStatusLabel(status: string): string {
+  return STATUS_COLORS[status as ItemStatus]?.label ?? status;
+}
+
 export default async function PmPlanPage({ params }: { params: { projectId: string } }) {
   const access = await requireModuleAccess(params.projectId, "PM_PLAN", "READ_LIMITED");
   const canWrite = access === "WRITE";
 
-  const [pmPlan, people] = await Promise.all([
+  // Risk & Dependency data is sourced live from the Risk Register and
+  // Dependencies tabs (RiskItem/DependencyItem, keyed by projectId) rather
+  // than duplicated into PMPlan — those tabs stay the single editable copy.
+  // Each has its own RBAC module, so a PM_PLAN viewer without access to one
+  // simply doesn't get that section here either.
+  // Milestones (Scope & Deliverables Baseline / Schedule & Milestones) are
+  // likewise sourced live from the Delivery tab's Milestone table — same
+  // reasoning and same RBAC-gating pattern as Risk/Dependencies above.
+  // Resource & Responsibility Plan and the PMO Gate checklist have no
+  // existing home elsewhere in the app, so those two stay PMPlan-owned,
+  // editable rows (like Stakeholders/Comms/RACI) rather than a live join.
+  const [riskAccess, depAccess, deliveryAccess] = await Promise.all([
+    getModuleAccess(params.projectId, "RISK_REGISTER"),
+    getModuleAccess(params.projectId, "DEPENDENCIES"),
+    getModuleAccess(params.projectId, "DELIVERY"),
+  ]);
+  const canSeeRisks = meetsLevel(riskAccess, "READ_LIMITED");
+  const canSeeDeps = meetsLevel(depAccess, "READ_LIMITED");
+  const canSeeMilestones = meetsLevel(deliveryAccess, "READ_LIMITED");
+
+  const [pmPlan, people, risks, dependencies, milestones] = await Promise.all([
     prisma.pMPlan.findUniqueOrThrow({
       where: { projectId: params.projectId },
       include: {
         stakeholders: { orderBy: { order: "asc" } },
         commsRows: { orderBy: { order: "asc" } },
         raciRows: { orderBy: { order: "asc" } },
+        resourceRows: { orderBy: { order: "asc" } },
+        gateRows: { orderBy: { order: "asc" } },
         links: true,
       },
     }),
     canWrite ? prisma.person.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }) : Promise.resolve([]),
+    canSeeRisks ? prisma.riskItem.findMany({ where: { projectId: params.projectId }, orderBy: { order: "asc" } }) : Promise.resolve([]),
+    canSeeDeps ? prisma.dependencyItem.findMany({ where: { projectId: params.projectId }, orderBy: { order: "asc" } }) : Promise.resolve([]),
+    canSeeMilestones
+      ? prisma.milestone.findMany({
+          where: { projectId: params.projectId },
+          orderBy: { plannedDate: "asc" },
+          include: { ownerPerson: { select: { name: true } } },
+        })
+      : Promise.resolve([]),
   ]);
 
   const projectId = params.projectId;
@@ -395,10 +435,166 @@ export default async function PmPlanPage({ params }: { params: { projectId: stri
     },
   ];
 
+  // Read-only: editing happens on the Risk Register / Dependencies tabs
+  // themselves, not here — keeps a single source of truth instead of a
+  // second copy that can drift out of sync.
+  if (canSeeRisks) {
+    sections.push({
+      id: "risk-issue-management",
+      number: sections.length + 1,
+      title: "Risk & Issue Management",
+      hint: "Sourced live from the Risk Register tab. Risk Score = Probability x Impact (Low=1, Medium=2, High=3). Edit entries on the Risk Register tab.",
+      itemCountLabel: `${risks.length} ${risks.length === 1 ? "item" : "items"}`,
+      status: statusFromCounts(risks.length > 0 ? 1 : 0, 1),
+      view: (
+        <div className="space-y-3">
+          <a href={`/projects/${projectId}/risks`} className="inline-flex items-center text-xs font-medium text-indigo-600 hover:text-indigo-700">
+            Open Risk Register to add or edit rows &rarr;
+          </a>
+          <ReadOnlyTable
+            columns={["#", "Type", "Description", "Probability", "Impact", "Score", "Response / Mitigation", "Owner", "Status"]}
+            rows={risks.map((r, i) => [
+              String(i + 1),
+              r.type,
+              r.description,
+              r.probability,
+              r.impact,
+              String(riskScore(r.probability, r.impact)),
+              r.mitigation ?? "",
+              r.owner ?? "",
+              r.status,
+            ])}
+          />
+        </div>
+      ),
+    });
+  }
+
+  if (canSeeDeps) {
+    sections.push({
+      id: "dependency-decision-management",
+      number: sections.length + 1,
+      title: "Dependency & Decision Management",
+      hint: "Sourced live from the Dependencies tab. Edit entries on the Dependencies tab.",
+      itemCountLabel: `${dependencies.length} ${dependencies.length === 1 ? "item" : "items"}`,
+      status: statusFromCounts(dependencies.length > 0 ? 1 : 0, 1),
+      view: (
+        <div className="space-y-3">
+          <a href={`/projects/${projectId}/dependencies`} className="inline-flex items-center text-xs font-medium text-indigo-600 hover:text-indigo-700">
+            Open Dependencies to add or edit rows &rarr;
+          </a>
+          <ReadOnlyTable
+            columns={["#", "Category", "Dependency / Decision", "Responsible", "Priority", "Expected Date", "Status"]}
+            rows={dependencies.map((d, i) => [
+              String(i + 1),
+              d.category ?? "",
+              d.description,
+              d.responsible ?? "",
+              d.priority,
+              formatShortDate(d.expectedDate),
+              d.status,
+            ])}
+          />
+        </div>
+      ),
+    });
+  }
+
+  // Scope & Deliverables Baseline and Schedule & Milestones both read the
+  // same live Milestone rows, just framed differently (contractual
+  // acceptance-evidence view vs. execution-tracking view) — deliberately
+  // mirrors how the source PMP template itself frames the same milestones
+  // twice across its own Section 4 and Section 5.
+  if (canSeeMilestones) {
+    sections.push({
+      id: "scope-deliverables-baseline",
+      number: sections.length + 1,
+      title: "Scope & Deliverables Baseline",
+      hint: "Sourced live from the Delivery tab's milestones. Edit entries on the Delivery tab.",
+      itemCountLabel: `${milestones.length} ${milestones.length === 1 ? "deliverable" : "deliverables"}`,
+      status: statusFromCounts(milestones.length > 0 ? 1 : 0, 1),
+      view: (
+        <div className="space-y-3">
+          <a href={`/projects/${projectId}/delivery`} className="inline-flex items-center text-xs font-medium text-indigo-600 hover:text-indigo-700">
+            Open Delivery to add or edit milestones &rarr;
+          </a>
+          <ReadOnlyTable
+            columns={["Deliverable", "Type", "Acceptance Evidence", "Owner", "Target"]}
+            rows={milestones.map((m) => [m.name, m.type, m.acceptanceCriteria ?? "", m.ownerPerson?.name ?? "", formatShortDate(m.plannedDate)])}
+          />
+        </div>
+      ),
+    });
+
+    sections.push({
+      id: "schedule-milestones",
+      number: sections.length + 1,
+      title: "Schedule & Milestones",
+      hint: "Sourced live from the Delivery tab's milestones. Edit entries on the Delivery tab.",
+      itemCountLabel: `${milestones.length} ${milestones.length === 1 ? "milestone" : "milestones"}`,
+      status: statusFromCounts(milestones.length > 0 ? 1 : 0, 1),
+      view: (
+        <div className="space-y-3">
+          <a href={`/projects/${projectId}/delivery`} className="inline-flex items-center text-xs font-medium text-indigo-600 hover:text-indigo-700">
+            Open Delivery to add or edit milestones &rarr;
+          </a>
+          <ReadOnlyTable
+            columns={["Milestone", "Baseline Date", "Owner", "Exit Criteria", "Status"]}
+            rows={milestones.map((m) => [m.name, formatShortDate(m.plannedDate), m.ownerPerson?.name ?? "", m.acceptanceCriteria ?? "", milestoneStatusLabel(m.status)])}
+          />
+        </div>
+      ),
+    });
+  }
+
+  // Resource & Responsibility Plan and PMO Health & Control Gates have no
+  // existing home elsewhere in the app (unlike the four sections above),
+  // so they're plain PMPlan-owned editable rows — same pattern as
+  // Stakeholders/Comms/RACI, gated only by PM_PLAN access itself.
+  sections.push({
+    id: "resource-responsibility-plan",
+    number: sections.length + 1,
+    title: "Resource & Responsibility Plan",
+    hint: "Static role-level staffing baseline. For live per-person allocation, see the Resourcing and Team tabs.",
+    itemCountLabel: `${pmPlan.resourceRows.length} ${pmPlan.resourceRows.length === 1 ? "role" : "roles"}`,
+    status: statusFromCounts(pmPlan.resourceRows.length, 1),
+    view: (
+      <ReadOnlyTable
+        columns={["Role", "Allocation", "Primary Responsibility", "Backup / Escalation"]}
+        rows={pmPlan.resourceRows.map((r) => [r.role, r.allocation, r.responsibility, r.backup])}
+      />
+    ),
+    edit: canWrite ? <ResourceTable pmPlanId={pmPlanId} projectId={projectId} rows={pmPlan.resourceRows} /> : undefined,
+  });
+
+  sections.push({
+    id: "pmo-health-control-gates",
+    number: sections.length + 1,
+    title: "PMO Health & Control Gates",
+    hint: "Formal stage-gate sign-off checklist (G0-G6). Distinct from the Checklist tab's delivery work items.",
+    itemCountLabel: `${pmPlan.gateRows.length} ${pmPlan.gateRows.length === 1 ? "gate" : "gates"}`,
+    status: statusFromCounts(pmPlan.gateRows.length, 1),
+    view: (
+      <ReadOnlyTable
+        columns={["Gate", "Required Evidence", "Exit Condition", "Status"]}
+        rows={pmPlan.gateRows.map((g) => [g.gate, g.requiredEvidence, g.exitCondition, g.status])}
+      />
+    ),
+    edit: canWrite ? <GateTable pmPlanId={pmPlanId} projectId={projectId} rows={pmPlan.gateRows} /> : undefined,
+  });
+
   const completedCount = sections.filter((s) => s.status === "COMPLETED").length;
   const inProgressCount = sections.filter((s) => s.status === "IN_PROGRESS").length;
   const notStartedCount = sections.filter((s) => s.status === "NOT_STARTED").length;
-  const dataRows = pmPlan.stakeholders.length + pmPlan.commsRows.length + pmPlan.raciRows.length;
+  const dataRows =
+    pmPlan.stakeholders.length +
+    pmPlan.commsRows.length +
+    pmPlan.raciRows.length +
+    risks.length +
+    dependencies.length +
+    milestones.length +
+    pmPlan.resourceRows.length +
+    pmPlan.gateRows.length;
 
   return (
     <div className="space-y-6">
@@ -451,7 +647,7 @@ export default async function PmPlanPage({ params }: { params: { projectId: stri
 
       <p className="flex items-center gap-1.5 text-xs text-slate-400">
         <IconClipboardList className="h-3.5 w-3.5" />
-        Generated from the BS23 PMP_Template.docx — {dataRows} data rows across Stakeholders, Communications, and RACI.
+        Generated from the BS23 PMP_Template.docx — {dataRows} data rows across Stakeholders, Communications, RACI, Risks, Dependencies, Milestones, Resources, and Gates.
       </p>
     </div>
   );

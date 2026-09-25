@@ -587,6 +587,8 @@ model PMPlan {
   stakeholders StakeholderRow[]
   commsRows    CommsRow[]
   raciRows     RaciRow[]
+  resourceRows ResourceRow[]
+  gateRows     GateRow[]
   links        PmPlanLink[]
 }
 
@@ -640,6 +642,36 @@ model RaciRow {
   ba           String
   leadEng      String
   creativeLead String
+}
+
+/// Static role-level staffing plan (e.g. "1.0 FTE") for the PMP's Resource &
+/// Responsibility Plan section — distinct from ProjectMembership/
+/// SprintAllocation, which track real per-person, per-sprint allocation.
+/// This is a planning-baseline snapshot, not a live roster.
+model ResourceRow {
+  id             String @id @default(cuid())
+  pmPlanId       String
+  pmPlan         PMPlan @relation(fields: [pmPlanId], references: [id], onDelete: Cascade)
+  order          Int
+  role           String
+  allocation     String
+  responsibility String
+  backup         String
+}
+
+/// PMO stage-gate checklist (G0-G6) for the PMP's Control Gates section —
+/// freestanding rows, not derived from ChecklistItem's stages, since a gate
+/// here represents formal PMO sign-off evidence rather than a delivery
+/// work item.
+model GateRow {
+  id               String @id @default(cuid())
+  pmPlanId         String
+  pmPlan           PMPlan @relation(fields: [pmPlanId], references: [id], onDelete: Cascade)
+  order            Int
+  gate             String
+  requiredEvidence String
+  exitCondition    String
+  status           String @default("Not Started")
 }
 
 /// Canonical registry of a real person — the single source of truth that

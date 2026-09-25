@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import clsx from "clsx";
 import { STATUS_COLORS } from "@/lib/colors";
 import { IconPencil, IconChevronDown } from "@/components/layout/icons";
@@ -31,11 +31,21 @@ function StatusPill({ status }: { status: PmPlanSectionStatus }) {
 export function PmPlanSections({ sections, canWrite }: { sections: PmPlanSectionData[]; canWrite: boolean }) {
   const [expandedId, setExpandedId] = useState<string | null>(sections[0]?.id ?? null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const sectionRefs = useRef(new Map<string, HTMLElement>());
 
   const toggle = (id: string) => {
     setExpandedId((cur) => (cur === id ? null : id));
     setEditingId(null);
   };
+
+  // Only one section is ever expanded at a time, so opening one below the
+  // fold (e.g. via the nav) collapses whichever was open above it with no
+  // other visual change in the viewport — scroll it into view so that
+  // doesn't look like the click did nothing.
+  useEffect(() => {
+    if (!expandedId) return;
+    sectionRefs.current.get(expandedId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [expandedId]);
 
   return (
     <div className="grid lg:grid-cols-[220px_1fr] gap-4">
@@ -75,7 +85,14 @@ export function PmPlanSections({ sections, canWrite }: { sections: PmPlanSection
           const expanded = expandedId === s.id;
           const editing = editingId === s.id;
           return (
-            <section key={s.id} className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+            <section
+              key={s.id}
+              ref={(el) => {
+                if (el) sectionRefs.current.set(s.id, el);
+                else sectionRefs.current.delete(s.id);
+              }}
+              className="rounded-xl border border-slate-200 bg-white overflow-hidden scroll-mt-4"
+            >
               <button
                 type="button"
                 onClick={() => toggle(s.id)}
