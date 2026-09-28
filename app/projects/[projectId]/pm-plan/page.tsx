@@ -124,389 +124,118 @@ export default async function PmPlanPage({ params }: { params: { projectId: stri
   const filledCount = (fields: (string | null)[]) => fields.filter((f) => f && f.trim() !== "").length;
   const commsFilled = (pmPlan.commsRows.length > 0 ? 1 : 0) + (pmPlan.escalationPath ? 1 : 0);
 
-  const sections: PmPlanSectionData[] = [
-    {
-      id: "rationale",
-      number: 1,
-      title: "Rationale",
-      hint: "Why this project is needed now, expected ROI, consequences of not proceeding, alignment with org goals.",
-      required: true,
-      status: statusFromCounts(pmPlan.rationale ? 1 : 0, 1),
-      view: <ReadOnlyField label="Rationale" value={pmPlan.rationale} link={link("rationale")} />,
-      edit: canWrite ? (
+  // Ordered to match the source BS23 PMP_Template.docx's own PMO section
+  // numbering (Rationale -> Stakeholders -> Charter -> Scope/Deliverables ->
+  // Schedule/Milestones -> Methodology -> Resource Plan -> Risk -> Test ->
+  // Deployment -> Communications -> RACI -> Dependencies -> Gates), not the
+  // order features were built in. Every section pushes with a dynamic
+  // `sections.length + 1` so a viewer missing access to a conditional
+  // section (Risk/Dependency/Milestone) never sees a numbering gap.
+  const sections: PmPlanSectionData[] = [];
+
+  sections.push({
+    id: "rationale",
+    number: sections.length + 1,
+    title: "Rationale",
+    hint: "Why this project is needed now, expected ROI, consequences of not proceeding, alignment with org goals.",
+    required: true,
+    status: statusFromCounts(pmPlan.rationale ? 1 : 0, 1),
+    view: <ReadOnlyField label="Rationale" value={pmPlan.rationale} link={link("rationale")} />,
+    edit: canWrite ? (
+      <PlanField
+        pmPlanId={pmPlanId}
+        projectId={projectId}
+        field="rationale"
+        label="Rationale"
+        value={pmPlan.rationale ?? ""}
+        linkField="rationale"
+        linkUrl={link("rationale")}
+      />
+    ) : undefined,
+  });
+
+  sections.push({
+    id: "stakeholders",
+    number: sections.length + 1,
+    title: "Stakeholders & Access",
+    hint: "Add/remove rows per the actual project org chart. Define access levels per system.",
+    required: true,
+    status: statusFromCounts(pmPlan.stakeholders.length, 1),
+    itemCountLabel: `${pmPlan.stakeholders.length} ${pmPlan.stakeholders.length === 1 ? "stakeholder" : "stakeholders"}`,
+    view: (
+      <ReadOnlyTable
+        columns={["Stakeholder", "Role", "Responsibility", "Access Required"]}
+        rows={pmPlan.stakeholders.map((r) => [r.stakeholder, r.role, r.responsibility, r.accessRequired])}
+      />
+    ),
+    edit: canWrite ? <StakeholdersTable pmPlanId={pmPlanId} projectId={projectId} rows={pmPlan.stakeholders} people={people} /> : undefined,
+  });
+
+  sections.push({
+    id: "charter",
+    number: sections.length + 1,
+    title: "Charter",
+    required: true,
+    status: statusFromCounts(filledCount(charterFields), charterFields.length),
+    itemCountLabel: `${filledCount(charterFields)}/${charterFields.length} fields`,
+    view: (
+      <div className="space-y-3">
+        <ReadOnlyField label="Objective" value={pmPlan.charterObjective} />
+        <ReadOnlyField label="Scope (In)" value={pmPlan.charterScopeIn} link={link("charterScopeIn")} />
+        <ReadOnlyField label="Scope (Out)" value={pmPlan.charterScopeOut} link={link("charterScopeOut")} />
+        <ReadOnlyField label="Success Criteria" value={pmPlan.charterSuccessCriteria} link={link("charterSuccessCriteria")} />
+        <ReadOnlyField label="Timeline" value={pmPlan.charterTimeline} link={link("charterTimeline")} />
+        <ReadOnlyField label="Budget" value={pmPlan.charterBudget} />
+        <ReadOnlyField label="Assumptions & Constraints" value={pmPlan.charterAssumptions} />
+        <ReadOnlyField label="PM Authority" value={pmPlan.charterPmAuthority} />
+      </div>
+    ),
+    edit: canWrite ? (
+      <div className="space-y-3">
+        <PlanField pmPlanId={pmPlanId} projectId={projectId} field="charterObjective" label="Objective" value={pmPlan.charterObjective ?? ""} />
         <PlanField
           pmPlanId={pmPlanId}
           projectId={projectId}
-          field="rationale"
-          label="Rationale"
-          value={pmPlan.rationale ?? ""}
-          linkField="rationale"
-          linkUrl={link("rationale")}
+          field="charterScopeIn"
+          label="Scope (In)"
+          value={pmPlan.charterScopeIn ?? ""}
+          linkField="charterScopeIn"
+          linkUrl={link("charterScopeIn")}
         />
-      ) : undefined,
-    },
-    {
-      id: "stakeholders",
-      number: 2,
-      title: "Stakeholders & Access",
-      hint: "Add/remove rows per the actual project org chart. Define access levels per system.",
-      required: true,
-      status: statusFromCounts(pmPlan.stakeholders.length, 1),
-      itemCountLabel: `${pmPlan.stakeholders.length} ${pmPlan.stakeholders.length === 1 ? "stakeholder" : "stakeholders"}`,
-      view: (
-        <ReadOnlyTable
-          columns={["Stakeholder", "Role", "Responsibility", "Access Required"]}
-          rows={pmPlan.stakeholders.map((r) => [r.stakeholder, r.role, r.responsibility, r.accessRequired])}
+        <PlanField
+          pmPlanId={pmPlanId}
+          projectId={projectId}
+          field="charterScopeOut"
+          label="Scope (Out)"
+          value={pmPlan.charterScopeOut ?? ""}
+          linkField="charterScopeOut"
+          linkUrl={link("charterScopeOut")}
         />
-      ),
-      edit: canWrite ? <StakeholdersTable pmPlanId={pmPlanId} projectId={projectId} rows={pmPlan.stakeholders} people={people} /> : undefined,
-    },
-    {
-      id: "charter",
-      number: 3,
-      title: "Charter",
-      required: true,
-      status: statusFromCounts(filledCount(charterFields), charterFields.length),
-      itemCountLabel: `${filledCount(charterFields)}/${charterFields.length} fields`,
-      view: (
-        <div className="space-y-3">
-          <ReadOnlyField label="Objective" value={pmPlan.charterObjective} />
-          <ReadOnlyField label="Scope (In)" value={pmPlan.charterScopeIn} link={link("charterScopeIn")} />
-          <ReadOnlyField label="Scope (Out)" value={pmPlan.charterScopeOut} link={link("charterScopeOut")} />
-          <ReadOnlyField label="Success Criteria" value={pmPlan.charterSuccessCriteria} link={link("charterSuccessCriteria")} />
-          <ReadOnlyField label="Timeline" value={pmPlan.charterTimeline} link={link("charterTimeline")} />
-          <ReadOnlyField label="Budget" value={pmPlan.charterBudget} />
-          <ReadOnlyField label="Assumptions & Constraints" value={pmPlan.charterAssumptions} />
-          <ReadOnlyField label="PM Authority" value={pmPlan.charterPmAuthority} />
-        </div>
-      ),
-      edit: canWrite ? (
-        <div className="space-y-3">
-          <PlanField pmPlanId={pmPlanId} projectId={projectId} field="charterObjective" label="Objective" value={pmPlan.charterObjective ?? ""} />
-          <PlanField
-            pmPlanId={pmPlanId}
-            projectId={projectId}
-            field="charterScopeIn"
-            label="Scope (In)"
-            value={pmPlan.charterScopeIn ?? ""}
-            linkField="charterScopeIn"
-            linkUrl={link("charterScopeIn")}
-          />
-          <PlanField
-            pmPlanId={pmPlanId}
-            projectId={projectId}
-            field="charterScopeOut"
-            label="Scope (Out)"
-            value={pmPlan.charterScopeOut ?? ""}
-            linkField="charterScopeOut"
-            linkUrl={link("charterScopeOut")}
-          />
-          <PlanField
-            pmPlanId={pmPlanId}
-            projectId={projectId}
-            field="charterSuccessCriteria"
-            label="Success Criteria"
-            value={pmPlan.charterSuccessCriteria ?? ""}
-            linkField="charterSuccessCriteria"
-            linkUrl={link("charterSuccessCriteria")}
-          />
-          <PlanField
-            pmPlanId={pmPlanId}
-            projectId={projectId}
-            field="charterTimeline"
-            label="Timeline"
-            value={pmPlan.charterTimeline ?? ""}
-            multiline={false}
-            linkField="charterTimeline"
-            linkUrl={link("charterTimeline")}
-          />
-          <PlanField pmPlanId={pmPlanId} projectId={projectId} field="charterBudget" label="Budget" value={pmPlan.charterBudget ?? ""} multiline={false} />
-          <PlanField pmPlanId={pmPlanId} projectId={projectId} field="charterAssumptions" label="Assumptions & Constraints" value={pmPlan.charterAssumptions ?? ""} />
-          <PlanField pmPlanId={pmPlanId} projectId={projectId} field="charterPmAuthority" label="PM Authority" value={pmPlan.charterPmAuthority ?? ""} />
-        </div>
-      ) : undefined,
-    },
-    {
-      id: "methodology",
-      number: 4,
-      title: "Methodology",
-      status: statusFromCounts(filledCount(methodFields), methodFields.length),
-      itemCountLabel: `${filledCount(methodFields)}/${methodFields.length} fields`,
-      view: (
-        <div className="space-y-3">
-          <ReadOnlyField label="Approach" value={pmPlan.methodApproach} />
-          <ReadOnlyField label="Cadence" value={pmPlan.methodCadence} />
-          <ReadOnlyField label="Ceremonies" value={pmPlan.methodCeremonies} link={link("methodCeremonies")} />
-          <ReadOnlyField label="Tools" value={pmPlan.methodTools} />
-          <ReadOnlyField label="Roles" value={pmPlan.methodRoles} />
-          <ReadOnlyField label="Change Management" value={pmPlan.methodChangeMgmt} link={link("methodChangeMgmt")} />
-        </div>
-      ),
-      edit: canWrite ? (
-        <div className="space-y-3">
-          <PlanField pmPlanId={pmPlanId} projectId={projectId} field="methodApproach" label="Approach" value={pmPlan.methodApproach ?? ""} multiline={false} />
-          <PlanField pmPlanId={pmPlanId} projectId={projectId} field="methodCadence" label="Cadence" value={pmPlan.methodCadence ?? ""} multiline={false} />
-          <PlanField
-            pmPlanId={pmPlanId}
-            projectId={projectId}
-            field="methodCeremonies"
-            label="Ceremonies"
-            value={pmPlan.methodCeremonies ?? ""}
-            linkField="methodCeremonies"
-            linkUrl={link("methodCeremonies")}
-          />
-          <PlanField pmPlanId={pmPlanId} projectId={projectId} field="methodTools" label="Tools" value={pmPlan.methodTools ?? ""} multiline={false} />
-          <PlanField pmPlanId={pmPlanId} projectId={projectId} field="methodRoles" label="Roles" value={pmPlan.methodRoles ?? ""} />
-          <PlanField
-            pmPlanId={pmPlanId}
-            projectId={projectId}
-            field="methodChangeMgmt"
-            label="Change Management"
-            value={pmPlan.methodChangeMgmt ?? ""}
-            linkField="methodChangeMgmt"
-            linkUrl={link("methodChangeMgmt")}
-          />
-        </div>
-      ) : undefined,
-    },
-    {
-      id: "test-plan",
-      number: 5,
-      title: "Test Plan",
-      status: statusFromCounts(filledCount(testFields), testFields.length),
-      itemCountLabel: `${filledCount(testFields)}/${testFields.length} fields`,
-      view: (
-        <div className="space-y-3">
-          <ReadOnlyField label="Testing Levels" value={pmPlan.testLevels} />
-          <ReadOnlyField label="Test Environments" value={pmPlan.testEnvironments} />
-          <ReadOnlyField label="Entry Criteria" value={pmPlan.testEntryCriteria} link={link("testEntryCriteria")} />
-          <ReadOnlyField label="Exit Criteria" value={pmPlan.testExitCriteria} link={link("testExitCriteria")} />
-          <ReadOnlyField label="Defect Management" value={pmPlan.testDefectMgmt} link={link("testDefectMgmt")} />
-          <ReadOnlyField label="UAT Process" value={pmPlan.testUatProcess} link={link("testUatProcess")} />
-          <ReadOnlyField label="Test Deliverables" value={pmPlan.testDeliverables} link={link("testDeliverables")} />
-        </div>
-      ),
-      edit: canWrite ? (
-        <div className="space-y-3">
-          <PlanField pmPlanId={pmPlanId} projectId={projectId} field="testLevels" label="Testing Levels" value={pmPlan.testLevels ?? ""} multiline={false} />
-          <PlanField pmPlanId={pmPlanId} projectId={projectId} field="testEnvironments" label="Test Environments" value={pmPlan.testEnvironments ?? ""} multiline={false} />
-          <PlanField
-            pmPlanId={pmPlanId}
-            projectId={projectId}
-            field="testEntryCriteria"
-            label="Entry Criteria"
-            value={pmPlan.testEntryCriteria ?? ""}
-            linkField="testEntryCriteria"
-            linkUrl={link("testEntryCriteria")}
-          />
-          <PlanField
-            pmPlanId={pmPlanId}
-            projectId={projectId}
-            field="testExitCriteria"
-            label="Exit Criteria"
-            value={pmPlan.testExitCriteria ?? ""}
-            linkField="testExitCriteria"
-            linkUrl={link("testExitCriteria")}
-          />
-          <PlanField
-            pmPlanId={pmPlanId}
-            projectId={projectId}
-            field="testDefectMgmt"
-            label="Defect Management"
-            value={pmPlan.testDefectMgmt ?? ""}
-            linkField="testDefectMgmt"
-            linkUrl={link("testDefectMgmt")}
-          />
-          <PlanField
-            pmPlanId={pmPlanId}
-            projectId={projectId}
-            field="testUatProcess"
-            label="UAT Process"
-            value={pmPlan.testUatProcess ?? ""}
-            linkField="testUatProcess"
-            linkUrl={link("testUatProcess")}
-          />
-          <PlanField
-            pmPlanId={pmPlanId}
-            projectId={projectId}
-            field="testDeliverables"
-            label="Test Deliverables"
-            value={pmPlan.testDeliverables ?? ""}
-            linkField="testDeliverables"
-            linkUrl={link("testDeliverables")}
-          />
-        </div>
-      ) : undefined,
-    },
-    {
-      id: "deployment-plan",
-      number: 6,
-      title: "Deployment Plan",
-      status: statusFromCounts(filledCount(deployFields), deployFields.length),
-      itemCountLabel: `${filledCount(deployFields)}/${deployFields.length} fields`,
-      view: (
-        <div className="space-y-3">
-          <ReadOnlyField label="Environments" value={pmPlan.deployEnvironments} />
-          <ReadOnlyField label="Release Strategy" value={pmPlan.deployReleaseStrategy} />
-          <ReadOnlyField label="Deployment Steps" value={pmPlan.deploySteps} link={link("deploySteps")} />
-          <ReadOnlyField label="Rollback Plan" value={pmPlan.deployRollback} link={link("deployRollback")} />
-          <ReadOnlyField label="Go-Live Checklist" value={pmPlan.deployGoliveChecklist} link={link("deployGoliveChecklist")} />
-          <ReadOnlyField label="Post-Deployment Monitoring" value={pmPlan.deployMonitoring} link={link("deployMonitoring")} />
-        </div>
-      ),
-      edit: canWrite ? (
-        <div className="space-y-3">
-          <PlanField pmPlanId={pmPlanId} projectId={projectId} field="deployEnvironments" label="Environments" value={pmPlan.deployEnvironments ?? ""} multiline={false} />
-          <PlanField pmPlanId={pmPlanId} projectId={projectId} field="deployReleaseStrategy" label="Release Strategy" value={pmPlan.deployReleaseStrategy ?? ""} />
-          <PlanField
-            pmPlanId={pmPlanId}
-            projectId={projectId}
-            field="deploySteps"
-            label="Deployment Steps"
-            value={pmPlan.deploySteps ?? ""}
-            linkField="deploySteps"
-            linkUrl={link("deploySteps")}
-          />
-          <PlanField
-            pmPlanId={pmPlanId}
-            projectId={projectId}
-            field="deployRollback"
-            label="Rollback Plan"
-            value={pmPlan.deployRollback ?? ""}
-            linkField="deployRollback"
-            linkUrl={link("deployRollback")}
-          />
-          <PlanField
-            pmPlanId={pmPlanId}
-            projectId={projectId}
-            field="deployGoliveChecklist"
-            label="Go-Live Checklist"
-            value={pmPlan.deployGoliveChecklist ?? ""}
-            linkField="deployGoliveChecklist"
-            linkUrl={link("deployGoliveChecklist")}
-          />
-          <PlanField
-            pmPlanId={pmPlanId}
-            projectId={projectId}
-            field="deployMonitoring"
-            label="Post-Deployment Monitoring"
-            value={pmPlan.deployMonitoring ?? ""}
-            linkField="deployMonitoring"
-            linkUrl={link("deployMonitoring")}
-          />
-        </div>
-      ) : undefined,
-    },
-    {
-      id: "communications-plan",
-      number: 7,
-      title: "Communications Plan",
-      hint: "Include an escalation path: who to contact and how, for urgent issues.",
-      status: statusFromCounts(commsFilled, 2),
-      itemCountLabel: `${pmPlan.commsRows.length} ${pmPlan.commsRows.length === 1 ? "row" : "rows"}`,
-      view: (
-        <div className="space-y-4">
-          <ReadOnlyTable columns={["Audience", "Frequency", "Channel", "Content"]} rows={pmPlan.commsRows.map((r) => [r.audience, r.frequency, r.channel, r.content])} />
-          <ReadOnlyField label="Escalation Path" value={pmPlan.escalationPath} link={link("escalationPath")} />
-        </div>
-      ),
-      edit: canWrite ? (
-        <div className="space-y-4">
-          <CommsTable pmPlanId={pmPlanId} projectId={projectId} rows={pmPlan.commsRows} />
-          <PlanField
-            pmPlanId={pmPlanId}
-            projectId={projectId}
-            field="escalationPath"
-            label="Escalation Path"
-            value={pmPlan.escalationPath ?? ""}
-            linkField="escalationPath"
-            linkUrl={link("escalationPath")}
-          />
-        </div>
-      ) : undefined,
-    },
-    {
-      id: "raci-matrix",
-      number: 8,
-      title: "RACI Matrix",
-      hint: "Legend: R = Responsible, A = Accountable, C = Consulted, I = Informed.",
-      required: true,
-      status: statusFromCounts(pmPlan.raciRows.length, 1),
-      itemCountLabel: `${pmPlan.raciRows.length} ${pmPlan.raciRows.length === 1 ? "activity" : "activities"}`,
-      view: (
-        <ReadOnlyTable
-          columns={["Activity", "PM", "TL", "BA", "Lead Eng.", "Creative Lead"]}
-          rows={pmPlan.raciRows.map((r) => [r.activity, r.pm, r.tl, r.ba, r.leadEng, r.creativeLead])}
+        <PlanField
+          pmPlanId={pmPlanId}
+          projectId={projectId}
+          field="charterSuccessCriteria"
+          label="Success Criteria"
+          value={pmPlan.charterSuccessCriteria ?? ""}
+          linkField="charterSuccessCriteria"
+          linkUrl={link("charterSuccessCriteria")}
         />
-      ),
-      edit: canWrite ? <RaciTable pmPlanId={pmPlanId} projectId={projectId} rows={pmPlan.raciRows} /> : undefined,
-    },
-  ];
-
-  // Read-only: editing happens on the Risk Register / Dependencies tabs
-  // themselves, not here — keeps a single source of truth instead of a
-  // second copy that can drift out of sync.
-  if (canSeeRisks) {
-    sections.push({
-      id: "risk-issue-management",
-      number: sections.length + 1,
-      title: "Risk & Issue Management",
-      hint: "Sourced live from the Risk Register tab. Risk Score = Probability x Impact (Low=1, Medium=2, High=3). Edit entries on the Risk Register tab.",
-      itemCountLabel: `${risks.length} ${risks.length === 1 ? "item" : "items"}`,
-      status: statusFromCounts(risks.length > 0 ? 1 : 0, 1),
-      view: (
-        <div className="space-y-3">
-          <a href={`/projects/${projectId}/risks`} className="inline-flex items-center text-xs font-medium text-indigo-600 hover:text-indigo-700">
-            Open Risk Register to add or edit rows &rarr;
-          </a>
-          <ReadOnlyTable
-            columns={["#", "Type", "Description", "Probability", "Impact", "Score", "Response / Mitigation", "Owner", "Status"]}
-            rows={risks.map((r, i) => [
-              String(i + 1),
-              r.type,
-              r.description,
-              r.probability,
-              r.impact,
-              String(riskScore(r.probability, r.impact)),
-              r.mitigation ?? "",
-              r.owner ?? "",
-              r.status,
-            ])}
-          />
-        </div>
-      ),
-    });
-  }
-
-  if (canSeeDeps) {
-    sections.push({
-      id: "dependency-decision-management",
-      number: sections.length + 1,
-      title: "Dependency & Decision Management",
-      hint: "Sourced live from the Dependencies tab. Edit entries on the Dependencies tab.",
-      itemCountLabel: `${dependencies.length} ${dependencies.length === 1 ? "item" : "items"}`,
-      status: statusFromCounts(dependencies.length > 0 ? 1 : 0, 1),
-      view: (
-        <div className="space-y-3">
-          <a href={`/projects/${projectId}/dependencies`} className="inline-flex items-center text-xs font-medium text-indigo-600 hover:text-indigo-700">
-            Open Dependencies to add or edit rows &rarr;
-          </a>
-          <ReadOnlyTable
-            columns={["#", "Category", "Dependency / Decision", "Responsible", "Priority", "Expected Date", "Status"]}
-            rows={dependencies.map((d, i) => [
-              String(i + 1),
-              d.category ?? "",
-              d.description,
-              d.responsible ?? "",
-              d.priority,
-              formatShortDate(d.expectedDate),
-              d.status,
-            ])}
-          />
-        </div>
-      ),
-    });
-  }
+        <PlanField
+          pmPlanId={pmPlanId}
+          projectId={projectId}
+          field="charterTimeline"
+          label="Timeline"
+          value={pmPlan.charterTimeline ?? ""}
+          multiline={false}
+          linkField="charterTimeline"
+          linkUrl={link("charterTimeline")}
+        />
+        <PlanField pmPlanId={pmPlanId} projectId={projectId} field="charterBudget" label="Budget" value={pmPlan.charterBudget ?? ""} multiline={false} />
+        <PlanField pmPlanId={pmPlanId} projectId={projectId} field="charterAssumptions" label="Assumptions & Constraints" value={pmPlan.charterAssumptions ?? ""} />
+        <PlanField pmPlanId={pmPlanId} projectId={projectId} field="charterPmAuthority" label="PM Authority" value={pmPlan.charterPmAuthority ?? ""} />
+      </div>
+    ) : undefined,
+  });
 
   // Scope & Deliverables Baseline is its own PMPlan-owned table (see
   // DeliverableRow) — a scope deliverable and a Delivery-tracking milestone
@@ -577,9 +306,52 @@ export default async function PmPlanPage({ params }: { params: { projectId: stri
     edit: canWrite ? <TimelineTable pmPlanId={pmPlanId} projectId={projectId} rows={pmPlan.timelineRows} /> : undefined,
   });
 
-  // Resource & Responsibility Plan and PMO Health & Control Gates have no
-  // existing home elsewhere in the app (unlike the four sections above),
-  // so they're plain PMPlan-owned editable rows — same pattern as
+  sections.push({
+    id: "methodology",
+    number: sections.length + 1,
+    title: "Methodology",
+    status: statusFromCounts(filledCount(methodFields), methodFields.length),
+    itemCountLabel: `${filledCount(methodFields)}/${methodFields.length} fields`,
+    view: (
+      <div className="space-y-3">
+        <ReadOnlyField label="Approach" value={pmPlan.methodApproach} />
+        <ReadOnlyField label="Cadence" value={pmPlan.methodCadence} />
+        <ReadOnlyField label="Ceremonies" value={pmPlan.methodCeremonies} link={link("methodCeremonies")} />
+        <ReadOnlyField label="Tools" value={pmPlan.methodTools} />
+        <ReadOnlyField label="Roles" value={pmPlan.methodRoles} />
+        <ReadOnlyField label="Change Management" value={pmPlan.methodChangeMgmt} link={link("methodChangeMgmt")} />
+      </div>
+    ),
+    edit: canWrite ? (
+      <div className="space-y-3">
+        <PlanField pmPlanId={pmPlanId} projectId={projectId} field="methodApproach" label="Approach" value={pmPlan.methodApproach ?? ""} multiline={false} />
+        <PlanField pmPlanId={pmPlanId} projectId={projectId} field="methodCadence" label="Cadence" value={pmPlan.methodCadence ?? ""} multiline={false} />
+        <PlanField
+          pmPlanId={pmPlanId}
+          projectId={projectId}
+          field="methodCeremonies"
+          label="Ceremonies"
+          value={pmPlan.methodCeremonies ?? ""}
+          linkField="methodCeremonies"
+          linkUrl={link("methodCeremonies")}
+        />
+        <PlanField pmPlanId={pmPlanId} projectId={projectId} field="methodTools" label="Tools" value={pmPlan.methodTools ?? ""} multiline={false} />
+        <PlanField pmPlanId={pmPlanId} projectId={projectId} field="methodRoles" label="Roles" value={pmPlan.methodRoles ?? ""} />
+        <PlanField
+          pmPlanId={pmPlanId}
+          projectId={projectId}
+          field="methodChangeMgmt"
+          label="Change Management"
+          value={pmPlan.methodChangeMgmt ?? ""}
+          linkField="methodChangeMgmt"
+          linkUrl={link("methodChangeMgmt")}
+        />
+      </div>
+    ) : undefined,
+  });
+
+  // Resource & Responsibility Plan has no existing home elsewhere in the
+  // app, so it's a plain PMPlan-owned editable table — same pattern as
   // Stakeholders/Comms/RACI, gated only by PM_PLAN access itself.
   sections.push({
     id: "resource-responsibility-plan",
@@ -597,6 +369,250 @@ export default async function PmPlanPage({ params }: { params: { projectId: stri
     edit: canWrite ? <ResourceTable pmPlanId={pmPlanId} projectId={projectId} rows={pmPlan.resourceRows} /> : undefined,
   });
 
+  // Read-only: editing happens on the Risk Register / Dependencies tabs
+  // themselves, not here — keeps a single source of truth instead of a
+  // second copy that can drift out of sync.
+  if (canSeeRisks) {
+    sections.push({
+      id: "risk-issue-management",
+      number: sections.length + 1,
+      title: "Risk & Issue Management",
+      hint: "Sourced live from the Risk Register tab. Risk Score = Probability x Impact (Low=1, Medium=2, High=3). Edit entries on the Risk Register tab.",
+      itemCountLabel: `${risks.length} ${risks.length === 1 ? "item" : "items"}`,
+      status: statusFromCounts(risks.length > 0 ? 1 : 0, 1),
+      view: (
+        <div className="space-y-3">
+          <a href={`/projects/${projectId}/risks`} className="inline-flex items-center text-xs font-medium text-indigo-600 hover:text-indigo-700">
+            Open Risk Register to add or edit rows &rarr;
+          </a>
+          <ReadOnlyTable
+            columns={["#", "Type", "Description", "Probability", "Impact", "Score", "Response / Mitigation", "Owner", "Status"]}
+            rows={risks.map((r, i) => [
+              String(i + 1),
+              r.type,
+              r.description,
+              r.probability,
+              r.impact,
+              String(riskScore(r.probability, r.impact)),
+              r.mitigation ?? "",
+              r.owner ?? "",
+              r.status,
+            ])}
+          />
+        </div>
+      ),
+    });
+  }
+
+  sections.push({
+    id: "test-plan",
+    number: sections.length + 1,
+    title: "Test Plan",
+    status: statusFromCounts(filledCount(testFields), testFields.length),
+    itemCountLabel: `${filledCount(testFields)}/${testFields.length} fields`,
+    view: (
+      <div className="space-y-3">
+        <ReadOnlyField label="Testing Levels" value={pmPlan.testLevels} />
+        <ReadOnlyField label="Test Environments" value={pmPlan.testEnvironments} />
+        <ReadOnlyField label="Entry Criteria" value={pmPlan.testEntryCriteria} link={link("testEntryCriteria")} />
+        <ReadOnlyField label="Exit Criteria" value={pmPlan.testExitCriteria} link={link("testExitCriteria")} />
+        <ReadOnlyField label="Defect Management" value={pmPlan.testDefectMgmt} link={link("testDefectMgmt")} />
+        <ReadOnlyField label="UAT Process" value={pmPlan.testUatProcess} link={link("testUatProcess")} />
+        <ReadOnlyField label="Test Deliverables" value={pmPlan.testDeliverables} link={link("testDeliverables")} />
+      </div>
+    ),
+    edit: canWrite ? (
+      <div className="space-y-3">
+        <PlanField pmPlanId={pmPlanId} projectId={projectId} field="testLevels" label="Testing Levels" value={pmPlan.testLevels ?? ""} multiline={false} />
+        <PlanField pmPlanId={pmPlanId} projectId={projectId} field="testEnvironments" label="Test Environments" value={pmPlan.testEnvironments ?? ""} multiline={false} />
+        <PlanField
+          pmPlanId={pmPlanId}
+          projectId={projectId}
+          field="testEntryCriteria"
+          label="Entry Criteria"
+          value={pmPlan.testEntryCriteria ?? ""}
+          linkField="testEntryCriteria"
+          linkUrl={link("testEntryCriteria")}
+        />
+        <PlanField
+          pmPlanId={pmPlanId}
+          projectId={projectId}
+          field="testExitCriteria"
+          label="Exit Criteria"
+          value={pmPlan.testExitCriteria ?? ""}
+          linkField="testExitCriteria"
+          linkUrl={link("testExitCriteria")}
+        />
+        <PlanField
+          pmPlanId={pmPlanId}
+          projectId={projectId}
+          field="testDefectMgmt"
+          label="Defect Management"
+          value={pmPlan.testDefectMgmt ?? ""}
+          linkField="testDefectMgmt"
+          linkUrl={link("testDefectMgmt")}
+        />
+        <PlanField
+          pmPlanId={pmPlanId}
+          projectId={projectId}
+          field="testUatProcess"
+          label="UAT Process"
+          value={pmPlan.testUatProcess ?? ""}
+          linkField="testUatProcess"
+          linkUrl={link("testUatProcess")}
+        />
+        <PlanField
+          pmPlanId={pmPlanId}
+          projectId={projectId}
+          field="testDeliverables"
+          label="Test Deliverables"
+          value={pmPlan.testDeliverables ?? ""}
+          linkField="testDeliverables"
+          linkUrl={link("testDeliverables")}
+        />
+      </div>
+    ) : undefined,
+  });
+
+  sections.push({
+    id: "deployment-plan",
+    number: sections.length + 1,
+    title: "Deployment Plan",
+    status: statusFromCounts(filledCount(deployFields), deployFields.length),
+    itemCountLabel: `${filledCount(deployFields)}/${deployFields.length} fields`,
+    view: (
+      <div className="space-y-3">
+        <ReadOnlyField label="Environments" value={pmPlan.deployEnvironments} />
+        <ReadOnlyField label="Release Strategy" value={pmPlan.deployReleaseStrategy} />
+        <ReadOnlyField label="Deployment Steps" value={pmPlan.deploySteps} link={link("deploySteps")} />
+        <ReadOnlyField label="Rollback Plan" value={pmPlan.deployRollback} link={link("deployRollback")} />
+        <ReadOnlyField label="Go-Live Checklist" value={pmPlan.deployGoliveChecklist} link={link("deployGoliveChecklist")} />
+        <ReadOnlyField label="Post-Deployment Monitoring" value={pmPlan.deployMonitoring} link={link("deployMonitoring")} />
+      </div>
+    ),
+    edit: canWrite ? (
+      <div className="space-y-3">
+        <PlanField pmPlanId={pmPlanId} projectId={projectId} field="deployEnvironments" label="Environments" value={pmPlan.deployEnvironments ?? ""} multiline={false} />
+        <PlanField pmPlanId={pmPlanId} projectId={projectId} field="deployReleaseStrategy" label="Release Strategy" value={pmPlan.deployReleaseStrategy ?? ""} />
+        <PlanField
+          pmPlanId={pmPlanId}
+          projectId={projectId}
+          field="deploySteps"
+          label="Deployment Steps"
+          value={pmPlan.deploySteps ?? ""}
+          linkField="deploySteps"
+          linkUrl={link("deploySteps")}
+        />
+        <PlanField
+          pmPlanId={pmPlanId}
+          projectId={projectId}
+          field="deployRollback"
+          label="Rollback Plan"
+          value={pmPlan.deployRollback ?? ""}
+          linkField="deployRollback"
+          linkUrl={link("deployRollback")}
+        />
+        <PlanField
+          pmPlanId={pmPlanId}
+          projectId={projectId}
+          field="deployGoliveChecklist"
+          label="Go-Live Checklist"
+          value={pmPlan.deployGoliveChecklist ?? ""}
+          linkField="deployGoliveChecklist"
+          linkUrl={link("deployGoliveChecklist")}
+        />
+        <PlanField
+          pmPlanId={pmPlanId}
+          projectId={projectId}
+          field="deployMonitoring"
+          label="Post-Deployment Monitoring"
+          value={pmPlan.deployMonitoring ?? ""}
+          linkField="deployMonitoring"
+          linkUrl={link("deployMonitoring")}
+        />
+      </div>
+    ) : undefined,
+  });
+
+  sections.push({
+    id: "communications-plan",
+    number: sections.length + 1,
+    title: "Communications Plan",
+    hint: "Include an escalation path: who to contact and how, for urgent issues.",
+    status: statusFromCounts(commsFilled, 2),
+    itemCountLabel: `${pmPlan.commsRows.length} ${pmPlan.commsRows.length === 1 ? "row" : "rows"}`,
+    view: (
+      <div className="space-y-4">
+        <ReadOnlyTable columns={["Audience", "Frequency", "Channel", "Content"]} rows={pmPlan.commsRows.map((r) => [r.audience, r.frequency, r.channel, r.content])} />
+        <ReadOnlyField label="Escalation Path" value={pmPlan.escalationPath} link={link("escalationPath")} />
+      </div>
+    ),
+    edit: canWrite ? (
+      <div className="space-y-4">
+        <CommsTable pmPlanId={pmPlanId} projectId={projectId} rows={pmPlan.commsRows} />
+        <PlanField
+          pmPlanId={pmPlanId}
+          projectId={projectId}
+          field="escalationPath"
+          label="Escalation Path"
+          value={pmPlan.escalationPath ?? ""}
+          linkField="escalationPath"
+          linkUrl={link("escalationPath")}
+        />
+      </div>
+    ) : undefined,
+  });
+
+  sections.push({
+    id: "raci-matrix",
+    number: sections.length + 1,
+    title: "RACI Matrix",
+    hint: "Legend: R = Responsible, A = Accountable, C = Consulted, I = Informed.",
+    required: true,
+    status: statusFromCounts(pmPlan.raciRows.length, 1),
+    itemCountLabel: `${pmPlan.raciRows.length} ${pmPlan.raciRows.length === 1 ? "activity" : "activities"}`,
+    view: (
+      <ReadOnlyTable
+        columns={["Activity", "PM", "TL", "BA", "Lead Eng.", "Creative Lead"]}
+        rows={pmPlan.raciRows.map((r) => [r.activity, r.pm, r.tl, r.ba, r.leadEng, r.creativeLead])}
+      />
+    ),
+    edit: canWrite ? <RaciTable pmPlanId={pmPlanId} projectId={projectId} rows={pmPlan.raciRows} /> : undefined,
+  });
+
+  if (canSeeDeps) {
+    sections.push({
+      id: "dependency-decision-management",
+      number: sections.length + 1,
+      title: "Dependency & Decision Management",
+      hint: "Sourced live from the Dependencies tab. Edit entries on the Dependencies tab.",
+      itemCountLabel: `${dependencies.length} ${dependencies.length === 1 ? "item" : "items"}`,
+      status: statusFromCounts(dependencies.length > 0 ? 1 : 0, 1),
+      view: (
+        <div className="space-y-3">
+          <a href={`/projects/${projectId}/dependencies`} className="inline-flex items-center text-xs font-medium text-indigo-600 hover:text-indigo-700">
+            Open Dependencies to add or edit rows &rarr;
+          </a>
+          <ReadOnlyTable
+            columns={["#", "Category", "Dependency / Decision", "Responsible", "Priority", "Expected Date", "Status"]}
+            rows={dependencies.map((d, i) => [
+              String(i + 1),
+              d.category ?? "",
+              d.description,
+              d.responsible ?? "",
+              d.priority,
+              formatShortDate(d.expectedDate),
+              d.status,
+            ])}
+          />
+        </div>
+      ),
+    });
+  }
+
+  // PMO Health & Control Gates has no existing home elsewhere in the app,
+  // so it's a plain PMPlan-owned editable table, gated only by PM_PLAN
+  // access itself — same as Resource & Responsibility Plan above.
   sections.push({
     id: "pmo-health-control-gates",
     number: sections.length + 1,
