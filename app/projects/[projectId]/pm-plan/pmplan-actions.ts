@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import sanitizeHtml from "sanitize-html";
 import { prisma } from "@/lib/prisma";
 import { parseDateInput } from "@/lib/format";
 import { requireModuleWrite, writeAudit } from "@/lib/rbac";
@@ -49,6 +50,49 @@ export type PmPlanScalarField =
   | "deployGoliveChecklist"
   | "deployMonitoring"
   | "escalationPath";
+
+// The subset of PmPlanScalarField edited as rich text (RichTextEditor, see
+// components/ui/rich-text-editor.tsx) rather than a plain input — every
+// PlanField the page renders with its default multiline=true. Their stored
+// value is an HTML string a WRITE user's browser produced, and other
+// viewers' browsers render it back via dangerouslySetInnerHTML (RichTextView),
+// so it's sanitized here on the way in rather than trusting the client.
+const RICH_TEXT_FIELDS = new Set<PmPlanScalarField>([
+  "rationale",
+  "charterObjective",
+  "charterScopeIn",
+  "charterScopeOut",
+  "charterSuccessCriteria",
+  "charterAssumptions",
+  "charterPmAuthority",
+  "methodCeremonies",
+  "methodRoles",
+  "methodChangeMgmt",
+  "testEntryCriteria",
+  "testExitCriteria",
+  "testDefectMgmt",
+  "testUatProcess",
+  "testDeliverables",
+  "deployReleaseStrategy",
+  "deploySteps",
+  "deployRollback",
+  "deployGoliveChecklist",
+  "deployMonitoring",
+  "escalationPath",
+]);
+
+const RICH_TEXT_ALLOWED_TAGS = ["p", "strong", "em", "s", "ul", "ol", "li", "a", "br"];
+
+function sanitizeRichText(value: string): string {
+  return sanitizeHtml(value, {
+    allowedTags: RICH_TEXT_ALLOWED_TAGS,
+    allowedAttributes: { a: ["href", "target", "rel"] },
+    allowedSchemes: ["http", "https", "mailto"],
+    transformTags: {
+      a: sanitizeHtml.simpleTransform("a", { target: "_blank", rel: "noopener noreferrer" }),
+    },
+  });
+}
 
 // The subset of PmPlanScalarField that gets an optional reference-link
 // affordance in the UI — the long-form fields where the real detail usually
@@ -101,7 +145,8 @@ export async function updatePmPlanField(pmPlanId: string, projectId: string, fie
   if (field === "planDate") {
     await prisma.pMPlan.update({ where: { id: pmPlanId }, data: { planDate: parseDateInput(value) } });
   } else {
-    await prisma.pMPlan.update({ where: { id: pmPlanId }, data: { [field]: value || null } });
+    const stored = RICH_TEXT_FIELDS.has(field) ? sanitizeRichText(value) : value;
+    await prisma.pMPlan.update({ where: { id: pmPlanId }, data: { [field]: stored || null } });
   }
 
   await writeAudit({ actor: user, projectId: realProjectId, action: "update", entityType: "PMPlan", entityId: pmPlanId, summary: `Updated PM Plan field "${field}"` });

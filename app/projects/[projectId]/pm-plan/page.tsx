@@ -10,6 +10,7 @@ import { IconLayers, IconCheckCircle, IconClock, IconCircle, IconClipboardList }
 import { PlanHeaderMeta } from "@/components/pm-plan/plan-header-meta";
 import { PmPlanSections, type PmPlanSectionData, type PmPlanSectionStatus } from "@/components/pm-plan/pm-plan-sections";
 import { PlanField } from "@/components/pm-plan/plan-field";
+import { RichTextView } from "@/components/ui/rich-text-view";
 import { FieldLinkView } from "@/components/pm-plan/field-link-editor";
 import { StakeholdersTable } from "@/components/pm-plan/stakeholders-table";
 import { CommsTable } from "@/components/pm-plan/comms-table";
@@ -140,7 +141,7 @@ export default async function PmPlanPage({ params }: { params: { projectId: stri
     hint: "Why this project is needed now, expected ROI, consequences of not proceeding, alignment with org goals.",
     required: true,
     status: statusFromCounts(pmPlan.rationale ? 1 : 0, 1),
-    view: <ReadOnlyField label="Rationale" value={pmPlan.rationale} link={link("rationale")} />,
+    view: <ReadOnlyField label="Rationale" value={pmPlan.rationale} link={link("rationale")} rich />,
     edit: canWrite ? (
       <PlanField
         pmPlanId={pmPlanId}
@@ -180,14 +181,14 @@ export default async function PmPlanPage({ params }: { params: { projectId: stri
     itemCountLabel: `${filledCount(charterFields)}/${charterFields.length} fields`,
     view: (
       <div className="space-y-3">
-        <ReadOnlyField label="Objective" value={pmPlan.charterObjective} />
-        <ReadOnlyField label="Scope (In)" value={pmPlan.charterScopeIn} link={link("charterScopeIn")} />
-        <ReadOnlyField label="Scope (Out)" value={pmPlan.charterScopeOut} link={link("charterScopeOut")} />
-        <ReadOnlyField label="Success Criteria" value={pmPlan.charterSuccessCriteria} link={link("charterSuccessCriteria")} />
+        <ReadOnlyField label="Objective" value={pmPlan.charterObjective} rich />
+        <ReadOnlyField label="Scope (In)" value={pmPlan.charterScopeIn} link={link("charterScopeIn")} rich />
+        <ReadOnlyField label="Scope (Out)" value={pmPlan.charterScopeOut} link={link("charterScopeOut")} rich />
+        <ReadOnlyField label="Success Criteria" value={pmPlan.charterSuccessCriteria} link={link("charterSuccessCriteria")} rich />
         <ReadOnlyField label="Timeline" value={pmPlan.charterTimeline} link={link("charterTimeline")} />
         <ReadOnlyField label="Budget" value={pmPlan.charterBudget} />
-        <ReadOnlyField label="Assumptions & Constraints" value={pmPlan.charterAssumptions} />
-        <ReadOnlyField label="PM Authority" value={pmPlan.charterPmAuthority} />
+        <ReadOnlyField label="Assumptions & Constraints" value={pmPlan.charterAssumptions} rich />
+        <ReadOnlyField label="PM Authority" value={pmPlan.charterPmAuthority} rich />
       </div>
     ),
     edit: canWrite ? (
@@ -316,10 +317,10 @@ export default async function PmPlanPage({ params }: { params: { projectId: stri
       <div className="space-y-3">
         <ReadOnlyField label="Approach" value={pmPlan.methodApproach} />
         <ReadOnlyField label="Cadence" value={pmPlan.methodCadence} />
-        <ReadOnlyField label="Ceremonies" value={pmPlan.methodCeremonies} link={link("methodCeremonies")} />
+        <ReadOnlyField label="Ceremonies" value={pmPlan.methodCeremonies} link={link("methodCeremonies")} rich />
         <ReadOnlyField label="Tools" value={pmPlan.methodTools} />
-        <ReadOnlyField label="Roles" value={pmPlan.methodRoles} />
-        <ReadOnlyField label="Change Management" value={pmPlan.methodChangeMgmt} link={link("methodChangeMgmt")} />
+        <ReadOnlyField label="Roles" value={pmPlan.methodRoles} rich />
+        <ReadOnlyField label="Change Management" value={pmPlan.methodChangeMgmt} link={link("methodChangeMgmt")} rich />
       </div>
     ),
     edit: canWrite ? (
@@ -414,11 +415,11 @@ export default async function PmPlanPage({ params }: { params: { projectId: stri
       <div className="space-y-3">
         <ReadOnlyField label="Testing Levels" value={pmPlan.testLevels} />
         <ReadOnlyField label="Test Environments" value={pmPlan.testEnvironments} />
-        <ReadOnlyField label="Entry Criteria" value={pmPlan.testEntryCriteria} link={link("testEntryCriteria")} />
-        <ReadOnlyField label="Exit Criteria" value={pmPlan.testExitCriteria} link={link("testExitCriteria")} />
-        <ReadOnlyField label="Defect Management" value={pmPlan.testDefectMgmt} link={link("testDefectMgmt")} />
-        <ReadOnlyField label="UAT Process" value={pmPlan.testUatProcess} link={link("testUatProcess")} />
-        <ReadOnlyField label="Test Deliverables" value={pmPlan.testDeliverables} link={link("testDeliverables")} />
+        <ReadOnlyField label="Entry Criteria" value={pmPlan.testEntryCriteria} link={link("testEntryCriteria")} rich />
+        <ReadOnlyField label="Exit Criteria" value={pmPlan.testExitCriteria} link={link("testExitCriteria")} rich />
+        <ReadOnlyField label="Defect Management" value={pmPlan.testDefectMgmt} link={link("testDefectMgmt")} rich />
+        <ReadOnlyField label="UAT Process" value={pmPlan.testUatProcess} link={link("testUatProcess")} rich />
+        <ReadOnlyField label="Test Deliverables" value={pmPlan.testDeliverables} link={link("testDeliverables")} rich />
       </div>
     ),
     edit: canWrite ? (
@@ -483,11 +484,11 @@ export default async function PmPlanPage({ params }: { params: { projectId: stri
     view: (
       <div className="space-y-3">
         <ReadOnlyField label="Environments" value={pmPlan.deployEnvironments} />
-        <ReadOnlyField label="Release Strategy" value={pmPlan.deployReleaseStrategy} />
-        <ReadOnlyField label="Deployment Steps" value={pmPlan.deploySteps} link={link("deploySteps")} />
-        <ReadOnlyField label="Rollback Plan" value={pmPlan.deployRollback} link={link("deployRollback")} />
-        <ReadOnlyField label="Go-Live Checklist" value={pmPlan.deployGoliveChecklist} link={link("deployGoliveChecklist")} />
-        <ReadOnlyField label="Post-Deployment Monitoring" value={pmPlan.deployMonitoring} link={link("deployMonitoring")} />
+        <ReadOnlyField label="Release Strategy" value={pmPlan.deployReleaseStrategy} rich />
+        <ReadOnlyField label="Deployment Steps" value={pmPlan.deploySteps} link={link("deploySteps")} rich />
+        <ReadOnlyField label="Rollback Plan" value={pmPlan.deployRollback} link={link("deployRollback")} rich />
+        <ReadOnlyField label="Go-Live Checklist" value={pmPlan.deployGoliveChecklist} link={link("deployGoliveChecklist")} rich />
+        <ReadOnlyField label="Post-Deployment Monitoring" value={pmPlan.deployMonitoring} link={link("deployMonitoring")} rich />
       </div>
     ),
     edit: canWrite ? (
@@ -544,7 +545,7 @@ export default async function PmPlanPage({ params }: { params: { projectId: stri
     view: (
       <div className="space-y-4">
         <ReadOnlyTable columns={["Audience", "Frequency", "Channel", "Content"]} rows={pmPlan.commsRows.map((r) => [r.audience, r.frequency, r.channel, r.content])} />
-        <ReadOnlyField label="Escalation Path" value={pmPlan.escalationPath} link={link("escalationPath")} />
+        <ReadOnlyField label="Escalation Path" value={pmPlan.escalationPath} link={link("escalationPath")} rich />
       </div>
     ),
     edit: canWrite ? (
@@ -701,11 +702,11 @@ export default async function PmPlanPage({ params }: { params: { projectId: stri
   );
 }
 
-function ReadOnlyField({ label, value, link }: { label: string; value: string | null; link?: string | null }) {
+function ReadOnlyField({ label, value, link, rich = false }: { label: string; value: string | null; link?: string | null; rich?: boolean }) {
   return (
     <div>
       <p className="text-xs font-medium text-slate-600 mb-0.5">{label}</p>
-      <p className="text-sm text-slate-800 whitespace-pre-wrap">{value || "—"}</p>
+      {rich ? <RichTextView html={value} /> : <p className="text-sm text-slate-800 whitespace-pre-wrap">{value || "—"}</p>}
       <FieldLinkView url={link} />
     </div>
   );
