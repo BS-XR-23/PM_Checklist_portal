@@ -27,11 +27,12 @@ import { DeliveryProgressGauge } from "@/components/charts/delivery-progress-gau
 import { DetailedReporting } from "./detailed-reporting";
 
 export default async function DashboardPage({ params }: { params: { projectId: string } }) {
-  const [access, decisionLogAccess, riskRegisterAccess, milestonesAccess] = await Promise.all([
+  const [access, decisionLogAccess, riskRegisterAccess, milestonesAccess, pmPlanAccess] = await Promise.all([
     requireModuleAccess(params.projectId, "DASHBOARD", "READ_LIMITED"),
     getModuleAccess(params.projectId, "DECISION_LOG"),
     getModuleAccess(params.projectId, "RISK_REGISTER"),
     getModuleAccess(params.projectId, "MILESTONES"),
+    getModuleAccess(params.projectId, "PM_PLAN"),
   ]);
   // READ_LIMITED (the Client default): overall progress only — no financial/
   // risk snapshot, no cost-bearing budget-burn chart.
@@ -275,6 +276,8 @@ export default async function DashboardPage({ params }: { params: { projectId: s
         evmChartData={data.evmChartData}
         stageSummaryByType={data.stageSummaryByType}
         timelineStrip={data.timelineStrip}
+        showProjectGantt={pmPlanAccess !== "NONE"}
+        projectGanttRows={data.projectGanttRows}
         milestonesList={data.milestonesList}
       />
     </div>

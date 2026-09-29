@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { parseDateInput } from "@/lib/format";
 import { ITEM_STATUSES, type ItemStatus } from "@/lib/constants";
 import { CHECKLIST_TYPES, CHECKLIST_TYPE_BY_KEY, type ChecklistType } from "@/lib/checklist-types";
 import { computeProjectRag } from "@/lib/rag";
@@ -13,7 +14,7 @@ import {
 } from "@/lib/calculations";
 
 export async function getDashboardData(projectId: string) {
-  const [project, allItems, risks, crs, sprints, milestones, actionItems, recentDecisionsRaw] = await Promise.all([
+  const [project, allItems, risks, crs, sprints, milestones, actionItems, recentDecisionsRaw, pmPlan] = await Promise.all([
     prisma.project.findUniqueOrThrow({ where: { id: projectId } }),
     // One query for both checklists (differ only by `type`) instead of two —
     // filtering below preserves the orderBy order within each subset.
@@ -29,6 +30,7 @@ export async function getDashboardData(projectId: string) {
     prisma.milestonePayment.findMany({ where: { checklistItem: { projectId } }, include: { checklistItem: true } }),
     prisma.actionItem.findMany({ where: { projectId, dueDate: { not: null } }, include: { ownerPerson: { select: { name: true } } } }),
     prisma.decisionLogItem.findMany({ where: { projectId }, orderBy: { order: "desc" }, take: 5, include: { decidedByPerson: { select: { name: true } } } }),
+    prisma.pMPlan.findUnique({ where: { projectId }, select: { timelineRows: { orderBy: { order: "asc" } } } }),
   ]);
 
   const recentDecisions = recentDecisionsRaw.map((d) => ({
@@ -138,6 +140,14 @@ export async function getDashboardData(projectId: string) {
 
   const timelineStrip = stageSummaryByType.flatMap((c) => c.stages.map((s) => ({ ...s, source: c.label })));
 
+  // PM Plan's Timeline section (project phases, distinct from the
+  // checklist-stage-level timelineStrip above) — reused here so the
+  // dashboard has a project-level Gantt, not just the PM/DevOps checklist
+  // planned-vs-actual strip.
+  const projectGanttRows = (pmPlan?.timelineRows ?? [])
+    .map((t) => ({ id: t.id, label: t.phase, start: parseDateInput(t.start), end: parseDateInput(t.end), status: t.status }))
+    .filter((t): t is { id: string; label: string; start: Date; end: Date; status: string } => t.start !== null && t.end !== null);
+
   const checklistTypeOrder = Object.fromEntries(CHECKLIST_TYPES.map((c, idx) => [c.key, idx]));
   const milestonesList = milestones
     .map((m) => ({
@@ -216,6 +226,7 @@ export async function getDashboardData(projectId: string) {
     perChecklistSummary,
     stageSummaryByType,
     timelineStrip,
+    projectGanttRows,
     milestonesList,
     evmChartData: evm.map((e) => ({ weekEnding: e.weekEnding.toISOString(), pv: e.pv, ev: e.ev, ac: e.actualCost })),
     financial: {

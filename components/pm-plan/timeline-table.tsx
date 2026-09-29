@@ -1,7 +1,7 @@
 "use client";
 
 import { useTransition } from "react";
-import { InlineText, InlineSelect } from "@/components/ui/inline-edit";
+import { InlineText, InlineDate, InlineSelect } from "@/components/ui/inline-edit";
 import { STATUS_COLORS } from "@/lib/colors";
 import { addTimelineRow, updateTimelineRow, deleteTimelineRow } from "@/app/projects/[projectId]/pm-plan/pmplan-actions";
 
@@ -37,10 +37,10 @@ export function TimelineTable({ pmPlanId, projectId, rows }: { pmPlanId: string;
                 <InlineText value={r.phase} onSave={(v) => updateTimelineRow(r.id, projectId, { phase: v })} />
               </td>
               <td className="px-3 py-1.5">
-                <InlineText value={r.start} onSave={(v) => updateTimelineRow(r.id, projectId, { start: v })} />
+                <InlineDate value={r.start || null} onSave={(v) => updateTimelineRow(r.id, projectId, { start: v ?? "" })} />
               </td>
               <td className="px-3 py-1.5">
-                <InlineText value={r.end} onSave={(v) => updateTimelineRow(r.id, projectId, { end: v })} />
+                <InlineDate value={r.end || null} onSave={(v) => updateTimelineRow(r.id, projectId, { end: v ?? "" })} />
               </td>
               <td className="px-3 py-1.5">
                 <InlineSelect

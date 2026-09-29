@@ -11,6 +11,7 @@ import { StatusPieChart } from "@/components/charts/status-pie-chart";
 import { CompletionBarChart } from "@/components/charts/completion-bar-chart";
 import { EvmLineChart } from "@/components/charts/evm-line-chart";
 import { TimelineStrip } from "@/components/dashboard/timeline-strip";
+import { GanttChart } from "@/components/charts/gantt-chart";
 import type { getDashboardData } from "@/lib/dashboard-data";
 
 type DashboardData = Awaited<ReturnType<typeof getDashboardData>>;
@@ -32,6 +33,8 @@ export function DetailedReporting({
   evmChartData,
   stageSummaryByType,
   timelineStrip,
+  showProjectGantt,
+  projectGanttRows,
   milestonesList,
 }: {
   projectId: string;
@@ -42,6 +45,9 @@ export function DetailedReporting({
   evmChartData: DashboardData["evmChartData"];
   stageSummaryByType: DashboardData["stageSummaryByType"];
   timelineStrip: DashboardData["timelineStrip"];
+  /** PM_PLAN access gate — Timeline phases live there, so hide the card entirely rather than show an empty one to a viewer without access. */
+  showProjectGantt: boolean;
+  projectGanttRows: DashboardData["projectGanttRows"];
   milestonesList: DashboardData["milestonesList"];
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -100,6 +106,13 @@ export function DetailedReporting({
               </div>
             )}
           </div>
+
+          {showProjectGantt && (
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <SectionHeader icon={<IconLayers />} iconWrapClass="bg-violet-50 text-violet-600" title="Project Timeline (Gantt)" className="mb-2" />
+              <GanttChart rows={projectGanttRows} emptyText="No phases with dates yet — add them in the PM Plan tab's Timeline section." />
+            </div>
+          )}
 
           <div className="grid lg:grid-cols-2 gap-4">
             <div className="rounded-xl border border-slate-200 bg-white p-4">

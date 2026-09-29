@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { toDateInputValue, formatShortDate } from "@/lib/format";
+import { toDateInputValue, formatShortDate, parseDateInput } from "@/lib/format";
 import { requireModuleAccess, getModuleAccess, meetsLevel } from "@/lib/rbac";
 import { riskScore } from "@/lib/calculations";
 import { STATUS_COLORS } from "@/lib/colors";
@@ -20,6 +20,7 @@ import { PmPlanMilestonesTable } from "@/components/pm-plan/pm-plan-milestones-t
 import { TimelineTable } from "@/components/pm-plan/timeline-table";
 import { ResourceTable } from "@/components/pm-plan/resource-table";
 import { GateTable } from "@/components/pm-plan/gate-table";
+import { GanttChart } from "@/components/charts/gantt-chart";
 import type { PmPlanLinkableField } from "./pmplan-actions";
 
 // filled/total -> a status band, reused by every section below: 0 filled is
@@ -124,6 +125,10 @@ export default async function PmPlanPage({ params }: { params: { projectId: stri
   ];
   const filledCount = (fields: (string | null)[]) => fields.filter((f) => f && f.trim() !== "").length;
   const commsFilled = (pmPlan.commsRows.length > 0 ? 1 : 0) + (pmPlan.escalationPath ? 1 : 0);
+
+  const timelineGanttRows = pmPlan.timelineRows
+    .map((t) => ({ id: t.id, label: t.phase, start: parseDateInput(t.start), end: parseDateInput(t.end), status: t.status }))
+    .filter((t): t is { id: string; label: string; start: Date; end: Date; status: string } => t.start !== null && t.end !== null);
 
   // Ordered to match the source BS23 PMP_Template.docx's own PMO section
   // numbering (Rationale -> Stakeholders -> Charter -> Scope/Deliverables ->
@@ -299,12 +304,20 @@ export default async function PmPlanPage({ params }: { params: { projectId: stri
     itemCountLabel: `${pmPlan.timelineRows.length} ${pmPlan.timelineRows.length === 1 ? "phase" : "phases"}`,
     status: statusFromCounts(pmPlan.timelineRows.length, 1),
     view: (
-      <ReadOnlyTable
-        columns={["Phase", "Start", "End", "Status"]}
-        rows={pmPlan.timelineRows.map((t) => [t.phase, t.start, t.end, t.status])}
-      />
+      <div className="space-y-4">
+        <GanttChart rows={timelineGanttRows} />
+        <ReadOnlyTable
+          columns={["Phase", "Start", "End", "Status"]}
+          rows={pmPlan.timelineRows.map((t) => [t.phase, formatShortDate(t.start || null), formatShortDate(t.end || null), t.status])}
+        />
+      </div>
     ),
-    edit: canWrite ? <TimelineTable pmPlanId={pmPlanId} projectId={projectId} rows={pmPlan.timelineRows} /> : undefined,
+    edit: canWrite ? (
+      <div className="space-y-4">
+        <GanttChart rows={timelineGanttRows} />
+        <TimelineTable pmPlanId={pmPlanId} projectId={projectId} rows={pmPlan.timelineRows} />
+      </div>
+    ) : undefined,
   });
 
   sections.push({

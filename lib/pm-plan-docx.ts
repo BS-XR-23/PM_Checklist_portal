@@ -148,7 +148,7 @@ export function renderPmPlanDocx({ project, pmPlan, stakeholders, comms, raci, r
     })),
     timeline: timeline
       .sort((a, b) => a.order - b.order)
-      .map((t) => ({ phase: t.phase, start: t.start, end: t.end, status: t.status })),
+      .map((t) => ({ phase: t.phase, start: formatShortDate(t.start || null), end: formatShortDate(t.end || null), status: t.status })),
     resources: resources
       .sort((a, b) => a.order - b.order)
       .map((r) => ({ role: r.role, allocation: r.allocation, responsibility: r.responsibility, backup: r.backup })),
