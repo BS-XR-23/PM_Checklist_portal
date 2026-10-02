@@ -96,6 +96,13 @@ export function ChecklistTable({
   // column doesn't flicker in/out as you switch stage pills.
   const showMilestone = items.some((i) => i.milestoneName);
 
+  // Same reasoning as showMilestone: the Actions column only ever has
+  // anything in it for a TPM override viewer (every row, since that's a
+  // page-level capability) or a row that's a custom (PM-added) item with
+  // delete access — most viewers on most checklist types get an empty
+  // column on every single row otherwise.
+  const showActions = canOverride || items.some((i) => canWrite && i.isCustom);
+
   // Default to the first stage/category that isn't fully complete yet, so
   // opening the checklist lands you on the work still in front of you
   // instead of always Stage 1. "All" (everything stacked) is one click away.
@@ -185,6 +192,7 @@ export function ChecklistTable({
             viewerRole={viewerRole}
             people={people}
             showMilestone={showMilestone}
+            showActions={showActions}
           />
         ))}
       </div>
@@ -213,6 +221,7 @@ function StageGroupCard({
   viewerRole,
   people,
   showMilestone,
+  showActions,
 }: {
   stage: string;
   stageLabel: string;
@@ -225,6 +234,7 @@ function StageGroupCard({
   viewerRole: Role;
   people: { id: string; name: string }[];
   showMilestone: boolean;
+  showActions: boolean;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [page, setPage] = useState(1);
@@ -261,25 +271,31 @@ function StageGroupCard({
       {!collapsed && (
         <>
           <div className="overflow-x-auto scroll-shadow-x border-t border-slate-100">
-            <table className={clsx("w-full text-sm", showMilestone ? "min-w-[1100px]" : "min-w-[960px]")}>
+            <table
+              className={clsx(
+                "w-full text-sm",
+                showMilestone && showActions ? "min-w-[1020px]" : showMilestone || showActions ? "min-w-[940px]" : "min-w-[860px]"
+              )}
+            >
               <thead>
                 <tr className="text-left text-xs font-medium text-slate-500 bg-slate-50">
                   <th className="px-3 py-2.5 w-10">#</th>
                   <th className="px-3 py-2.5 min-w-[260px]">Checklist Item</th>
                   {showMilestone && <th className="px-3 py-2.5 w-40">Milestone</th>}
-                  <th className="px-3 py-2.5 w-44">Owner</th>
-                  <th className="px-3 py-2.5 w-36">Planned Date</th>
-                  <th className="px-3 py-2.5 w-36">Actual Date</th>
-                  <th className="px-3 py-2.5 w-40">Link</th>
-                  <th className="px-3 py-2.5 w-28">Notes</th>
+                  <th className="px-3 py-2.5 w-52">Owner</th>
+                  <th className="px-3 py-2.5 w-32">Planned Date</th>
+                  <th className="px-3 py-2.5 w-32">Actual Date</th>
+                  <th className="px-3 py-2.5 w-10">Link</th>
+                  <th className="px-3 py-2.5 w-10">Notes</th>
                   <th className="px-3 py-2.5 w-36">Status</th>
-                  <th className="px-3 py-2.5 w-14">Actions</th>
+                  {showActions && <th className="px-3 py-2.5 w-14">Actions</th>}
                 </tr>
               </thead>
               <tbody>
-                {pageRows.map((item) => (
+                {pageRows.map((item, idx) => (
                   <ChecklistItemRow
                     key={item.id}
+                    displayIndex={(clampedPage - 1) * pageSize + idx + 1}
                     item={item}
                     projectId={projectId}
                     checklistType={checklistType}
@@ -289,6 +305,7 @@ function StageGroupCard({
                     viewerRole={viewerRole}
                     people={people}
                     showMilestone={showMilestone}
+                    showActions={showActions}
                   />
                 ))}
               </tbody>
@@ -402,7 +419,8 @@ function ChecklistItemText({ value, onSave }: { value: string; onSave: (v: strin
         tabIndex={0}
         onClick={() => setExpanded(true)}
         onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && setExpanded(true)}
-        className="text-sm font-medium text-slate-900 rounded px-1 -mx-1 py-0.5 hover:bg-slate-50 cursor-text"
+        title={draft}
+        className="text-sm font-medium text-slate-900 rounded px-1 -mx-1 py-0.5 hover:bg-slate-50 cursor-text line-clamp-2"
       >
         {draft}
       </p>
@@ -489,14 +507,14 @@ function ChecklistLinkCell({ value, canWrite, onSave }: { value: string | null; 
           setDraft(value ?? "");
           setExpanded(true);
         }}
-        title={value ?? undefined}
+        title={value ?? "Add link"}
         className={clsx(
-          "inline-flex max-w-[180px] items-center gap-1.5 rounded-full px-2 py-1 text-xs",
-          value ? "bg-indigo-50 text-indigo-700 hover:bg-indigo-100" : "border border-dashed border-slate-300 text-slate-400 hover:border-slate-400 hover:text-slate-600"
+          "inline-flex items-center gap-1.5 rounded-full text-xs",
+          value ? "max-w-[180px] bg-indigo-50 text-indigo-700 px-2 py-1 hover:bg-indigo-100" : "p-1.5 border border-dashed border-slate-300 text-slate-400 hover:border-slate-400 hover:text-slate-600"
         )}
       >
         <IconExternalLink className="h-3 w-3 shrink-0" />
-        <span className="truncate">{value || "Add link"}</span>
+        {value && <span className="truncate">{value}</span>}
       </button>
       {value && (
         <a href={value} target="_blank" rel="noopener noreferrer" title="Open link" className="shrink-0 text-slate-400 hover:text-indigo-600">
@@ -545,6 +563,7 @@ function ChecklistLinkCell({ value, canWrite, onSave }: { value: string | null; 
 
 function ChecklistItemRow({
   item,
+  displayIndex,
   projectId,
   checklistType,
   canWrite,
@@ -553,8 +572,13 @@ function ChecklistItemRow({
   viewerRole,
   people,
   showMilestone,
+  showActions,
 }: {
   item: ChecklistTableItem;
+  /** Position within the currently-filtered view (1, 2, 3, ...), not item.order — the
+      item's real template order jumps around once you've filtered to a single stage
+      (e.g. 1, 2, 3, 4, 29, 35...), which reads as "items are missing" at a glance. */
+  displayIndex: number;
   projectId: string;
   checklistType: ChecklistType;
   canWrite: boolean;
@@ -563,6 +587,7 @@ function ChecklistItemRow({
   viewerRole: Role;
   people: { id: string; name: string }[];
   showMilestone: boolean;
+  showActions: boolean;
 }) {
   const slipped = isSlipped(item.plannedDate, item.actualDate, item.status);
   // A PM may reword an item they added themselves; rewording a fixed
@@ -571,8 +596,8 @@ function ChecklistItemRow({
 
   return (
     <tr className="border-t border-slate-100 align-top hover:bg-slate-50/40">
-      <td className="px-3 py-3 text-xs text-slate-400">{item.order}</td>
-      <td className="px-3 py-3">
+      <td className="px-3 py-2 text-xs text-slate-400" title={`Template order: ${item.order}`}>{displayIndex}</td>
+      <td className="px-3 py-2">
         <div className="flex items-start gap-2">
           <span className="mt-1"><StatusDot status={item.status as ItemStatus} /></span>
           <div className="min-w-0 flex-1">
@@ -584,13 +609,15 @@ function ChecklistItemRow({
             {canEditText ? (
               <ChecklistItemText value={item.itemText} onSave={(v) => updateChecklistItem(item.id, projectId, checklistType, { itemText: v })} />
             ) : (
-              <p className="text-sm font-medium text-slate-900">{item.itemText}</p>
+              <p className="text-sm font-medium text-slate-900 line-clamp-2" title={item.itemText}>
+                {item.itemText}
+              </p>
             )}
           </div>
         </div>
       </td>
       {showMilestone && (
-        <td className="px-3 py-3">
+        <td className="px-3 py-2">
           {item.milestoneName ? (
             <span className="inline-flex items-center rounded-full bg-indigo-50 text-indigo-700 px-2 py-0.5 text-xs font-medium">
               {item.milestoneName}
@@ -600,7 +627,7 @@ function ChecklistItemRow({
           )}
         </td>
       )}
-      <td className="px-3 py-3">
+      <td className="px-3 py-2">
         <div className="flex items-center gap-2">
           <span
             className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white"
@@ -608,7 +635,14 @@ function ChecklistItemRow({
           >
             {initials(item.ownerPersonName ?? item.owner ?? "?")}
           </span>
-          <div className="min-w-0 flex-1">
+          {/* min-w-[130px], not min-w-0: in auto table layout a flex-1 child
+              with no width floor can get collapsed to near-zero by the
+              browser's column-width algorithm once neighboring columns
+              change (which is exactly what happened here after the Link/
+              Notes columns and Actions column shrank) — a fixed floor is
+              what actually keeps the owner name legible, not the column's
+              nominal w-52 on its own. */}
+          <div className="min-w-[130px] flex-1">
             {canWrite ? (
               <PersonPicker
                 personId={item.ownerPersonId}
@@ -617,14 +651,22 @@ function ChecklistItemRow({
                 onSave={(personId) => updateChecklistItem(item.id, projectId, checklistType, { ownerPersonId: personId })}
               />
             ) : (
-              <span className="text-sm text-slate-700 truncate block">{item.ownerPersonName || item.owner || "—"}</span>
+              <span className="text-sm text-slate-700 truncate block" title={item.ownerPersonName || item.owner || undefined}>
+                {item.ownerPersonName || item.owner || "—"}
+              </span>
             )}
           </div>
         </div>
       </td>
-      <td className="px-3 py-3">
-        <div className="flex items-center gap-1.5 text-slate-400">
-          <IconCalendar className="h-3.5 w-3.5 shrink-0" />
+      <td className="px-3 py-2">
+        {/* Empty date cells recede (opacity) so a scan down the column finds the
+            filled-in dates first — a page of 30+ identical "dd/mm/yyyy" placeholders
+            otherwise reads as 30 unfilled form fields instead of 30 blank-by-default ones.
+            No separate calendar icon on the editable path — the native date input
+            already draws its own, so a second one beside it was pure redundancy;
+            kept on the read-only text path since that has no icon of its own. */}
+        <div className={clsx("flex items-center gap-1.5 text-slate-400", !item.plannedDate && "opacity-50")}>
+          {!canWrite && <IconCalendar className="h-3.5 w-3.5 shrink-0" />}
           {canWrite ? (
             <InlineDate value={toDateInputValue(item.plannedDate)} onSave={(v) => updateChecklistItem(item.id, projectId, checklistType, { plannedDate: v })} />
           ) : (
@@ -632,9 +674,9 @@ function ChecklistItemRow({
           )}
         </div>
       </td>
-      <td className="px-3 py-3">
-        <div className="flex items-center gap-1.5 text-slate-400">
-          <IconCalendar className="h-3.5 w-3.5 shrink-0" />
+      <td className="px-3 py-2">
+        <div className={clsx("flex items-center gap-1.5 text-slate-400", !item.actualDate && "opacity-50")}>
+          {!canWrite && <IconCalendar className="h-3.5 w-3.5 shrink-0" />}
           {canWrite ? (
             <InlineDate value={toDateInputValue(item.actualDate)} onSave={(v) => updateChecklistItem(item.id, projectId, checklistType, { actualDate: v })} />
           ) : (
@@ -647,20 +689,21 @@ function ChecklistItemRow({
           )}
         </div>
       </td>
-      <td className="px-3 py-3">
+      <td className="px-3 py-2">
         <ChecklistLinkCell value={item.link} canWrite={canWrite} onSave={(v) => updateChecklistItem(item.id, projectId, checklistType, { link: v })} />
       </td>
-      <td className="px-3 py-3">
+      <td className="px-3 py-2">
         {!notesHidden && (
           <NotesCell
             icon={<IconFileText className="h-3.5 w-3.5 shrink-0" />}
             value={item.notes}
             canWrite={canWrite}
+            iconOnly
             onSave={(v) => updateChecklistItem(item.id, projectId, checklistType, { notes: v })}
           />
         )}
       </td>
-      <td className="px-3 py-3">
+      <td className="px-3 py-2">
         {canWrite ? (
           <InlineSelect
             value={item.status}
@@ -674,14 +717,16 @@ function ChecklistItemRow({
           <StatusBadge status={item.status as ItemStatus} />
         )}
       </td>
-      <td className="px-3 py-3">
-        <div className="flex items-center gap-1.5">
-          {canOverride && viewerRole === "TPM" && <TpmOverrideChecklistModal projectId={projectId} checklistType={checklistType} item={item} />}
-          {canWrite && item.isCustom && (
-            <RowActionsMenu actions={[{ label: "Delete item", pendingLabel: "Deleting...", danger: true, onClick: () => deleteChecklistItem(item.id, projectId, checklistType) }]} />
-          )}
-        </div>
-      </td>
+      {showActions && (
+        <td className="px-3 py-2">
+          <div className="flex items-center gap-1.5">
+            {canOverride && viewerRole === "TPM" && <TpmOverrideChecklistModal projectId={projectId} checklistType={checklistType} item={item} />}
+            {canWrite && item.isCustom && (
+              <RowActionsMenu actions={[{ label: "Delete item", pendingLabel: "Deleting...", danger: true, onClick: () => deleteChecklistItem(item.id, projectId, checklistType) }]} />
+            )}
+          </div>
+        </td>
+      )}
     </tr>
   );
 }

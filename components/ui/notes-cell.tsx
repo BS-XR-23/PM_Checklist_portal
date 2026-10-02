@@ -23,6 +23,7 @@ export function NotesCell({
   addLabel = "Add note",
   viewLabel = "View note",
   icon,
+  iconOnly = false,
 }: {
   value: string | null;
   canWrite: boolean;
@@ -31,6 +32,8 @@ export function NotesCell({
   viewLabel?: string;
   /** Optional leading icon on the trigger button — omitted by default so existing callers (Milestones) render unchanged. */
   icon?: React.ReactNode;
+  /** Hides the text label, keeping it as a `title` tooltip — for a dense table (Checklist) where "Add note" repeated on every row of every column outweighs the icon itself. Existing callers are unaffected (default false). */
+  iconOnly?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(value ?? "");
@@ -55,10 +58,11 @@ export function NotesCell({
           setDraft(value ?? "");
           setOpen((v) => !v);
         }}
+        title={iconOnly ? (value ? viewLabel : addLabel) : undefined}
         className="inline-flex items-center gap-1 text-sm font-medium text-indigo-600 hover:underline whitespace-nowrap"
       >
         {icon}
-        {value ? viewLabel : addLabel}
+        {!iconOnly && (value ? viewLabel : addLabel)}
       </button>
       {open &&
         coords &&

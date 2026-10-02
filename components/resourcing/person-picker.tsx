@@ -20,12 +20,18 @@ export function PersonPicker({
   onSave: (personId: string | null) => Promise<void>;
 }) {
   const [pending, startTransition] = useTransition();
+  // A native <select> clips its displayed value with no ellipsis once the
+  // text outgrows a narrow column (e.g. a checklist's Owner cell) — the
+  // title tooltip is the only way to recover the full name without widening
+  // every table that embeds this.
+  const selectedName = people.find((p) => p.id === personId)?.name ?? legacyText ?? undefined;
 
   return (
     <select
       className="w-full bg-transparent text-sm px-1.5 py-1 rounded hover:bg-slate-100 focus:bg-white focus:outline-none focus:ring-1 focus:ring-slate-400 disabled:opacity-50"
       defaultValue={personId ?? ""}
       disabled={pending}
+      title={selectedName}
       onChange={(e) => startTransition(() => onSave(e.target.value || null))}
     >
       <option value="">{legacyText ? `${legacyText} (unlinked)` : "—"}</option>
