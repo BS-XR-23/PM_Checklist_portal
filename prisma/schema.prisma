@@ -22,9 +22,10 @@ enum ModuleName {
   DASHBOARD
   PM_CHECKLIST
   DEVOPS_CHECKLIST
-  ENGINEERING_CHECKLIST
-  QA_CHECKLIST
+  ENGINEERING_CHECKLIST // superseded by DELIVERY_QA_CHECKLIST (Engineering + QA merge) — kept, not dropped: Postgres can't cheaply remove an enum value, and no row references it anymore.
+  QA_CHECKLIST // superseded by DELIVERY_QA_CHECKLIST — see ENGINEERING_CHECKLIST note above.
   CREATIVE_XR_CHECKLIST
+  DELIVERY_QA_CHECKLIST
   MILESTONES
   RISK_REGISTER
   CR_LOG

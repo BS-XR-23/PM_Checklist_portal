@@ -1,11 +1,16 @@
 import type { ModuleName } from "@prisma/client";
-import { PM_STAGES, ENGINEERING_STAGES, QA_STAGES, DEVOPS_CATEGORIES, CREATIVE_XR_STAGES, DEV_STAGES } from "@/lib/seed-data";
+import { PM_STAGES, DELIVERY_QA_STAGES, DEVOPS_CATEGORIES, CREATIVE_XR_STAGES, DEV_STAGES } from "@/lib/seed-data";
 
 // Single source of truth for "which checklists exist on a project" — every
 // page/action/report that used to hardcode a PM/DevOps 2-way branch reads
 // from this list instead, so a 6th checklist type is a one-entry addition
 // here rather than a hunt through a dozen ternaries.
-export type ChecklistType = "PM" | "ENGINEERING" | "QA" | "DEVOPS" | "CREATIVE_XR" | "DEV";
+// ENGINEERING and QA were two separate checklist types until they were
+// merged into DELIVERY_QA ("Delivery & QA Checklist") — both old keys stay
+// out of this union (ChecklistItem/ChecklistTemplateItem rows were migrated
+// to "DELIVERY_QA", see the migration alongside the ENGINEERING_CHECKLIST/
+// QA_CHECKLIST ModuleName enum comments in schema.prisma).
+export type ChecklistType = "PM" | "DELIVERY_QA" | "DEVOPS" | "CREATIVE_XR" | "DEV";
 
 export type ChecklistTypeConfig = {
   key: ChecklistType;
@@ -38,22 +43,12 @@ export const CHECKLIST_TYPES: ChecklistTypeConfig[] = [
     inGeneralChecklistNav: true,
   },
   {
-    key: "ENGINEERING",
-    label: "Engineering Checklist",
-    description: "Architecture, development, code review, and performance.",
-    routeSegment: "engineering",
-    moduleName: "ENGINEERING_CHECKLIST",
-    stageOrder: ENGINEERING_STAGES,
-    stageLabel: "Stage",
-    inGeneralChecklistNav: true,
-  },
-  {
-    key: "QA",
-    label: "QA Checklist",
-    description: "Test planning, functional, device, regression, and UAT.",
-    routeSegment: "qa",
-    moduleName: "QA_CHECKLIST",
-    stageOrder: QA_STAGES,
+    key: "DELIVERY_QA",
+    label: "Delivery & QA Checklist",
+    description: "Architecture, development, code review, performance, and QA testing through UAT.",
+    routeSegment: "delivery-qa",
+    moduleName: "DELIVERY_QA_CHECKLIST",
+    stageOrder: DELIVERY_QA_STAGES,
     stageLabel: "Stage",
     inGeneralChecklistNav: true,
   },

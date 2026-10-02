@@ -31,8 +31,7 @@ function sectionKey(type: ChecklistType, stage: string): string {
 // this is a tab-row accent, not a status/semantic color used elsewhere.
 const TYPE_COLORS: Record<ChecklistType, { icon: string; activeText: string; activeBorder: string }> = {
   PM: { icon: "text-indigo-500", activeText: "text-indigo-600", activeBorder: "border-indigo-600" },
-  ENGINEERING: { icon: "text-blue-500", activeText: "text-blue-600", activeBorder: "border-blue-600" },
-  QA: { icon: "text-emerald-500", activeText: "text-emerald-600", activeBorder: "border-emerald-600" },
+  DELIVERY_QA: { icon: "text-blue-500", activeText: "text-blue-600", activeBorder: "border-blue-600" },
   DEVOPS: { icon: "text-violet-500", activeText: "text-violet-600", activeBorder: "border-violet-600" },
   CREATIVE_XR: { icon: "text-rose-500", activeText: "text-rose-600", activeBorder: "border-rose-600" },
   DEV: { icon: "text-amber-500", activeText: "text-amber-600", activeBorder: "border-amber-600" },

@@ -7,7 +7,16 @@ import { CHECKLIST_TYPES, CHECKLIST_TYPE_BY_ROUTE } from "@/lib/checklist-types"
 import { requireModuleAccess, getModuleAccess, getCurrentUser } from "@/lib/rbac";
 import type { AccessLevel } from "@prisma/client";
 
+// Retired route segments — "engineering" and "qa" were two separate
+// checklist types/tabs until they merged into "delivery-qa" (see
+// lib/checklist-types.ts). Any existing bookmark/notification link to the
+// old URLs lands here instead of a 404.
+const RETIRED_TYPE_SEGMENTS: Record<string, string> = { engineering: "delivery-qa", qa: "delivery-qa" };
+
 export default async function ChecklistPage({ params }: { params: { projectId: string; type: string } }) {
+  const retired = RETIRED_TYPE_SEGMENTS[params.type];
+  if (retired) redirect(`/projects/${params.projectId}/checklist/${retired}`);
+
   const active = CHECKLIST_TYPE_BY_ROUTE[params.type];
   if (!active) notFound();
   // Development Checklist only shows inside Delivery, not the general

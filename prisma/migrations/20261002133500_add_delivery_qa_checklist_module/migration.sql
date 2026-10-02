@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "ModuleName" ADD VALUE 'DELIVERY_QA_CHECKLIST';

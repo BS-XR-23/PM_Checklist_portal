@@ -29,11 +29,10 @@ export type MilestoneTableRow = {
 // deliberately carries no milestoneName, so it can never produce a
 // MilestonePayment row (see lib/seed-data.ts) — but the entry is required
 // for type completeness now that ChecklistType includes it.
-const SOURCE_LABEL: Record<ChecklistType, string> = { PM: "PM", ENGINEERING: "Engineering", QA: "QA", DEVOPS: "DevOps", CREATIVE_XR: "Creative & XR", DEV: "Development" };
+const SOURCE_LABEL: Record<ChecklistType, string> = { PM: "PM", DELIVERY_QA: "Delivery & QA", DEVOPS: "DevOps", CREATIVE_XR: "Creative & XR", DEV: "Development" };
 const SOURCE_STYLE: Record<ChecklistType, string> = {
   PM: "bg-indigo-50 text-indigo-700",
-  ENGINEERING: "bg-violet-50 text-violet-700",
-  QA: "bg-amber-50 text-amber-700",
+  DELIVERY_QA: "bg-violet-50 text-violet-700",
   DEVOPS: "bg-blue-50 text-blue-700",
   CREATIVE_XR: "bg-pink-50 text-pink-700",
   DEV: "bg-slate-100 text-slate-700",

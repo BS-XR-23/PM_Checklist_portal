@@ -49,27 +49,31 @@ export const PM_CHECKLIST_SEED: ChecklistSeedItem[] = [
   { order: 34, stage: "Planning", itemText: "Conduct initial risk identification workshop; populate the Risk Register with top risks, severity, and mitigation owners", milestoneName: null },
 ];
 
-// All 3 items consolidated onto "Development" — spreading only 3 items
-// across 3 different stages (Code Review/Development/Performance) rendered
-// as three near-empty 1-item stage cards. Architecture/Code Review/
-// Performance/Technical QA stay in ENGINEERING_STAGES for future growth,
-// just inert (0 rows) until real content justifies splitting back out.
-export const ENGINEERING_CHECKLIST_SEED: ChecklistSeedItem[] = [
+// Delivery & QA checklist (formerly separate Engineering + QA checklists —
+// merged into one type/module/tab). Items and stage assignments are
+// unchanged from the two source checklists; only `order` is renumbered
+// 1..8 (Engineering's 3 first, then QA's 5) since order is unique per
+// (type) in ChecklistTemplateItem and per (project, type) in ChecklistItem
+// — two checklists each independently numbering from 1 would collide once
+// merged into a single type.
+// All 3 Engineering items consolidated onto "Development" — spreading only
+// 3 items across 3 different stages (Code Review/Development/Performance)
+// rendered as three near-empty 1-item stage cards. Architecture/Code
+// Review/Performance/Technical QA stay in DELIVERY_QA_STAGES for future
+// growth, just inert (0 rows) until real content justifies splitting back
+// out. Device Testing folded into Functional Testing (device-level testing
+// is a form of functional testing) — was a lone 1-item stage next to Test
+// Planning/Functional Testing. Device Testing/Regression/UAT likewise stay
+// in DELIVERY_QA_STAGES for future growth, just inert until populated.
+export const DELIVERY_QA_CHECKLIST_SEED: ChecklistSeedItem[] = [
   { order: 1, stage: "Development", itemText: "Run automated AI code review (Git Action) on every PR; senior dev manual review before merge", milestoneName: null },
   { order: 2, stage: "Development", itemText: "Validate asset imports; test API integration on staging; implement error handling/fallback", milestoneName: null },
   { order: 3, stage: "Development", itemText: "Run final optimization pass", milestoneName: null },
-];
-
-// Device Testing folded into Functional Testing (device-level testing is a
-// form of functional testing) — was a lone 1-item stage next to Test
-// Planning/Functional Testing. Device Testing/Regression/UAT stay in
-// QA_STAGES for future growth, just inert until populated.
-export const QA_CHECKLIST_SEED: ChecklistSeedItem[] = [
-  { order: 1, stage: "Test Planning", itemText: "Define Definition of Done (DoD) checklist, including XR-specific criteria", milestoneName: null },
-  { order: 2, stage: "Functional Testing", itemText: "Run device-level testing each sprint (FPS, draw calls, shader complexity)", milestoneName: null },
-  { order: 3, stage: "Functional Testing", itemText: "Run comfort & accessibility QA each sprint", milestoneName: null },
-  { order: 4, stage: "Functional Testing", itemText: "Execute test cases; log and retest defects", milestoneName: null },
-  { order: 5, stage: "Test Planning", itemText: "Define target performance budget per platform (FPS, draw calls, triangle/poly count, memory)", milestoneName: null },
+  { order: 4, stage: "Test Planning", itemText: "Define Definition of Done (DoD) checklist, including XR-specific criteria", milestoneName: null },
+  { order: 5, stage: "Functional Testing", itemText: "Run device-level testing each sprint (FPS, draw calls, shader complexity)", milestoneName: null },
+  { order: 6, stage: "Functional Testing", itemText: "Run comfort & accessibility QA each sprint", milestoneName: null },
+  { order: 7, stage: "Functional Testing", itemText: "Execute test cases; log and retest defects", milestoneName: null },
+  { order: 8, stage: "Test Planning", itemText: "Define target performance budget per platform (FPS, draw calls, triangle/poly count, memory)", milestoneName: null },
 ];
 
 export const DEVOPS_CHECKLIST_SEED: ChecklistSeedItem[] = [
@@ -130,12 +134,23 @@ export const PM_STAGES = [
 // into Monitoring as part of the same migration that split PM_STAGES above.
 export const DEVOPS_CATEGORIES = ["Infrastructure", "CI/CD", "Security", "Monitoring"] as const;
 
-// New checklist types (see lib/checklist-types.ts) — no existing ChecklistItem
-// rows use these yet, so unlike PM_STAGES/DEVOPS_CATEGORIES these are safe to
-// define with their final content immediately; there's nothing to backfill.
-export const ENGINEERING_STAGES = ["Architecture", "Development", "Code Review", "Performance", "Technical QA"] as const;
-
-export const QA_STAGES = ["Test Planning", "Functional Testing", "Device Testing", "Regression", "UAT"] as const;
+// Engineering + QA merged into one "Delivery & QA" checklist type (was two
+// separate checklist types/modules/tabs) — the stage list is just the two
+// former stage lists concatenated, Engineering's 5 first then QA's 5, so
+// nothing about either stage's meaning or item assignment changes, only the
+// container they live in.
+export const DELIVERY_QA_STAGES = [
+  "Architecture",
+  "Development",
+  "Code Review",
+  "Performance",
+  "Technical QA",
+  "Test Planning",
+  "Functional Testing",
+  "Device Testing",
+  "Regression",
+  "UAT",
+] as const;
 
 export const CREATIVE_XR_STAGES = ["Storyboard", "3D", "UX", "Assets", "XR Validation"] as const;
 

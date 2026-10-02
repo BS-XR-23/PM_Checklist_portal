@@ -12,7 +12,7 @@ import { ProjectFilters, type ProjectCardData, type ProjectStats } from "./proje
 // average of the two, not a pooled total — the Dev Checklist typically has far
 // fewer items than the other five combined, so pooling would barely move the
 // needle for it; averaging weighs it equally instead.
-const GOVERNANCE_TYPES = ["PM", "ENGINEERING", "QA", "DEVOPS", "CREATIVE_XR"];
+const GOVERNANCE_TYPES = ["PM", "DELIVERY_QA", "DEVOPS", "CREATIVE_XR"];
 
 export const dynamic = "force-dynamic";
 
