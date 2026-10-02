@@ -5,3 +5,21 @@
 body {
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
 }
+
+/* Fade + shadow hint at the scrollable edges of a wide table, so "there's
+   more to the right" is visible without having to nudge the scrollbar first.
+   Classic 4-layer CSS scroll-shadow recipe — two gradients scroll with the
+   content to mask it near the edge, two stay fixed to cast the shadow; no
+   JS scroll listener needed. Apply to the element that actually scrolls
+   (the overflow-x-auto wrapper), not an ancestor. */
+.scroll-shadow-x {
+  background:
+    linear-gradient(to right, white 30%, rgba(255, 255, 255, 0)) 0 0,
+    linear-gradient(to left, white 30%, rgba(255, 255, 255, 0)) 100% 0,
+    linear-gradient(to right, rgba(15, 23, 42, 0.12), rgba(15, 23, 42, 0)) 0 0,
+    linear-gradient(to left, rgba(15, 23, 42, 0.12), rgba(15, 23, 42, 0)) 100% 0;
+  background-repeat: no-repeat;
+  background-color: white;
+  background-size: 24px 100%, 24px 100%, 8px 100%, 8px 100%;
+  background-attachment: local, local, scroll, scroll;
+}

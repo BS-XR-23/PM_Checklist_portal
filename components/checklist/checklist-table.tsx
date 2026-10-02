@@ -89,6 +89,13 @@ export function ChecklistTable({
     .map((stage) => ({ stage, rows: items.filter((i) => i.stage === stage) }))
     .filter((g) => g.rows.length > 0);
 
+  // Dev Checklist (and any other checklist type that never tags an item
+  // with a milestone — see DEV_CHECKLIST_SEED's note on why) would otherwise
+  // show a Milestone column that's "—" on every single row across all of
+  // its items. Computed from the full item set, not per-stage, so the
+  // column doesn't flicker in/out as you switch stage pills.
+  const showMilestone = items.some((i) => i.milestoneName);
+
   // Default to the first stage/category that isn't fully complete yet, so
   // opening the checklist lands you on the work still in front of you
   // instead of always Stage 1. "All" (everything stacked) is one click away.
@@ -177,6 +184,7 @@ export function ChecklistTable({
             canOverride={canOverride}
             viewerRole={viewerRole}
             people={people}
+            showMilestone={showMilestone}
           />
         ))}
       </div>
@@ -204,6 +212,7 @@ function StageGroupCard({
   canOverride,
   viewerRole,
   people,
+  showMilestone,
 }: {
   stage: string;
   stageLabel: string;
@@ -215,6 +224,7 @@ function StageGroupCard({
   canOverride: boolean;
   viewerRole: Role;
   people: { id: string; name: string }[];
+  showMilestone: boolean;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [page, setPage] = useState(1);
@@ -250,13 +260,13 @@ function StageGroupCard({
 
       {!collapsed && (
         <>
-          <div className="overflow-x-auto border-t border-slate-100">
-            <table className="w-full text-sm min-w-[1100px]">
+          <div className="overflow-x-auto scroll-shadow-x border-t border-slate-100">
+            <table className={clsx("w-full text-sm", showMilestone ? "min-w-[1100px]" : "min-w-[960px]")}>
               <thead>
                 <tr className="text-left text-xs font-medium text-slate-500 bg-slate-50">
                   <th className="px-3 py-2.5 w-10">#</th>
                   <th className="px-3 py-2.5 min-w-[260px]">Checklist Item</th>
-                  <th className="px-3 py-2.5 w-40">Milestone</th>
+                  {showMilestone && <th className="px-3 py-2.5 w-40">Milestone</th>}
                   <th className="px-3 py-2.5 w-44">Owner</th>
                   <th className="px-3 py-2.5 w-36">Planned Date</th>
                   <th className="px-3 py-2.5 w-36">Actual Date</th>
@@ -278,6 +288,7 @@ function StageGroupCard({
                     canOverride={canOverride}
                     viewerRole={viewerRole}
                     people={people}
+                    showMilestone={showMilestone}
                   />
                 ))}
               </tbody>
@@ -541,6 +552,7 @@ function ChecklistItemRow({
   canOverride,
   viewerRole,
   people,
+  showMilestone,
 }: {
   item: ChecklistTableItem;
   projectId: string;
@@ -550,6 +562,7 @@ function ChecklistItemRow({
   canOverride: boolean;
   viewerRole: Role;
   people: { id: string; name: string }[];
+  showMilestone: boolean;
 }) {
   const slipped = isSlipped(item.plannedDate, item.actualDate, item.status);
   // A PM may reword an item they added themselves; rewording a fixed
@@ -576,15 +589,17 @@ function ChecklistItemRow({
           </div>
         </div>
       </td>
-      <td className="px-3 py-3">
-        {item.milestoneName ? (
-          <span className="inline-flex items-center rounded-full bg-indigo-50 text-indigo-700 px-2 py-0.5 text-xs font-medium">
-            {item.milestoneName}
-          </span>
-        ) : (
-          <span className="text-slate-300">—</span>
-        )}
-      </td>
+      {showMilestone && (
+        <td className="px-3 py-3">
+          {item.milestoneName ? (
+            <span className="inline-flex items-center rounded-full bg-indigo-50 text-indigo-700 px-2 py-0.5 text-xs font-medium">
+              {item.milestoneName}
+            </span>
+          ) : (
+            <span className="text-slate-300">—</span>
+          )}
+        </td>
+      )}
       <td className="px-3 py-3">
         <div className="flex items-center gap-2">
           <span

@@ -81,16 +81,17 @@ export async function getDashboardData(projectId: string) {
   }
 
   // One stage/category breakdown per checklist type, in registry order.
-  // "Presales" is only ever populated on a project won from a Presales
-  // opportunity (winPresalesProject, app/presales/actions.ts) — drop it
-  // here when empty so a regular project's Dashboard doesn't show a
-  // permanent "Presales: 0/0" row under PM Checklist.
+  // Stages with zero items for this project (e.g. Architecture/Code Review/
+  // Performance/Technical QA on a project that's only used Engineering's
+  // "Development" stage so far, or "Presales" on anything not won from a
+  // Presales opportunity — see winPresalesProject, app/presales/actions.ts)
+  // are dropped rather than shown as a permanent "0/0 (0%)" row — dead rows
+  // were the biggest source of scroll depth on this section.
   const stageSummaryByType = CHECKLIST_TYPES.map((c) => {
     const items = allItems.filter((i) => i.type === c.key);
-    let stages = stageSummary(items, c.stageOrder);
-    if (c.key === "PM") stages = stages.filter((s) => s.stage !== "Presales" || s.total > 0);
+    const stages = stageSummary(items, c.stageOrder).filter((s) => s.total > 0);
     return { key: c.key, label: c.label, stageLabel: c.stageLabel, stages };
-  }).filter((c) => c.stages.some((s) => s.total > 0));
+  }).filter((c) => c.stages.length > 0);
 
   // Derived, not stored — the project's "end date" (latest Actual Date
   // across every checklist item), so it can't drift out of sync with the

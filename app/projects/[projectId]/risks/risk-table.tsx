@@ -67,7 +67,7 @@ export function RiskTable({
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto scroll-shadow-x">
         <table className="w-full text-sm min-w-[1200px]">
           <thead>
             <tr className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide bg-slate-50">
