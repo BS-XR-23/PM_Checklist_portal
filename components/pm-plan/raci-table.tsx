@@ -10,7 +10,7 @@ export function RaciTable({ pmPlanId, projectId, rows }: { pmPlanId: string; pro
   const [pending, startTransition] = useTransition();
 
   return (
-    <div className="rounded-lg border border-slate-200 overflow-x-auto">
+    <div className="rounded-lg border border-slate-200 overflow-x-auto scroll-shadow-x">
       <table className="w-full text-sm">
         <thead>
           <tr className="text-left text-xs text-slate-500 border-b border-slate-100 bg-slate-50">

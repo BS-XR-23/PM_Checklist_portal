@@ -1,4 +1,5 @@
 import sanitizeHtml from "sanitize-html";
+import { normalizeLegacyRichText } from "@/lib/rich-text";
 
 const ALLOWED_TAGS = ["p", "strong", "em", "s", "ul", "ol", "li", "a", "br"];
 
@@ -12,7 +13,7 @@ export function RichTextView({ html, emptyText = "—" }: { html: string | null;
   if (!html || !html.trim()) {
     return <p className="text-sm text-slate-400">{emptyText}</p>;
   }
-  const clean = sanitizeHtml(html, { allowedTags: ALLOWED_TAGS, allowedAttributes: { a: ["href", "target", "rel"] } });
+  const clean = sanitizeHtml(normalizeLegacyRichText(html), { allowedTags: ALLOWED_TAGS, allowedAttributes: { a: ["href", "target", "rel"] } });
   return (
     <div
       className="prose-sm max-w-none text-sm text-slate-800 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-1 [&_a]:text-indigo-600 [&_a]:underline"

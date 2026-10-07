@@ -19,14 +19,14 @@ export function TimelineTable({ pmPlanId, projectId, rows }: { pmPlanId: string;
   const [pending, startTransition] = useTransition();
 
   return (
-    <div className="rounded-lg border border-slate-200 overflow-hidden">
+    <div className="rounded-lg border border-slate-200 overflow-x-auto scroll-shadow-x">
       <table className="w-full text-sm">
         <thead>
           <tr className="text-left text-xs text-slate-500 border-b border-slate-100 bg-slate-50">
-            <th className="px-3 py-2 font-medium">Phase</th>
-            <th className="px-3 py-2 font-medium">Start</th>
-            <th className="px-3 py-2 font-medium">End</th>
-            <th className="px-3 py-2 font-medium">Status</th>
+            <th className="px-3 py-2 font-medium min-w-[160px]">Phase</th>
+            <th className="px-3 py-2 font-medium min-w-[130px]">Start</th>
+            <th className="px-3 py-2 font-medium min-w-[130px]">End</th>
+            <th className="px-3 py-2 font-medium min-w-[130px]">Status</th>
             <th className="px-3 py-2 font-medium w-8" />
           </tr>
         </thead>

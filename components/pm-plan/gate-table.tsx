@@ -47,14 +47,14 @@ export function GateTable({ pmPlanId, projectId, rows }: { pmPlanId: string; pro
   }
 
   return (
-    <div className="rounded-lg border border-slate-200 overflow-hidden">
+    <div className="rounded-lg border border-slate-200 overflow-x-auto scroll-shadow-x">
       <table className="w-full text-sm">
         <thead>
           <tr className="text-left text-xs text-slate-500 border-b border-slate-100 bg-slate-50">
-            <th className="px-3 py-2 font-medium">Gate</th>
-            <th className="px-3 py-2 font-medium">Required Evidence</th>
-            <th className="px-3 py-2 font-medium">Exit Condition</th>
-            <th className="px-3 py-2 font-medium">Status</th>
+            <th className="px-3 py-2 font-medium min-w-[140px]">Gate</th>
+            <th className="px-3 py-2 font-medium min-w-[200px]">Required Evidence</th>
+            <th className="px-3 py-2 font-medium min-w-[200px]">Exit Condition</th>
+            <th className="px-3 py-2 font-medium min-w-[120px]">Status</th>
             <th className="px-3 py-2 font-medium w-8" />
           </tr>
         </thead>

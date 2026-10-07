@@ -78,7 +78,12 @@ export default async function PmPlanPage({ params }: { params: { projectId: stri
         links: true,
       },
     }),
-    canWrite || canWriteMilestones ? prisma.person.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }) : Promise.resolve([]),
+    // Always fetched, not just for WRITE: Stakeholders' read-only view also
+    // needs this to resolve a linked personId to a display name (see the
+    // "stakeholders" section below) — restricting the query to writers only
+    // left a READ_LIMITED/READ_FULL viewer unable to see who a stakeholder
+    // row was actually linked to.
+    prisma.person.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
     canSeeRisks ? prisma.riskItem.findMany({ where: { projectId: params.projectId }, orderBy: { order: "asc" } }) : Promise.resolve([]),
     canSeeDeps ? prisma.dependencyItem.findMany({ where: { projectId: params.projectId }, orderBy: { order: "asc" } }) : Promise.resolve([]),
     canSeeMilestones
@@ -170,8 +175,14 @@ export default async function PmPlanPage({ params }: { params: { projectId: stri
     itemCountLabel: `${pmPlan.stakeholders.length} ${pmPlan.stakeholders.length === 1 ? "stakeholder" : "stakeholders"}`,
     view: (
       <ReadOnlyTable
-        columns={["Stakeholder", "Role", "Responsibility", "Access Required"]}
-        rows={pmPlan.stakeholders.map((r) => [r.stakeholder, r.role, r.responsibility, r.accessRequired])}
+        columns={["Stakeholder", "Linked Person", "Role", "Responsibility", "Access Required"]}
+        rows={pmPlan.stakeholders.map((r) => [
+          r.stakeholder,
+          people.find((p) => p.id === r.personId)?.name ?? "",
+          r.role,
+          r.responsibility,
+          r.accessRequired,
+        ])}
       />
     ),
     edit: canWrite ? <StakeholdersTable pmPlanId={pmPlanId} projectId={projectId} rows={pmPlan.stakeholders} people={people} /> : undefined,
@@ -730,7 +741,7 @@ function ReadOnlyTable({ columns, rows }: { columns: string[]; rows: string[][] 
     return <p className="text-sm text-slate-400">No rows yet.</p>;
   }
   return (
-    <div className="rounded-lg border border-slate-200 overflow-x-auto">
+    <div className="rounded-lg border border-slate-200 overflow-x-auto scroll-shadow-x">
       <table className="w-full text-sm">
         <thead>
           <tr className="text-left text-xs text-slate-500 border-b border-slate-100 bg-slate-50">

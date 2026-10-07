@@ -7,6 +7,7 @@ import { riskScore } from "@/lib/calculations";
 import { STATUS_COLORS } from "@/lib/colors";
 import type { ItemStatus } from "@/lib/constants";
 import type { Project, PMPlan, StakeholderRow, CommsRow, RaciRow, RiskItem, DependencyItem, Milestone, DeliverableRow, TimelineRow, ResourceRow, GateRow } from "@prisma/client";
+import { normalizeLegacyRichText } from "@/lib/rich-text";
 
 function milestoneStatusLabel(status: string): string {
   return STATUS_COLORS[status as ItemStatus]?.label ?? status;
@@ -20,7 +21,14 @@ function milestoneStatusLabel(status: string): string {
 // Word doc. This flattens it back to plain text (bullets as "- ", blank
 // line between paragraphs) instead — formatting (bold/italic/links) is
 // lost in the .docx export, but the content reads cleanly.
-function htmlToPlainText(html: string): string {
+//
+// Rows a WRITE user hasn't re-saved since the Tiptap editor shipped are
+// still flat pasted text ("●\titem\n...", see RichTextView's same
+// normalizer) rather than real HTML — run it through normalizeLegacyRichText
+// first so every field exports with the same "- " bullet style instead of
+// upgraded fields reading "- item" and untouched ones reading "●\titem".
+function htmlToPlainText(raw: string): string {
+  const html = normalizeLegacyRichText(raw);
   return html
     .replace(/<li>/gi, "- ")
     .replace(/<\/li>/gi, "\n")

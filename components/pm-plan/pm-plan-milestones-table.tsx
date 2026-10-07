@@ -32,15 +32,15 @@ export function PmPlanMilestonesTable({
   const [pending, startTransition] = useTransition();
 
   return (
-    <div className="rounded-lg border border-slate-200 overflow-hidden">
+    <div className="rounded-lg border border-slate-200 overflow-x-auto scroll-shadow-x">
       <table className="w-full text-sm">
         <thead>
           <tr className="text-left text-xs text-slate-500 border-b border-slate-100 bg-slate-50">
-            <th className="px-3 py-2 font-medium">Milestone</th>
-            <th className="px-3 py-2 font-medium">Baseline Date</th>
-            <th className="px-3 py-2 font-medium">Owner</th>
-            <th className="px-3 py-2 font-medium">Exit Criteria</th>
-            <th className="px-3 py-2 font-medium">Status</th>
+            <th className="px-3 py-2 font-medium min-w-[160px]">Milestone</th>
+            <th className="px-3 py-2 font-medium min-w-[140px]">Baseline Date</th>
+            <th className="px-3 py-2 font-medium min-w-[150px]">Owner</th>
+            <th className="px-3 py-2 font-medium min-w-[200px]">Exit Criteria</th>
+            <th className="px-3 py-2 font-medium min-w-[130px]">Status</th>
             <th className="px-3 py-2 font-medium w-8" />
           </tr>
         </thead>

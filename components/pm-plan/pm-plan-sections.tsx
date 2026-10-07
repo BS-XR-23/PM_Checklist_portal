@@ -61,7 +61,7 @@ export function PmPlanSections({ sections, canWrite }: { sections: PmPlanSection
                   setEditingId(null);
                 }}
                 className={clsx(
-                  "w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm",
+                  "w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm min-w-0",
                   expandedId === s.id ? "bg-indigo-50 text-indigo-700 font-medium" : "text-slate-600 hover:bg-slate-50"
                 )}
               >
@@ -73,7 +73,9 @@ export function PmPlanSections({ sections, canWrite }: { sections: PmPlanSection
                 >
                   {s.number}
                 </span>
-                <span className="truncate">{s.title}</span>
+                <span className="min-w-0 flex-1 truncate" title={s.title}>
+                  {s.title}
+                </span>
               </button>
             </li>
           ))}
@@ -102,7 +104,9 @@ export function PmPlanSections({ sections, canWrite }: { sections: PmPlanSection
                   <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-600 text-xs font-semibold">
                     {s.number}
                   </span>
-                  <span className="text-sm font-semibold text-slate-900 truncate">{s.title}</span>
+                  <span className="text-sm font-semibold text-slate-900 min-w-0 truncate" title={s.title}>
+                    {s.title}
+                  </span>
                   {s.required && expanded && (
                     <span className="inline-flex items-center rounded-full bg-rose-50 text-rose-600 text-[11px] font-medium px-2 py-0.5 shrink-0">
                       Required

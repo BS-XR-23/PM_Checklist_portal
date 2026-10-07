@@ -37,17 +37,19 @@ export function PlanHeaderMeta({
   }
 
   return (
-    <div className="flex items-start gap-6">
-      <div>
+    <div className="flex flex-wrap items-start gap-x-6 gap-y-3">
+      <div className="min-w-0 max-w-full">
         <p className="text-xs text-slate-500 mb-1">Prepared By</p>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 min-w-0">
           <span
             className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold text-white"
             style={{ backgroundColor: avatarColorFromString(preparedBy || "?") }}
           >
             {preparedBy ? initials(preparedBy) : <IconUser className="h-3.5 w-3.5" />}
           </span>
-          <span className="text-sm font-medium text-slate-800">{preparedBy || "—"}</span>
+          <span className="text-sm font-medium text-slate-800 truncate" title={preparedBy || undefined}>
+            {preparedBy || "—"}
+          </span>
         </div>
       </div>
       <div>

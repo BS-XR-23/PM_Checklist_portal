@@ -6,6 +6,7 @@ import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
 import clsx from "clsx";
+import { normalizeLegacyRichText } from "@/lib/rich-text";
 
 const errorTextClass = "text-xs text-red-600 mt-0.5";
 function errorMessage(err: unknown): string {
@@ -117,7 +118,7 @@ export function RichTextEditor({
       Link.configure({ openOnClick: false, autolink: true }),
       Placeholder.configure({ placeholder: placeholder ?? "" }),
     ],
-    content: value,
+    content: normalizeLegacyRichText(value),
     editorProps: {
       attributes: {
         class: "prose-sm max-w-none px-2 py-1.5 text-sm text-slate-800 focus:outline-none min-h-[64px] [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_a]:text-indigo-600 [&_a]:underline",
@@ -129,8 +130,9 @@ export function RichTextEditor({
   // (e.g. another tab saved first) without fighting the user's own typing —
   // only resets when the doc actually differs from what's on screen.
   useEffect(() => {
-    if (editor && value !== editor.getHTML()) {
-      editor.commands.setContent(value, { emitUpdate: false });
+    const normalized = normalizeLegacyRichText(value);
+    if (editor && normalized !== editor.getHTML()) {
+      editor.commands.setContent(normalized, { emitUpdate: false });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value, editor]);

@@ -16,14 +16,14 @@ export function DeliverableTable({ pmPlanId, projectId, rows }: { pmPlanId: stri
   const [pending, startTransition] = useTransition();
 
   return (
-    <div className="rounded-lg border border-slate-200 overflow-hidden">
+    <div className="rounded-lg border border-slate-200 overflow-x-auto scroll-shadow-x">
       <table className="w-full text-sm">
         <thead>
           <tr className="text-left text-xs text-slate-500 border-b border-slate-100 bg-slate-50">
-            <th className="px-3 py-2 font-medium">Deliverable</th>
-            <th className="px-3 py-2 font-medium">Acceptance Evidence</th>
-            <th className="px-3 py-2 font-medium">Owner</th>
-            <th className="px-3 py-2 font-medium">Target</th>
+            <th className="px-3 py-2 font-medium min-w-[180px]">Deliverable</th>
+            <th className="px-3 py-2 font-medium min-w-[240px]">Acceptance Evidence</th>
+            <th className="px-3 py-2 font-medium min-w-[120px]">Owner</th>
+            <th className="px-3 py-2 font-medium min-w-[120px]">Target</th>
             <th className="px-3 py-2 font-medium w-8" />
           </tr>
         </thead>

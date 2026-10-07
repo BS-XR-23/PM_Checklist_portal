@@ -16,14 +16,14 @@ export function ResourceTable({ pmPlanId, projectId, rows }: { pmPlanId: string;
   const [pending, startTransition] = useTransition();
 
   return (
-    <div className="rounded-lg border border-slate-200 overflow-hidden">
+    <div className="rounded-lg border border-slate-200 overflow-x-auto scroll-shadow-x">
       <table className="w-full text-sm">
         <thead>
           <tr className="text-left text-xs text-slate-500 border-b border-slate-100 bg-slate-50">
-            <th className="px-3 py-2 font-medium">Role</th>
-            <th className="px-3 py-2 font-medium">Allocation</th>
-            <th className="px-3 py-2 font-medium">Primary Responsibility</th>
-            <th className="px-3 py-2 font-medium">Backup / Escalation</th>
+            <th className="px-3 py-2 font-medium min-w-[120px]">Role</th>
+            <th className="px-3 py-2 font-medium min-w-[110px]">Allocation</th>
+            <th className="px-3 py-2 font-medium min-w-[200px]">Primary Responsibility</th>
+            <th className="px-3 py-2 font-medium min-w-[180px]">Backup / Escalation</th>
             <th className="px-3 py-2 font-medium w-8" />
           </tr>
         </thead>
