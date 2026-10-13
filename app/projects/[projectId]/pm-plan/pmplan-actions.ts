@@ -169,7 +169,15 @@ export async function addStakeholderRow(pmPlanId: string, _projectId: string) {
 export async function updateStakeholderRow(
   id: string,
   projectId: string,
-  data: Partial<{ stakeholder: string; personId: string | null; role: string; responsibility: string; accessRequired: string }>
+  data: Partial<{
+    stakeholder: string;
+    personId: string | null;
+    role: string;
+    responsibility: string;
+    accessRequired: string;
+    influence: string;
+    interest: string;
+  }>
 ) {
   const existing = await prisma.stakeholderRow.findUniqueOrThrow({ where: { id }, include: { pmPlan: true } });
   const user = await requireModuleWrite(existing.pmPlan.projectId, "PM_PLAN");
@@ -201,7 +209,7 @@ export async function addCommsRow(pmPlanId: string, _projectId: string) {
 export async function updateCommsRow(
   id: string,
   projectId: string,
-  data: Partial<{ audience: string; frequency: string; channel: string; content: string }>
+  data: Partial<{ audience: string; frequency: string; channel: string; content: string; personId: string | null }>
 ) {
   const existing = await prisma.commsRow.findUniqueOrThrow({ where: { id }, include: { pmPlan: true } });
   const user = await requireModuleWrite(existing.pmPlan.projectId, "PM_PLAN");

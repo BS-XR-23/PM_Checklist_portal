@@ -2,11 +2,31 @@
 
 import { useTransition } from "react";
 import { InlineText } from "@/components/ui/inline-edit";
+import { PersonPicker } from "@/components/resourcing/person-picker";
+import { formatShortDate } from "@/lib/format";
 import { addCommsRow, updateCommsRow, deleteCommsRow } from "@/app/projects/[projectId]/pm-plan/pmplan-actions";
 
-export type CommsRowData = { id: string; audience: string; frequency: string; channel: string; content: string };
+export type CommsRowData = {
+  id: string;
+  audience: string;
+  frequency: string;
+  channel: string;
+  content: string;
+  personId: string | null;
+  updatedAt: Date | string;
+};
 
-export function CommsTable({ pmPlanId, projectId, rows }: { pmPlanId: string; projectId: string; rows: CommsRowData[] }) {
+export function CommsTable({
+  pmPlanId,
+  projectId,
+  rows,
+  people,
+}: {
+  pmPlanId: string;
+  projectId: string;
+  rows: CommsRowData[];
+  people: { id: string; name: string }[];
+}) {
   const [pending, startTransition] = useTransition();
 
   return (
@@ -15,9 +35,11 @@ export function CommsTable({ pmPlanId, projectId, rows }: { pmPlanId: string; pr
         <thead>
           <tr className="text-left text-xs text-slate-500 border-b border-slate-100 bg-slate-50">
             <th className="px-3 py-2 font-medium min-w-[120px]">Audience</th>
+            <th className="px-3 py-2 font-medium min-w-[160px]">Stakeholder</th>
             <th className="px-3 py-2 font-medium min-w-[110px]">Frequency</th>
             <th className="px-3 py-2 font-medium min-w-[120px]">Channel</th>
             <th className="px-3 py-2 font-medium min-w-[240px]">Content</th>
+            <th className="px-3 py-2 font-medium min-w-[110px]">Last Updated</th>
             <th className="px-3 py-2 font-medium w-8" />
           </tr>
         </thead>
@@ -28,6 +50,9 @@ export function CommsTable({ pmPlanId, projectId, rows }: { pmPlanId: string; pr
                 <InlineText value={r.audience} onSave={(v) => updateCommsRow(r.id, projectId, { audience: v })} />
               </td>
               <td className="px-3 py-1.5">
+                <PersonPicker personId={r.personId} legacyText={null} people={people} onSave={(personId) => updateCommsRow(r.id, projectId, { personId })} />
+              </td>
+              <td className="px-3 py-1.5">
                 <InlineText value={r.frequency} onSave={(v) => updateCommsRow(r.id, projectId, { frequency: v })} />
               </td>
               <td className="px-3 py-1.5">
@@ -36,6 +61,7 @@ export function CommsTable({ pmPlanId, projectId, rows }: { pmPlanId: string; pr
               <td className="px-3 py-1.5">
                 <InlineText value={r.content} onSave={(v) => updateCommsRow(r.id, projectId, { content: v })} />
               </td>
+              <td className="px-3 py-1.5 text-xs text-slate-500 whitespace-nowrap">{formatShortDate(r.updatedAt)}</td>
               <td className="px-3 py-1.5">
                 <button
                   onClick={() => startTransition(() => deleteCommsRow(r.id, projectId))}

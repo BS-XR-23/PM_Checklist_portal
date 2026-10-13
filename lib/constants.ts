@@ -40,6 +40,12 @@ export const ITEM_STATUSES: ItemStatus[] = [
 export const RISK_LEVELS = ["Low", "Medium", "High"] as const;
 export type RiskLevel = (typeof RISK_LEVELS)[number];
 
+// Stakeholder power/interest grid classification (StakeholderRow.influence/
+// interest) — same Low/Medium/High scale as RISK_LEVELS but kept as its own
+// constant since it's a distinct concept (stakeholder analysis, not risk).
+export const STAKEHOLDER_INFLUENCE_LEVELS = ["Low", "Medium", "High"] as const;
+export const STAKEHOLDER_INTEREST_LEVELS = ["Low", "Medium", "High"] as const;
+
 export const RISK_TYPES = ["Risk", "Opportunity", "Issue"] as const;
 export const RISK_STATUSES = ["Open", "Monitoring", "Mitigated", "Closed", "Realized", "Not Pursued"] as const;
 

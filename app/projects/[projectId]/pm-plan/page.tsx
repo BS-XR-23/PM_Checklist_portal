@@ -175,13 +175,16 @@ export default async function PmPlanPage({ params }: { params: { projectId: stri
     itemCountLabel: `${pmPlan.stakeholders.length} ${pmPlan.stakeholders.length === 1 ? "stakeholder" : "stakeholders"}`,
     view: (
       <ReadOnlyTable
-        columns={["Stakeholder", "Linked Person", "Role", "Responsibility", "Access Required"]}
+        columns={["Stakeholder", "Linked Person", "Role", "Responsibility", "Access Required", "Influence", "Interest", "Last Updated"]}
         rows={pmPlan.stakeholders.map((r) => [
           r.stakeholder,
           people.find((p) => p.id === r.personId)?.name ?? "",
           r.role,
           r.responsibility,
           r.accessRequired,
+          r.influence,
+          r.interest,
+          formatShortDate(r.updatedAt),
         ])}
       />
     ),
@@ -192,6 +195,7 @@ export default async function PmPlanPage({ params }: { params: { projectId: stri
     id: "charter",
     number: sections.length + 1,
     title: "Charter",
+    hint: "The project's founding agreement: objective, what's in/out of scope, success criteria, and who has authority to approve changes within it.",
     required: true,
     status: statusFromCounts(filledCount(charterFields), charterFields.length),
     itemCountLabel: `${filledCount(charterFields)}/${charterFields.length} fields`,
@@ -335,6 +339,7 @@ export default async function PmPlanPage({ params }: { params: { projectId: stri
     id: "methodology",
     number: sections.length + 1,
     title: "Methodology",
+    hint: "How the team runs day-to-day — cadence, ceremonies, tools, and ownership. Change Management here is your delivery process for scope/schedule changes, not a sign-off log — approved changes still get tracked on the Change Requests tab.",
     status: statusFromCounts(filledCount(methodFields), methodFields.length),
     itemCountLabel: `${filledCount(methodFields)}/${methodFields.length} fields`,
     view: (
@@ -433,6 +438,7 @@ export default async function PmPlanPage({ params }: { params: { projectId: stri
     id: "test-plan",
     number: sections.length + 1,
     title: "Test Plan",
+    hint: "The testing approach and gating criteria for this project — distinct from the Delivery tab's UAT Cases, which track each individual test's execution and result.",
     status: statusFromCounts(filledCount(testFields), testFields.length),
     itemCountLabel: `${filledCount(testFields)}/${testFields.length} fields`,
     view: (
@@ -503,6 +509,7 @@ export default async function PmPlanPage({ params }: { params: { projectId: stri
     id: "deployment-plan",
     number: sections.length + 1,
     title: "Deployment Plan",
+    hint: "How this project ships to production — environments, release steps, rollback, and the go-live checklist. Distinct from the Delivery tab's Releases, which track actual release execution and approval status.",
     status: statusFromCounts(filledCount(deployFields), deployFields.length),
     itemCountLabel: `${filledCount(deployFields)}/${deployFields.length} fields`,
     view: (
@@ -568,13 +575,23 @@ export default async function PmPlanPage({ params }: { params: { projectId: stri
     itemCountLabel: `${pmPlan.commsRows.length} ${pmPlan.commsRows.length === 1 ? "row" : "rows"}`,
     view: (
       <div className="space-y-4">
-        <ReadOnlyTable columns={["Audience", "Frequency", "Channel", "Content"]} rows={pmPlan.commsRows.map((r) => [r.audience, r.frequency, r.channel, r.content])} />
+        <ReadOnlyTable
+          columns={["Audience", "Stakeholder", "Frequency", "Channel", "Content", "Last Updated"]}
+          rows={pmPlan.commsRows.map((r) => [
+            r.audience,
+            people.find((p) => p.id === r.personId)?.name ?? "",
+            r.frequency,
+            r.channel,
+            r.content,
+            formatShortDate(r.updatedAt),
+          ])}
+        />
         <ReadOnlyField label="Escalation Path" value={pmPlan.escalationPath} link={link("escalationPath")} rich />
       </div>
     ),
     edit: canWrite ? (
       <div className="space-y-4">
-        <CommsTable pmPlanId={pmPlanId} projectId={projectId} rows={pmPlan.commsRows} />
+        <CommsTable pmPlanId={pmPlanId} projectId={projectId} rows={pmPlan.commsRows} people={people} />
         <PlanField
           pmPlanId={pmPlanId}
           projectId={projectId}

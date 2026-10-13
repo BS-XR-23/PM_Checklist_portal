@@ -1,0 +1,11 @@
+-- AlterTable
+ALTER TABLE "CommsRow" ADD COLUMN     "personId" TEXT,
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable
+ALTER TABLE "StakeholderRow" ADD COLUMN     "influence" TEXT NOT NULL DEFAULT 'Medium',
+ADD COLUMN     "interest" TEXT NOT NULL DEFAULT 'Medium',
+ADD COLUMN     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AddForeignKey
+ALTER TABLE "CommsRow" ADD CONSTRAINT "CommsRow_personId_fkey" FOREIGN KEY ("personId") REFERENCES "Person"("id") ON DELETE SET NULL ON UPDATE CASCADE;

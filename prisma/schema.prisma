@@ -611,27 +611,46 @@ model PmPlanLink {
 }
 
 model StakeholderRow {
-  id             String  @id @default(cuid())
+  id             String   @id @default(cuid())
   pmPlanId       String
-  pmPlan         PMPlan  @relation(fields: [pmPlanId], references: [id], onDelete: Cascade)
+  pmPlan         PMPlan   @relation(fields: [pmPlanId], references: [id], onDelete: Cascade)
   order          Int
   stakeholder    String // legacy free-text name/label; prefer personId once set
   personId       String?
-  person         Person? @relation(fields: [personId], references: [id], onDelete: SetNull)
+  person         Person?  @relation(fields: [personId], references: [id], onDelete: SetNull)
   role           String
   responsibility String
   accessRequired String
+  // Stakeholder-analysis fields (power/interest grid) — turns this register
+  // into a lightweight stakeholder management plan instead of just a system
+  // access matrix. Defaulted to "Medium" (a neutral starting point) rather
+  // than nullable "unclassified", matching how other status-like fields in
+  // this schema default to a real value instead of modeling an unset state.
+  influence      String   @default("Medium")
+  interest       String   @default("Medium")
+  // Auto-maintained (not user-set) so "is this being kept current" has a
+  // real, unforgeable answer — a manually-set "last reviewed" field can be
+  // bumped once and then silently go stale if a PM forgets to re-touch it
+  // after a real edit.
+  updatedAt      DateTime @default(now()) @updatedAt
 }
 
 model CommsRow {
-  id        String @id @default(cuid())
-  pmPlanId  String
-  pmPlan    PMPlan @relation(fields: [pmPlanId], references: [id], onDelete: Cascade)
-  order     Int
-  audience  String
-  frequency String
-  channel   String
-  content   String
+  id             String   @id @default(cuid())
+  pmPlanId       String
+  pmPlan         PMPlan   @relation(fields: [pmPlanId], references: [id], onDelete: Cascade)
+  order          Int
+  audience       String
+  frequency      String
+  channel        String
+  content        String
+  // Links this row to the specific stakeholder it's engaging, not just a
+  // broad audience label — lets two stakeholders in the same audience
+  // bucket (e.g. both "Client") be tracked with genuinely different
+  // engagement/communication forms instead of sharing one row.
+  personId       String?
+  person         Person?  @relation(fields: [personId], references: [id], onDelete: SetNull)
+  updatedAt      DateTime @default(now()) @updatedAt
 }
 
 model RaciRow {
@@ -731,6 +750,7 @@ model Person {
   checklistOwners         ChecklistItem[]
   riskOwners              RiskItem[]
   stakeholderRows         StakeholderRow[]
+  commsRows               CommsRow[]
   decisionsMade           DecisionLogItem[]
   actionItemOwner         ActionItem[]
   presalesDecisionsMade   PresalesDecisionItem[]

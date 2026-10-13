@@ -1,8 +1,10 @@
 "use client";
 
 import { useTransition } from "react";
-import { InlineText } from "@/components/ui/inline-edit";
+import { InlineText, InlineSelect } from "@/components/ui/inline-edit";
 import { PersonPicker } from "@/components/resourcing/person-picker";
+import { STAKEHOLDER_INFLUENCE_LEVELS, STAKEHOLDER_INTEREST_LEVELS } from "@/lib/constants";
+import { formatShortDate } from "@/lib/format";
 import { addStakeholderRow, updateStakeholderRow, deleteStakeholderRow } from "@/app/projects/[projectId]/pm-plan/pmplan-actions";
 
 export type StakeholderRowData = {
@@ -12,6 +14,9 @@ export type StakeholderRowData = {
   role: string;
   responsibility: string;
   accessRequired: string;
+  influence: string;
+  interest: string;
+  updatedAt: Date | string;
 };
 
 export function StakeholdersTable({
@@ -37,6 +42,9 @@ export function StakeholdersTable({
             <th className="px-3 py-2 font-medium min-w-[120px]">Role</th>
             <th className="px-3 py-2 font-medium min-w-[200px]">Responsibility</th>
             <th className="px-3 py-2 font-medium min-w-[140px]">Access Required</th>
+            <th className="px-3 py-2 font-medium min-w-[100px]">Influence</th>
+            <th className="px-3 py-2 font-medium min-w-[100px]">Interest</th>
+            <th className="px-3 py-2 font-medium min-w-[110px]">Last Updated</th>
             <th className="px-3 py-2 font-medium w-8" />
           </tr>
         </thead>
@@ -58,6 +66,21 @@ export function StakeholdersTable({
               <td className="px-3 py-1.5">
                 <InlineText value={r.accessRequired} onSave={(v) => updateStakeholderRow(r.id, projectId, { accessRequired: v })} />
               </td>
+              <td className="px-3 py-1.5">
+                <InlineSelect
+                  value={r.influence}
+                  options={STAKEHOLDER_INFLUENCE_LEVELS}
+                  onSave={(v) => updateStakeholderRow(r.id, projectId, { influence: v })}
+                />
+              </td>
+              <td className="px-3 py-1.5">
+                <InlineSelect
+                  value={r.interest}
+                  options={STAKEHOLDER_INTEREST_LEVELS}
+                  onSave={(v) => updateStakeholderRow(r.id, projectId, { interest: v })}
+                />
+              </td>
+              <td className="px-3 py-1.5 text-xs text-slate-500 whitespace-nowrap">{formatShortDate(r.updatedAt)}</td>
               <td className="px-3 py-1.5">
                 <button
                   onClick={() => startTransition(() => deleteStakeholderRow(r.id, projectId))}
