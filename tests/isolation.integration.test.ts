@@ -356,7 +356,7 @@ describe("isolation boundary", () => {
   });
 
   it("sanity check: PM-A CAN add a milestone and rename it", async () => {
-    const { createMilestone, updateMilestone } = await import("@/app/projects/[projectId]/delivery/milestones/milestone-actions");
+    const { createMilestone, updateMilestone } = await import("@/app/projects/[projectId]/milestones/milestone-actions");
     actAs(pmAUserId);
 
     const created = await createMilestone(projectA.id, { name: "[TEST] Beta Signoff", type: "DEVELOPMENT" });
@@ -369,7 +369,7 @@ describe("isolation boundary", () => {
   });
 
   it("guessed-ID attack: PM-A cannot add a milestone to Project B, or rename one that belongs to it", async () => {
-    const { createMilestone, updateMilestone } = await import("@/app/projects/[projectId]/delivery/milestones/milestone-actions");
+    const { createMilestone, updateMilestone } = await import("@/app/projects/[projectId]/milestones/milestone-actions");
 
     const milestoneInB = await prisma.milestone.create({
       data: { projectId: projectB.id, name: "[TEST] B milestone", type: "DEVELOPMENT" },

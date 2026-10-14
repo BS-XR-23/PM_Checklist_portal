@@ -5,6 +5,7 @@ import Link from "next/link";
 import clsx from "clsx";
 import { formatPct, formatDate } from "@/lib/format";
 import { STATUS_COLORS } from "@/lib/colors";
+import { MILESTONE_TYPE_LABELS } from "@/lib/constants";
 import { SectionHeader } from "@/components/ui/section-header";
 import { IconChevronDown, IconChart, IconGrid, IconDollar, IconLayers, IconClock, IconClipboardList } from "@/components/layout/icons";
 import { StatusPieChart } from "@/components/charts/status-pie-chart";
@@ -142,19 +143,26 @@ export function DetailedReporting({
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-xs text-slate-500 border-b border-slate-100 bg-slate-50">
-                  <th className="px-3 py-2 font-medium">Checklist</th>
-                  <th className="px-3 py-2 font-medium">Stage / Category</th>
                   <th className="px-3 py-2 font-medium">Milestone</th>
-                  <th className="px-3 py-2 font-medium">Actual Date</th>
+                  <th className="px-3 py-2 font-medium">Type</th>
+                  <th className="px-3 py-2 font-medium">Due</th>
+                  <th className="px-3 py-2 font-medium">Actual</th>
                   <th className="px-3 py-2 font-medium">Status</th>
                 </tr>
               </thead>
               <tbody>
+                {milestonesList.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="px-3 py-4 text-center text-sm text-slate-400">
+                      No milestones yet — add them on the Milestones &amp; Payments tab.
+                    </td>
+                  </tr>
+                )}
                 {milestonesList.map((m) => (
                   <tr key={m.id} className="border-b border-slate-50 last:border-0">
-                    <td className="px-3 py-1.5 text-slate-500 whitespace-nowrap">{m.source}</td>
-                    <td className="px-3 py-1.5 text-slate-500 whitespace-nowrap">{m.stage}</td>
-                    <td className="px-3 py-1.5 text-slate-800 font-medium whitespace-nowrap">{m.milestoneName}</td>
+                    <td className="px-3 py-1.5 text-slate-800 font-medium whitespace-nowrap">{m.name}</td>
+                    <td className="px-3 py-1.5 text-slate-500 whitespace-nowrap">{MILESTONE_TYPE_LABELS[m.type] ?? m.type}</td>
+                    <td className="px-3 py-1.5 text-slate-500 whitespace-nowrap">{formatDate(m.dueDate)}</td>
                     <td className="px-3 py-1.5 text-slate-500 whitespace-nowrap">{formatDate(m.actualDate)}</td>
                     <td className="px-3 py-1.5">
                       <span

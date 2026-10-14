@@ -5,6 +5,7 @@
 // used its own story-point SPI and competency CPI).
 import { checklistCompletionPct, competencyCpi, riskScore, sprintTotalsFor, type SprintForBudget } from "@/lib/calculations";
 import type { Rag } from "@/lib/rag";
+import { isMilestoneDone, milestoneDueDate } from "@/lib/milestones";
 
 /** SPI at or above this is on schedule; below it is AMBER, and below SPI_RED_BELOW is RED. */
 export const SPI_AMBER_BELOW = 1.0;
@@ -97,14 +98,20 @@ export function countOpenHighRisks(risks: { type: string; status: string; probab
   ).length;
 }
 
-/** Milestones not done whose planned date has already passed. */
-export function countOverdueMilestones(
-  milestones: { status: string; plannedDate: Date | null }[],
-  today: Date = new Date()
-): number {
-  return milestones.filter(
-    (m) => m.status !== "COMPLETED" && m.status !== "NOT_APPLICABLE" && m.plannedDate != null && m.plannedDate < today
-  ).length;
+type MilestoneDates = { status: string; plannedDate: Date | null; forecastDate?: Date | null };
+
+/**
+ * Milestones not done whose due date (forecast if re-forecast, else planned
+ * — see milestoneDueDate) is before today. Same rule as summarizeMilestones'
+ * overdue list, so Health and the Dashboard never disagree.
+ */
+export function countOverdueMilestones(milestones: MilestoneDates[], today: Date = new Date()): number {
+  const startOfToday = new Date(today);
+  startOfToday.setHours(0, 0, 0, 0);
+  return milestones.filter((m) => {
+    const due = milestoneDueDate({ plannedDate: m.plannedDate, forecastDate: m.forecastDate ?? null });
+    return !isMilestoneDone(m) && due != null && due < startOfToday;
+  }).length;
 }
 
 export type ProjectHealth = {
@@ -130,7 +137,7 @@ export type ProjectHealth = {
 export function computeProjectHealth(input: {
   sprints: SprintForBudget[];
   risks: { type: string; status: string; probability: string; impact: string }[];
-  milestones: { status: string; plannedDate: Date | null }[];
+  milestones: MilestoneDates[];
   today?: Date;
 }): ProjectHealth {
   const { spi, effortIndex } = deliveryIndices(input.sprints);

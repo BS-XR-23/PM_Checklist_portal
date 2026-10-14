@@ -16,14 +16,14 @@ export async function GET(_req: NextRequest, { params }: { params: { projectId: 
   // those tabs too, same rule the page itself applies. Deliverables/
   // Resources/Gates have no separate module (PMPlan-owned data), so they
   // follow PM_PLAN access alone, same as Stakeholders/Comms/RACI below.
-  const [riskAccess, depAccess, deliveryAccess] = await Promise.all([
+  const [riskAccess, depAccess, milestonesAccess] = await Promise.all([
     getModuleAccess(params.projectId, "RISK_REGISTER"),
     getModuleAccess(params.projectId, "DEPENDENCIES"),
-    getModuleAccess(params.projectId, "DELIVERY"),
+    getModuleAccess(params.projectId, "MILESTONES"),
   ]);
   const canSeeRisks = meetsLevel(riskAccess, "READ_LIMITED");
   const canSeeDeps = meetsLevel(depAccess, "READ_LIMITED");
-  const canSeeMilestones = meetsLevel(deliveryAccess, "READ_LIMITED");
+  const canSeeMilestones = meetsLevel(milestonesAccess, "READ_LIMITED");
 
   const project = await prisma.project.findUnique({ where: { id: params.projectId } });
   if (!project) return new NextResponse("Not found", { status: 404 });

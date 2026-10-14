@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireModuleAccess, getModuleAccess } from "@/lib/rbac";
 import { toSprintsForBudget, sprintTotalsFor } from "@/lib/calculations";
 import { computeProjectHealth, deliveryIndices, deliveryPct } from "@/lib/project-health";
+import { isMilestoneDone, milestoneDueDate } from "@/lib/milestones";
 import { StatTile } from "@/components/ui/stat-tile";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { SectionHeader } from "@/components/ui/section-header";
@@ -33,7 +34,7 @@ export default async function DeliveryOverviewPage({ params }: { params: { proje
   ]);
   const projectId = params.projectId;
 
-  const [wbsTasks, sprints, milestones, releases, uatCases, uatDefects, risks, paymentMilestoneItems] = await Promise.all([
+  const [wbsTasks, sprints, milestones, releases, uatCases, uatDefects, risks] = await Promise.all([
     prisma.wbsTask.findMany({ where: { projectId } }),
     prisma.sprint.findMany({
       where: { projectId },
@@ -41,19 +42,14 @@ export default async function DeliveryOverviewPage({ params }: { params: { proje
       include: { tasks: { include: { person: { include: { roleRate: true } } } } },
       relationLoadStrategy: "join",
     }),
-    // payment: null — Overview's Milestone Summary reflects Delivery's own
-    // development-checkpoint milestones only, never the unrelated
-    // "Milestones & Payments" feature's payment-tranche-linked ones.
-    prisma.milestone.findMany({ where: { projectId, payment: null }, orderBy: { plannedDate: "asc" } }),
+    // The project's one milestone list (Milestones & Payments tab) — the
+    // same rows Dashboard, Portfolio, and Health read.
+    prisma.milestone.findMany({ where: { projectId }, orderBy: { plannedDate: "asc" } }),
     prisma.release.findMany({ where: { projectId }, orderBy: { createdAt: "desc" } }),
     prisma.uatCase.findMany({ where: { projectId } }),
     prisma.uatDefect.findMany({ where: { projectId } }),
     // Health inputs — same sources Dashboard/Portfolio feed computeProjectHealth.
     prisma.riskItem.findMany({ where: { projectId }, select: { type: true, status: true, probability: true, impact: true } }),
-    prisma.checklistItem.findMany({
-      where: { projectId, milestonePayment: { isNot: null } },
-      select: { status: true, plannedDate: true },
-    }),
   ]);
 
   // --- Execution KPIs: task counts (same derivation as the Tasks tab) ---
@@ -70,7 +66,7 @@ export default async function DeliveryOverviewPage({ params }: { params: { proje
   // lib/project-health.ts, identical to Dashboard, Projects, and Portfolio.
   const sprintsForBudget = toSprintsForBudget(sprints);
   const { spi, effortIndex, scheduleVariancePts } = deliveryIndices(sprintsForBudget);
-  const health = computeProjectHealth({ sprints: sprintsForBudget, risks, milestones: paymentMilestoneItems });
+  const health = computeProjectHealth({ sprints: sprintsForBudget, risks, milestones });
 
   const currentSprint =
     sprints.find((s) => s.startedAt && !s.closedAt) ??
@@ -92,16 +88,21 @@ export default async function DeliveryOverviewPage({ params }: { params: { proje
   const forecastEnd = latestMilestoneForecast && plannedEnd && latestMilestoneForecast > plannedEnd ? latestMilestoneForecast : plannedEnd;
 
   // --- Milestone summary ---
-  const now = new Date();
+  // Due date = forecast if re-forecast, else planned — same rule as the
+  // Dashboard/Portfolio/Health (lib/milestones.ts).
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
   const currentMilestone =
-    milestones.find((m) => m.status === "IN_PROGRESS") ??
-    milestones.find((m) => m.status !== "COMPLETED" && m.status !== "NOT_APPLICABLE") ??
-    null;
+    milestones.find((m) => m.status === "IN_PROGRESS") ?? milestones.find((m) => !isMilestoneDone(m)) ?? null;
   const upcomingMilestone =
-    milestones.find((m) => m.id !== currentMilestone?.id && m.status !== "COMPLETED" && m.plannedDate && m.plannedDate >= now) ?? null;
-  const delayedMilestones = milestones.filter(
-    (m) => m.status === "DELAYED" || (m.status !== "COMPLETED" && m.plannedDate && m.plannedDate < now)
-  );
+    milestones.find((m) => {
+      const due = milestoneDueDate(m);
+      return m.id !== currentMilestone?.id && !isMilestoneDone(m) && due != null && due >= startOfToday;
+    }) ?? null;
+  const delayedMilestones = milestones.filter((m) => {
+    const due = milestoneDueDate(m);
+    return !isMilestoneDone(m) && (m.status === "DELAYED" || (due != null && due < startOfToday));
+  });
   const recentlyCompleted = [...milestones]
     .filter((m) => m.status === "COMPLETED")
     .sort((a, b) => (b.actualDate?.getTime() ?? 0) - (a.actualDate?.getTime() ?? 0))[0];
@@ -248,10 +249,10 @@ export default async function DeliveryOverviewPage({ params }: { params: { proje
           <SectionHeader icon={<IconFolder />} iconWrapClass="bg-blue-50 text-blue-600" title="Milestone Summary" />
           <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
             <SummaryRow label="Current" value={currentMilestone?.name} status={currentMilestone?.status as ItemStatus | undefined} />
-            <SummaryRow label="Upcoming" value={upcomingMilestone?.name} date={upcomingMilestone?.plannedDate ?? null} />
+            <SummaryRow label="Upcoming" value={upcomingMilestone?.name} date={upcomingMilestone ? milestoneDueDate(upcomingMilestone) : null} />
             <SummaryRow label="Delayed" value={delayedMilestones.length ? `${delayedMilestones.length} milestone(s)` : "None"} />
             <SummaryRow label="Recently Completed" value={recentlyCompleted?.name} date={recentlyCompleted?.actualDate ?? null} />
-            <Link href={`/projects/${projectId}/pm-plan`} className="text-xs font-medium text-indigo-600 hover:underline block pt-1">
+            <Link href={`/projects/${projectId}/milestones`} className="text-xs font-medium text-indigo-600 hover:underline block pt-1">
               View all milestones →
             </Link>
           </div>

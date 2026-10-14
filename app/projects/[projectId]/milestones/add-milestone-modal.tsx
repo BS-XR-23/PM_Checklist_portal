@@ -1,20 +1,24 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { CHECKLIST_TYPES, CHECKLIST_TYPE_BY_KEY, type ChecklistType } from "@/lib/checklist-types";
-import { addMilestone } from "./milestone-actions";
+import type { MilestoneType } from "@prisma/client";
+import { MILESTONE_TYPES, MILESTONE_TYPE_LABELS } from "@/lib/constants";
+import { createMilestone } from "./milestone-actions";
 
 export function AddMilestoneModal({ projectId }: { projectId: string }) {
   const [open, setOpen] = useState(false);
-  const [checklistType, setChecklistType] = useState<ChecklistType>("PM");
-  const stages = CHECKLIST_TYPE_BY_KEY[checklistType].stageOrder;
-  const [stage, setStage] = useState<string>(stages[0]);
   const [name, setName] = useState("");
+  const [type, setType] = useState<MilestoneType>("DEVELOPMENT");
+  const [plannedDate, setPlannedDate] = useState("");
+  const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
-  function changeType(next: ChecklistType) {
-    setChecklistType(next);
-    setStage(CHECKLIST_TYPE_BY_KEY[next].stageOrder[0]);
+  function close() {
+    setOpen(false);
+    setName("");
+    setType("DEVELOPMENT");
+    setPlannedDate("");
+    setError(null);
   }
 
   if (!open) {
@@ -33,49 +37,49 @@ export function AddMilestoneModal({ projectId }: { projectId: string }) {
       <div className="bg-white rounded-lg shadow-lg max-w-md w-full p-5 space-y-3">
         <h3 className="text-sm font-semibold text-slate-900">Add Milestone</h3>
         <p className="text-xs text-slate-500">
-          Creates a new checklist item carrying a payment tranche — appears on both the Milestones page and the
-          checklist you pick below.
+          A delivery commitment shared with the client. Set its payment %, owner, and dates in the table afterward.
         </p>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Checklist</label>
-            <select
-              value={checklistType}
-              onChange={(e) => changeType(e.target.value as ChecklistType)}
-              className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm"
-            >
-              {CHECKLIST_TYPES.map((c) => (
-                <option key={c.key} value={c.key}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Stage</label>
-            <select value={stage} onChange={(e) => setStage(e.target.value)} className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm">
-              {stages.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">Milestone Name</label>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Beta Release Signoff"
+            placeholder="e.g. Phase 1 MVP Delivered"
             className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm"
           />
         </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Type</label>
+            <select
+              value={type}
+              onChange={(e) => setType(e.target.value as MilestoneType)}
+              className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm"
+            >
+              {MILESTONE_TYPES.map((t) => (
+                <option key={t} value={t}>
+                  {MILESTONE_TYPE_LABELS[t]}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Planned Date</label>
+            <input
+              type="date"
+              value={plannedDate}
+              onChange={(e) => setPlannedDate(e.target.value)}
+              className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm"
+            />
+          </div>
+        </div>
+
+        {error && <p className="text-xs text-red-600">{error}</p>}
 
         <div className="flex justify-end gap-2 pt-1">
           <button
-            onClick={() => setOpen(false)}
+            onClick={close}
             disabled={pending}
             className="rounded-md border border-slate-300 text-slate-600 text-sm font-medium px-3 py-1.5 hover:bg-slate-50"
           >
@@ -84,9 +88,12 @@ export function AddMilestoneModal({ projectId }: { projectId: string }) {
           <button
             onClick={() =>
               startTransition(async () => {
-                await addMilestone(projectId, { checklistType, stage, name: name.trim() || "New Milestone" });
-                setOpen(false);
-                setName("");
+                try {
+                  await createMilestone(projectId, { name: name.trim(), type, plannedDate: plannedDate || null });
+                  close();
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : "Failed to add milestone.");
+                }
               })
             }
             disabled={pending || !name.trim()}

@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/rbac";
 import { getReminderItems } from "@/lib/notifications";
 import { PORTFOLIO_PROJECT_INCLUDE, buildPortfolioData } from "@/lib/portfolio-data";
+import { summarizeMilestones } from "@/lib/milestones";
 import { AppShell } from "@/components/layout/app-shell";
 import { ProjectFilters, type ProjectCardData, type ProjectStats } from "./project-filters";
 
@@ -44,13 +45,9 @@ export default async function ProjectsPage() {
 
   const extrasById = new Map(
     projects.map((p) => {
-      const applicable = p.checklistItems.filter((i) => i.status !== "NOT_APPLICABLE");
-      // Derived "end date" — latest Actual Date across the checklist, same
-      // definition the single-project Dashboard uses.
-      const endDate = applicable.reduce<Date | null>((latest, i) => {
-        if (!i.actualDate) return latest;
-        return !latest || i.actualDate > latest ? i.actualDate : latest;
-      }, null);
+      // Planned end = latest milestone date — same definition as the
+      // single-project Dashboard's "Planned End" (lib/milestones.ts).
+      const endDate = summarizeMilestones(p.milestones.map((m) => ({ ...m, ownerName: null })), p.contractValue).plannedEnd;
       // Governance %/Delivery %/health come from the shared portfolio row
       // (lib/portfolio-data.ts → lib/project-health.ts), not recomputed here.
       return [

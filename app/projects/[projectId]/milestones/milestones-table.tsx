@@ -1,41 +1,33 @@
 "use client";
 
-import { InlinePercent, InlineSelect, InlineText } from "@/components/ui/inline-edit";
+import { InlineDate, InlinePercent, InlineSelect, InlineText } from "@/components/ui/inline-edit";
 import { NotesCell } from "@/components/ui/notes-cell";
 import { RowActionsMenu } from "@/components/ui/row-actions-menu";
-import { IconCalendar } from "@/components/layout/icons";
-import { STATUS_COLORS } from "@/lib/colors";
-import { INVOICE_STATUSES, SIGNOFF_STATUSES, type ItemStatus } from "@/lib/constants";
-import type { ChecklistType } from "@/lib/checklist-types";
-import { formatDate, formatMoney, formatPct } from "@/lib/format";
-import { trancheAmount } from "@/lib/calculations";
-import { updateMilestonePayment, updateMilestoneName } from "./milestone-actions";
+import { PersonPicker } from "@/components/resourcing/person-picker";
+import { STATUS_COLORS, SLIPPED_FLAG_COLOR } from "@/lib/colors";
+import { INVOICE_STATUSES, ITEM_STATUSES, MILESTONE_TYPE_LABELS, SIGNOFF_STATUSES, type ItemStatus } from "@/lib/constants";
+import { formatDate, formatMoney, formatPct, toDateInputValue } from "@/lib/format";
+import { isSlipped, trancheAmount } from "@/lib/calculations";
+import { updateMilestone, updateMilestonePayment, deleteMilestone } from "./milestone-actions";
 
 export type MilestoneTableRow = {
   id: string;
-  checklistItemId: string;
+  name: string;
+  type: string;
+  plannedDate: Date | null;
+  forecastDate: Date | null;
+  actualDate: Date | null;
+  status: ItemStatus;
+  ownerPersonId: string | null;
+  ownerName: string | null;
   paymentPct: number;
   invoiceStatus: string;
   clientSignoff: string;
   notes: string | null; // null when stripped by READ_LIMITED access
-  checklistType: ChecklistType;
-  stage: string;
-  milestoneName: string;
-  actualDate: Date | null;
-  status: ItemStatus;
-};
-
-// DEV (Development Checklist) never actually appears here — its seed data
-// deliberately carries no milestoneName, so it can never produce a
-// MilestonePayment row (see lib/seed-data.ts) — but the entry is required
-// for type completeness now that ChecklistType includes it.
-const SOURCE_LABEL: Record<ChecklistType, string> = { PM: "PM", DELIVERY_QA: "Delivery & QA", DEVOPS: "DevOps", CREATIVE_XR: "Creative & XR", DEV: "Development" };
-const SOURCE_STYLE: Record<ChecklistType, string> = {
-  PM: "bg-indigo-50 text-indigo-700",
-  DELIVERY_QA: "bg-violet-50 text-violet-700",
-  DEVOPS: "bg-blue-50 text-blue-700",
-  CREATIVE_XR: "bg-pink-50 text-pink-700",
-  DEV: "bg-slate-100 text-slate-700",
+  // Checklist gates linked to this milestone (ChecklistItem.milestoneId) —
+  // internal checkpoints that should be done before it; display only.
+  gatesDone: number;
+  gatesTotal: number;
 };
 
 const SIGNOFF_STYLE: Record<string, { bg: string; text: string }> = {
@@ -53,6 +45,7 @@ export function MilestonesTable({
   totalAllocatedPct,
   allocationOff,
   rows,
+  people,
 }: {
   projectId: string;
   contractValue: number;
@@ -61,76 +54,143 @@ export function MilestonesTable({
   totalAllocatedPct: number;
   allocationOff: boolean;
   rows: MilestoneTableRow[];
+  people: { id: string; name: string }[];
 }) {
-  const maxPct = Math.max(...rows.map((r) => r.paymentPct), 0.0001);
   const totalTranche = rows.reduce((sum, r) => sum + trancheAmount(contractValue, r.paymentPct), 0);
+
+  if (rows.length === 0) {
+    return (
+      <div className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center">
+        <p className="text-sm font-medium text-slate-700">No milestones yet</p>
+        <p className="mt-1 text-xs text-slate-500">
+          Add the commitments this project delivers to the client — e.g. Phase 1 MVP, UAT Complete, Go-Live — and
+          split the contract&apos;s payment across them.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
       <div className="overflow-x-auto">
-        <table className="w-full text-sm min-w-[1100px]">
+        <table className="w-full text-sm min-w-[1500px]">
           <thead>
             <tr className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide bg-slate-50">
               <th className="px-3 py-2.5 w-10">#</th>
               <th className="px-3 py-2.5 min-w-[220px]">Milestone</th>
-              <th className="px-3 py-2.5 w-24">Source</th>
-              <th className="px-3 py-2.5 w-32">Payment %</th>
-              <th className="px-3 py-2.5 w-32">Tranche Amount</th>
-              <th className="px-3 py-2.5 w-36">Actual Date</th>
-              <th className="px-3 py-2.5 w-36">Invoice Status</th>
-              <th className="px-3 py-2.5 w-28">Client Signoff</th>
-              <th className="px-3 py-2.5 w-28">Notes</th>
-              <th className="px-3 py-2.5 w-14">Actions</th>
+              <th className="px-3 py-2.5 w-44">Owner</th>
+              <th className="px-3 py-2.5 w-36">Planned</th>
+              <th className="px-3 py-2.5 w-36">Forecast</th>
+              <th className="px-3 py-2.5 w-36">Actual</th>
+              <th className="px-3 py-2.5 w-36">Status</th>
+              <th className="px-3 py-2.5 w-28">Payment %</th>
+              <th className="px-3 py-2.5 w-28">Tranche</th>
+              <th className="px-3 py-2.5 w-36">Invoice</th>
+              <th className="px-3 py-2.5 w-32">Client Signoff</th>
+              <th className="px-3 py-2.5 w-24">Notes</th>
+              {canWrite && <th className="px-3 py-2.5 w-14" />}
             </tr>
           </thead>
           <tbody>
             {rows.map((m, i) => {
-              const statusColor = STATUS_COLORS[m.status];
+              const statusColor = STATUS_COLORS[m.status] ?? STATUS_COLORS.NOT_STARTED;
               const signoffColor = SIGNOFF_STYLE[m.clientSignoff] ?? SIGNOFF_STYLE["N/A"];
+              const slipped = isSlipped(m.plannedDate, m.forecastDate, m.status);
               return (
                 <tr key={m.id} className="border-t border-slate-100 align-top hover:bg-slate-50/40">
                   <td className="px-3 py-3 text-xs text-slate-400">{i + 1}</td>
 
                   <td className="px-3 py-3">
                     {canWrite ? (
-                      <InlineText value={m.milestoneName} onSave={(v) => updateMilestoneName(m.checklistItemId, projectId, v)} />
+                      <InlineText value={m.name} onSave={(v) => updateMilestone(m.id, projectId, { name: v })} />
                     ) : (
-                      <p className="text-sm font-medium text-slate-900">{m.milestoneName}</p>
+                      <p className="text-sm font-medium text-slate-900">{m.name}</p>
                     )}
                     <p className="text-xs text-slate-400 mt-0.5">
-                      {SOURCE_LABEL[m.checklistType]} Checklist — {m.stage}
+                      {MILESTONE_TYPE_LABELS[m.type] ?? m.type}
+                      {m.gatesTotal > 0 && (
+                        <span title="Checklist gates linked to this milestone">
+                          {" "}
+                          · Gates {m.gatesDone}/{m.gatesTotal}
+                        </span>
+                      )}
                     </p>
                   </td>
 
                   <td className="px-3 py-3">
-                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap ${SOURCE_STYLE[m.checklistType]}`}>
-                      {SOURCE_LABEL[m.checklistType]}
-                    </span>
+                    {canWrite ? (
+                      <div className="min-w-[160px]">
+                        <PersonPicker
+                          personId={m.ownerPersonId}
+                          legacyText={null}
+                          people={people}
+                          onSave={(personId) => updateMilestone(m.id, projectId, { ownerPersonId: personId })}
+                        />
+                      </div>
+                    ) : (
+                      <span className="text-sm text-slate-700">{m.ownerName ?? "—"}</span>
+                    )}
                   </td>
 
                   <td className="px-3 py-3">
-                    <div className="flex items-center gap-2">
-                      {canWrite ? (
-                        <InlinePercent value={m.paymentPct} onSave={(v) => updateMilestonePayment(m.id, projectId, { paymentPct: v })} />
-                      ) : (
-                        <span className="text-sm text-slate-700">{formatPct(m.paymentPct)}</span>
-                      )}
-                    </div>
-                    <div className="mt-1.5 h-1.5 w-20 rounded-full bg-slate-100 overflow-hidden">
-                      <div className="h-full rounded-full" style={{ width: `${(m.paymentPct / maxPct) * 100}%`, backgroundColor: statusColor.bg }} />
-                    </div>
+                    {canWrite ? (
+                      <InlineDate value={toDateInputValue(m.plannedDate)} onSave={(v) => updateMilestone(m.id, projectId, { plannedDate: v })} />
+                    ) : (
+                      <span className="text-sm text-slate-700">{formatDate(m.plannedDate)}</span>
+                    )}
+                  </td>
+
+                  <td className="px-3 py-3">
+                    {canWrite ? (
+                      <InlineDate value={toDateInputValue(m.forecastDate)} onSave={(v) => updateMilestone(m.id, projectId, { forecastDate: v })} />
+                    ) : (
+                      <span className="text-sm text-slate-700">{formatDate(m.forecastDate)}</span>
+                    )}
+                    {slipped && (
+                      <p className="text-[11px] font-medium mt-0.5" style={{ color: SLIPPED_FLAG_COLOR }}>
+                        ⚠ slipped past plan
+                      </p>
+                    )}
+                  </td>
+
+                  <td className="px-3 py-3">
+                    {canWrite ? (
+                      <InlineDate value={toDateInputValue(m.actualDate)} onSave={(v) => updateMilestone(m.id, projectId, { actualDate: v })} />
+                    ) : (
+                      <span className="text-sm text-slate-700">{formatDate(m.actualDate)}</span>
+                    )}
+                  </td>
+
+                  <td className="px-3 py-3">
+                    {canWrite ? (
+                      <InlineSelect
+                        value={m.status}
+                        options={ITEM_STATUSES}
+                        renderOption={(s) => STATUS_COLORS[s as ItemStatus]?.label ?? s}
+                        className="rounded-full px-2.5 py-1 text-xs font-medium border-0 focus:outline-none focus:ring-1 focus:ring-slate-400 cursor-pointer"
+                        style={{ backgroundColor: statusColor.bg, color: statusColor.text }}
+                        onSave={(v) => updateMilestone(m.id, projectId, { status: v })}
+                      />
+                    ) : (
+                      <span
+                        className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap"
+                        style={{ backgroundColor: statusColor.bg, color: statusColor.text }}
+                      >
+                        {statusColor.label}
+                      </span>
+                    )}
+                  </td>
+
+                  <td className="px-3 py-3">
+                    {canWrite ? (
+                      <InlinePercent value={m.paymentPct} onSave={(v) => updateMilestonePayment(m.id, projectId, { paymentPct: v })} />
+                    ) : (
+                      <span className="text-sm text-slate-700">{formatPct(m.paymentPct)}</span>
+                    )}
                   </td>
 
                   <td className="px-3 py-3">
                     <span className="font-medium text-slate-800">{formatMoney(trancheAmount(contractValue, m.paymentPct))}</span>
-                  </td>
-
-                  <td className="px-3 py-3">
-                    <div className="flex items-center gap-1.5 text-slate-400">
-                      <IconCalendar className="h-3.5 w-3.5 shrink-0" />
-                      <span className="text-sm text-slate-600">{formatDate(m.actualDate)}</span>
-                    </div>
-                    {!m.actualDate && <p className="text-[11px] text-slate-400 mt-0.5">(Planned)</p>}
                   </td>
 
                   <td className="px-3 py-3">
@@ -170,27 +230,28 @@ export function MilestonesTable({
                     )}
                   </td>
 
-                  <td className="px-3 py-3">
-                    {canWrite && (
+                  {canWrite && (
+                    <td className="px-3 py-3">
                       <RowActionsMenu
                         actions={[
                           {
-                            label: "Remove from Milestones",
-                            pendingLabel: "Removing...",
+                            label: "Delete milestone",
+                            pendingLabel: "Deleting...",
                             danger: true,
-                            onClick: () => updateMilestoneName(m.checklistItemId, projectId, ""),
+                            confirmMessage: `Delete milestone "${m.name}" and its payment details? This can't be undone.`,
+                            onClick: () => deleteMilestone(m.id, projectId),
                           },
                         ]}
                       />
-                    )}
-                  </td>
+                    </td>
+                  )}
                 </tr>
               );
             })}
           </tbody>
           <tfoot>
             <tr className="border-t border-slate-200 bg-slate-50 text-sm font-semibold text-slate-700">
-              <td className="px-3 py-3" colSpan={3}>
+              <td className="px-3 py-3" colSpan={7}>
                 Total
               </td>
               <td className="px-3 py-3" style={allocationOff ? { color: "#C00000" } : undefined}>
@@ -198,9 +259,7 @@ export function MilestonesTable({
                 {allocationOff && <span className="block text-[11px] font-normal">should total 100%</span>}
               </td>
               <td className="px-3 py-3">{formatMoney(totalTranche)}</td>
-              <td className="px-3 py-3 text-slate-400" colSpan={5}>
-                —
-              </td>
+              <td className="px-3 py-3" colSpan={canWrite ? 4 : 3} />
             </tr>
           </tfoot>
         </table>

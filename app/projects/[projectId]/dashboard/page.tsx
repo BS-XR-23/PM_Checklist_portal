@@ -124,13 +124,28 @@ export default async function DashboardPage({ params }: { params: { projectId: s
           value={data.deliveryPct != null ? formatPct(data.deliveryPct) : "—"}
           subtitle={data.deliveryPct == null ? "No WBS tasks yet" : undefined}
         />
-        <StatTile icon={<IconClock />} iconWrapClass="bg-emerald-50 text-emerald-600" label="End Date" value={data.endDate ? formatDate(data.endDate) : "—"} />
+        <StatTile
+          icon={<IconClock />}
+          iconWrapClass="bg-emerald-50 text-emerald-600"
+          label="Planned End"
+          value={data.plannedEnd ? formatDate(data.plannedEnd) : "—"}
+          subtitle={data.plannedEnd ? "Latest milestone date" : "No dated milestones yet"}
+        />
         <StatTile
           icon={<IconTarget />}
           iconWrapClass="bg-violet-50 text-violet-600"
           label="Next Milestone"
           value={data.nextMilestone?.name ?? "—"}
-          subtitle={data.nextMilestone ? formatDate(data.nextMilestone.date) : undefined}
+          subtitle={
+            <>
+              {data.nextMilestone ? formatDate(data.nextMilestone.date) : "Nothing upcoming"}
+              {data.overdueMilestones.length > 0 && (
+                <span className="block font-medium text-rose-600">
+                  {data.overdueMilestones.length} overdue
+                </span>
+              )}
+            </>
+          }
         />
       </div>
 
@@ -278,8 +293,8 @@ export default async function DashboardPage({ params }: { params: { projectId: s
             icon={<IconClock />}
             iconWrapClass="bg-emerald-50 text-emerald-600"
             label="Next Payment Due"
-            value={financial.nextPaymentDue ? formatDate(financial.nextPaymentDue) : "—"}
-            subtitle={financial.nextPaymentDue ? formatMoney(financial.nextPaymentAmount) : undefined}
+            value={financial.nextPayment ? financial.nextPayment.date ? formatDate(financial.nextPayment.date) : "Undated" : "—"}
+            subtitle={financial.nextPayment ? `${formatMoney(financial.nextPayment.amount)} · ${financial.nextPayment.name}` : "No un-invoiced tranches"}
           />
           <StatTile icon={<IconDollar />} iconWrapClass="bg-blue-50 text-blue-600" label="Total Contract Value" value={formatMoney(financial.contractValue)} />
           <StatTile icon={<IconDollar />} iconWrapClass="bg-emerald-50 text-emerald-600" label="Paid to Date" value={formatMoney(financial.paidAmount)} />

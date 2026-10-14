@@ -3,107 +3,166 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireModuleWrite, writeAudit } from "@/lib/rbac";
-import { CHECKLIST_TYPE_BY_KEY, type ChecklistType } from "@/lib/checklist-types";
+import type { MilestoneType } from "@prisma/client";
 
-export async function updateMilestonePayment(
-  id: string,
+// Milestones are the project's client-facing delivery commitments (MVP
+// delivered, UAT complete, Go-Live, ...) and the only thing that carries a
+// payment tranche, invoice status, and client sign-off. They have one home —
+// the "Milestones & Payments" tab — and are gated on the MILESTONES module.
+// PM Plan, Dashboard, Delivery, and Portfolio only read them.
+//
+// Checklist items tagged with a name are internal "gates", not milestones:
+// they never create or own a payment (see docs/FIX_PLAN.md, Phase 3).
+
+function revalidateMilestones(projectId: string) {
+  revalidatePath(`/projects/${projectId}/milestones`);
+  revalidatePath(`/projects/${projectId}/dashboard`);
+  revalidatePath(`/projects/${projectId}/delivery`);
+  revalidatePath(`/projects/${projectId}/pm-plan`);
+  revalidatePath(`/projects/${projectId}/activity`);
+}
+
+export async function createMilestone(
   projectId: string,
-  data: Partial<{ paymentPct: number; invoiceStatus: string; clientSignoff: string; notes: string }>
+  input: { name: string; type: MilestoneType; plannedDate?: string | null; ownerPersonId?: string | null }
 ) {
-  const existing = await prisma.milestonePayment.findUniqueOrThrow({
-    where: { id },
-    include: { checklistItem: true },
-  });
-  // Guessed-ID fix: authorize against the milestone's real project, not the caller's claim.
-  const realProjectId = existing.checklistItem.projectId;
-  const user = await requireModuleWrite(realProjectId, "MILESTONES");
-
-  await prisma.milestonePayment.update({
-    where: { id },
-    data: {
-      ...(data.paymentPct !== undefined ? { paymentPct: data.paymentPct } : {}),
-      ...(data.invoiceStatus !== undefined ? { invoiceStatus: data.invoiceStatus } : {}),
-      ...(data.clientSignoff !== undefined ? { clientSignoff: data.clientSignoff } : {}),
-      ...(data.notes !== undefined ? { notes: data.notes || null } : {}),
-    },
-  });
-
-  await writeAudit({
-    actor: user,
-    projectId: realProjectId,
-    action: "update",
-    entityType: "MilestonePayment",
-    entityId: id,
-    summary: `Updated milestone "${existing.checklistItem.milestoneName ?? id}"`,
-    diff: { before: existing, changes: data },
-  });
-
-  revalidatePath(`/projects/${projectId}/milestones`);
-  revalidatePath(`/projects/${projectId}/dashboard`);
-  revalidatePath(`/projects/${projectId}/activity`);
-}
-
-// milestoneName lives on ChecklistItem, not MilestonePayment — a milestone's
-// "name" is really the label on the checklist item it's attached to.
-export async function updateMilestoneName(checklistItemId: string, projectId: string, name: string) {
-  const existing = await prisma.checklistItem.findUniqueOrThrow({ where: { id: checklistItemId } });
-  const user = await requireModuleWrite(existing.projectId, "MILESTONES");
-
-  await prisma.checklistItem.update({ where: { id: checklistItemId }, data: { milestoneName: name } });
-
-  await writeAudit({
-    actor: user,
-    projectId: existing.projectId,
-    action: "update",
-    entityType: "ChecklistItem",
-    entityId: checklistItemId,
-    summary: `Renamed milestone "${existing.milestoneName ?? ""}" to "${name}"`,
-    diff: { before: { milestoneName: existing.milestoneName }, changes: { milestoneName: name } },
-  });
-
-  revalidatePath(`/projects/${projectId}/milestones`);
-  revalidatePath(`/projects/${projectId}/dashboard`);
-  revalidatePath(`/projects/${projectId}/activity`);
-}
-
-/** Creates a new custom checklist item that's also a payment milestone, in one step. */
-export async function addMilestone(projectId: string, input: { checklistType: ChecklistType; stage: string; name: string }) {
   const user = await requireModuleWrite(projectId, "MILESTONES");
 
-  const created = await prisma.$transaction(async (tx) => {
-    const { _max } = await tx.checklistItem.aggregate({
-      where: { projectId, type: input.checklistType },
-      _max: { order: true },
-    });
-
-    const item = await tx.checklistItem.create({
-      data: {
-        projectId,
-        type: input.checklistType,
-        order: (_max.order ?? 0) + 1,
-        stage: input.stage,
-        itemText: input.name,
-        milestoneName: input.name,
-        isCustom: true,
-      },
-    });
-
-    await tx.milestonePayment.create({ data: { checklistItemId: item.id, paymentPct: 0 } });
-
-    return item;
+  const { _max } = await prisma.milestone.aggregate({ where: { projectId }, _max: { order: true } });
+  // No payment row yet — updateMilestonePayment creates it the first time a
+  // payment field is set, so a milestone with no tranche carries no empty row.
+  const created = await prisma.milestone.create({
+    data: {
+      projectId,
+      name: input.name,
+      type: input.type,
+      order: (_max.order ?? 0) + 1,
+      plannedDate: input.plannedDate ? new Date(input.plannedDate) : null,
+      ownerPersonId: input.ownerPersonId || null,
+    },
   });
 
   await writeAudit({
     actor: user,
     projectId,
     action: "create",
-    entityType: "ChecklistItem",
+    entityType: "Milestone",
     entityId: created.id,
-    summary: `Added milestone "${input.name}" to "${input.stage}"`,
+    summary: `Added milestone "${input.name}"`,
   });
 
-  revalidatePath(`/projects/${projectId}/milestones`);
-  revalidatePath(`/projects/${projectId}/dashboard`);
-  revalidatePath(`/projects/${projectId}/activity`);
-  revalidatePath(`/projects/${projectId}/checklist/${CHECKLIST_TYPE_BY_KEY[input.checklistType].routeSegment}`);
+  revalidateMilestones(projectId);
+  return created;
+}
+
+export async function updateMilestone(
+  id: string,
+  _projectId: string,
+  data: Partial<{
+    name: string;
+    type: MilestoneType;
+    description: string | null;
+    plannedDate: string | null;
+    forecastDate: string | null;
+    actualDate: string | null;
+    status: string;
+    pctComplete: number;
+    ownerPersonId: string | null;
+    acceptanceCriteria: string | null;
+    dependenciesNote: string | null;
+  }>
+) {
+  const existing = await prisma.milestone.findUniqueOrThrow({ where: { id } });
+  // Guessed-ID fix: authorize against the milestone's real project, not the caller's claim.
+  const user = await requireModuleWrite(existing.projectId, "MILESTONES");
+
+  await prisma.milestone.update({
+    where: { id },
+    data: {
+      ...(data.name !== undefined ? { name: data.name } : {}),
+      ...(data.type !== undefined ? { type: data.type } : {}),
+      ...(data.description !== undefined ? { description: data.description || null } : {}),
+      ...(data.plannedDate !== undefined ? { plannedDate: data.plannedDate ? new Date(data.plannedDate) : null } : {}),
+      ...(data.forecastDate !== undefined ? { forecastDate: data.forecastDate ? new Date(data.forecastDate) : null } : {}),
+      ...(data.actualDate !== undefined ? { actualDate: data.actualDate ? new Date(data.actualDate) : null } : {}),
+      ...(data.status !== undefined ? { status: data.status } : {}),
+      ...(data.pctComplete !== undefined ? { pctComplete: data.pctComplete } : {}),
+      ...(data.ownerPersonId !== undefined ? { ownerPersonId: data.ownerPersonId || null } : {}),
+      ...(data.acceptanceCriteria !== undefined ? { acceptanceCriteria: data.acceptanceCriteria || null } : {}),
+      ...(data.dependenciesNote !== undefined ? { dependenciesNote: data.dependenciesNote || null } : {}),
+    },
+  });
+
+  await writeAudit({
+    actor: user,
+    projectId: existing.projectId,
+    action: "update",
+    entityType: "Milestone",
+    entityId: id,
+    summary: `Updated milestone "${existing.name}"`,
+    diff: { before: existing, changes: data },
+  });
+
+  revalidateMilestones(existing.projectId);
+}
+
+/** Payment %, invoice status, client sign-off, notes — creates the milestone's payment row on first edit. */
+export async function updateMilestonePayment(
+  milestoneId: string,
+  _projectId: string,
+  data: Partial<{ paymentPct: number; invoiceStatus: string; clientSignoff: string; notes: string }>
+) {
+  const milestone = await prisma.milestone.findUniqueOrThrow({ where: { id: milestoneId }, include: { payment: true } });
+  const user = await requireModuleWrite(milestone.projectId, "MILESTONES");
+
+  const changes = {
+    ...(data.paymentPct !== undefined ? { paymentPct: data.paymentPct } : {}),
+    ...(data.invoiceStatus !== undefined ? { invoiceStatus: data.invoiceStatus } : {}),
+    ...(data.clientSignoff !== undefined ? { clientSignoff: data.clientSignoff } : {}),
+    ...(data.notes !== undefined ? { notes: data.notes || null } : {}),
+  };
+  await prisma.milestonePayment.upsert({
+    where: { milestoneId },
+    create: { milestoneId, ...changes },
+    update: changes,
+  });
+
+  await writeAudit({
+    actor: user,
+    projectId: milestone.projectId,
+    action: "update",
+    entityType: "MilestonePayment",
+    entityId: milestone.payment?.id ?? milestoneId,
+    summary: `Updated payment for milestone "${milestone.name}"`,
+    diff: { before: milestone.payment, changes: data },
+  });
+
+  revalidateMilestones(milestone.projectId);
+}
+
+export async function deleteMilestone(id: string, _projectId: string) {
+  const existing = await prisma.milestone.findUniqueOrThrow({ where: { id }, include: { payment: true } });
+  const user = await requireModuleWrite(existing.projectId, "MILESTONES");
+
+  // Deleting a milestone deletes its payment row (onDelete: Cascade) — never
+  // silently throw away a tranche that's already been billed or paid.
+  if (existing.payment && existing.payment.invoiceStatus !== "Not Invoiced") {
+    throw new Error(
+      `"${existing.name}" is already ${existing.payment.invoiceStatus.toLowerCase()} — set its invoice status back to Not Invoiced first if you really mean to delete it.`
+    );
+  }
+
+  await prisma.milestone.delete({ where: { id } });
+
+  await writeAudit({
+    actor: user,
+    projectId: existing.projectId,
+    action: "delete",
+    entityType: "Milestone",
+    entityId: id,
+    summary: `Deleted milestone "${existing.name}"`,
+    diff: { before: existing },
+  });
+
+  revalidateMilestones(existing.projectId);
 }

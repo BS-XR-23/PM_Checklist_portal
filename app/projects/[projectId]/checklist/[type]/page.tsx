@@ -74,7 +74,7 @@ export default async function ChecklistPage({ params }: { params: { projectId: s
           title="How to fill this in"
           points={[
             <>Marking an item <strong>Not Applicable</strong> removes it from the completion % entirely — it counts as out of scope, not as incomplete.</>,
-            <>Tagging an item with a <strong>Milestone Name</strong> is what creates a row on the project&apos;s Milestones &amp; Payments tab (that tab&apos;s <strong>+ Add Milestone</strong> button does the same thing in one step).</>,
+            <>An item with a <strong>Gate</strong> label is an internal checkpoint (e.g. DoR Approved). Gates don&apos;t carry payment — client-facing milestones and payment tranches live on the <strong>Milestones &amp; Payments</strong> tab.</>,
             <>A read-limited viewer sees every item&apos;s Notes stripped out — that&apos;s deliberate, not missing data.</>,
           ]}
         />

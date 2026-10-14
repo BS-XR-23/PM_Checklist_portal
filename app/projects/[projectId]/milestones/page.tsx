@@ -2,11 +2,11 @@ import { prisma } from "@/lib/prisma";
 import { formatMoney, formatPct } from "@/lib/format";
 import { trancheAmount } from "@/lib/calculations";
 import type { ItemStatus } from "@/lib/constants";
-import type { ChecklistType } from "@/lib/checklist-types";
+import { countOverdueMilestones } from "@/lib/project-health";
 import { requireModuleAccess } from "@/lib/rbac";
 import { StatTile } from "@/components/ui/stat-tile";
 import { PageGuide } from "@/components/ui/page-guide";
-import { IconLayers, IconCheckCircle, IconTarget, IconCircle, IconDollar } from "@/components/layout/icons";
+import { IconLayers, IconCheckCircle, IconTarget, IconAlertCircle, IconDollar } from "@/components/layout/icons";
 import { ContractValueField } from "./contract-value-field";
 import { MilestonesTable } from "./milestones-table";
 import { AddMilestoneModal } from "./add-milestone-modal";
@@ -16,26 +16,31 @@ export default async function MilestonesPage({ params }: { params: { projectId: 
   const canWrite = access === "WRITE";
   const notesHidden = access === "READ_LIMITED";
 
-  // Independent of each other — fetched concurrently instead of as two
-  // serialized round trips.
-  const [project, milestones] = await Promise.all([
+  // Independent of each other — fetched concurrently instead of serialized round trips.
+  const [project, milestones, people] = await Promise.all([
     prisma.project.findUniqueOrThrow({ where: { id: params.projectId } }),
-    prisma.milestonePayment.findMany({
-      where: { checklistItem: { projectId: params.projectId } },
-      include: { checklistItem: true },
-      orderBy: [{ checklistItem: { type: "asc" } }, { checklistItem: { order: "asc" } }],
+    prisma.milestone.findMany({
+      where: { projectId: params.projectId },
+      include: {
+        payment: true,
+        ownerPerson: { select: { name: true } },
+        checklistItems: { select: { status: true } }, // linked gates
+      },
+      orderBy: [{ plannedDate: { sort: "asc", nulls: "last" } }, { order: "asc" }],
     }),
+    canWrite ? prisma.person.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }) : Promise.resolve([]),
   ]);
 
-  const totalAllocatedPct = milestones.reduce((sum, m) => sum + m.paymentPct, 0);
+  const pctOf = (m: (typeof milestones)[number]) => m.payment?.paymentPct ?? 0;
+  const totalAllocatedPct = milestones.reduce((sum, m) => sum + pctOf(m), 0);
   const paidAmount = milestones
-    .filter((m) => m.invoiceStatus === "Paid")
-    .reduce((sum, m) => sum + trancheAmount(project.contractValue, m.paymentPct), 0);
+    .filter((m) => m.payment?.invoiceStatus === "Paid")
+    .reduce((sum, m) => sum + trancheAmount(project.contractValue, pctOf(m)), 0);
 
   const totalMilestones = milestones.length;
-  const completedCount = milestones.filter((m) => m.checklistItem.status === "COMPLETED").length;
-  const inProgressCount = milestones.filter((m) => m.checklistItem.status === "IN_PROGRESS").length;
-  const notStartedCount = milestones.filter((m) => m.checklistItem.status === "NOT_STARTED").length;
+  const completedCount = milestones.filter((m) => m.status === "COMPLETED").length;
+  const inProgressCount = milestones.filter((m) => m.status === "IN_PROGRESS").length;
+  const overdueCount = countOverdueMilestones(milestones);
   const remainingAmount = project.contractValue - paidAmount;
 
   const allocationOff = Math.round(totalAllocatedPct * 1000) !== 1000; // != 100%, tolerant of float error
@@ -46,8 +51,8 @@ export default async function MilestonesPage({ params }: { params: { projectId: 
         <div>
           <h2 className="text-base font-semibold text-slate-900">Milestones & Payments</h2>
           <p className="text-sm text-slate-500">
-            Payment milestones come from checklist items tagged with a milestone name — set payment %, invoice
-            status, and sign-off here.
+            The project&apos;s client-facing delivery commitments — dates, status, payment tranche, invoice, and
+            client sign-off in one place.
           </p>
         </div>
         {canWrite && <AddMilestoneModal projectId={project.id} />}
@@ -55,11 +60,11 @@ export default async function MilestonesPage({ params }: { params: { projectId: 
 
       <PageGuide
         id="milestones-payments"
-        title="This is payment tracking, not delivery tracking"
+        title="Milestones vs. Gates"
         points={[
-          <>Each row comes from a checklist item (any checklist) tagged with a milestone name. <strong>+ Add Milestone</strong> creates a new tagged checklist item for you; you can also tag an existing item on its checklist.</>,
-          <>Payment % across every milestone should add up to 100% of Contract Value — the page flags it if the allocation is off.</>,
-          <>These are payment tranches, tied to invoicing and client sign-off. For development delivery checkpoints that aren&apos;t tied to payment, see the <strong>Milestone</strong> section of the project&apos;s <strong>PM Plan</strong> tab instead — the two lists are separate for now.</>,
+          <><strong>Milestones</strong> (this page) are what you deliver to the client — e.g. Phase 1 MVP, UAT Complete, Go-Live. Each carries its dates, owner, payment %, invoice status, and client sign-off. Dashboard, Delivery, Portfolio, and the PM Plan all read this list.</>,
+          <><strong>Gates</strong> are internal checkpoints on the Checklist tab (e.g. &quot;DoR Approved&quot;, &quot;CI Pipeline Green&quot;). They never carry payment. A milestone shows <em>Gates 2/3</em> when checklist gates are linked to it.</>,
+          <>Payment % across every milestone should add up to 100% of Contract Value — the table flags it if the allocation is off. A milestone that&apos;s already invoiced or paid can&apos;t be deleted until its invoice status is reset.</>,
         ]}
       />
 
@@ -92,11 +97,11 @@ export default async function MilestonesPage({ params }: { params: { projectId: 
             subtitle={formatPct(totalMilestones ? inProgressCount / totalMilestones : 0)}
           />
           <StatTile
-            icon={<IconCircle />}
-            iconWrapClass="bg-slate-100 text-slate-500"
-            label="Not Started"
-            value={String(notStartedCount)}
-            subtitle={formatPct(totalMilestones ? notStartedCount / totalMilestones : 0)}
+            icon={<IconAlertCircle />}
+            iconWrapClass="bg-rose-50 text-rose-600"
+            label="Overdue"
+            value={String(overdueCount)}
+            subtitle="Past planned date"
           />
           <StatTile
             icon={<IconDollar />}
@@ -122,18 +127,23 @@ export default async function MilestonesPage({ params }: { params: { projectId: 
         notesHidden={notesHidden}
         totalAllocatedPct={totalAllocatedPct}
         allocationOff={allocationOff}
+        people={people}
         rows={milestones.map((m) => ({
           id: m.id,
-          checklistItemId: m.checklistItemId,
-          paymentPct: m.paymentPct,
-          invoiceStatus: m.invoiceStatus,
-          clientSignoff: m.clientSignoff,
-          notes: notesHidden ? null : m.notes,
-          checklistType: m.checklistItem.type as ChecklistType,
-          stage: m.checklistItem.stage,
-          milestoneName: m.checklistItem.milestoneName ?? "",
-          actualDate: m.checklistItem.actualDate,
-          status: m.checklistItem.status as ItemStatus,
+          name: m.name,
+          type: m.type,
+          plannedDate: m.plannedDate,
+          forecastDate: m.forecastDate,
+          actualDate: m.actualDate,
+          status: m.status as ItemStatus,
+          ownerPersonId: m.ownerPersonId,
+          ownerName: m.ownerPerson?.name ?? null,
+          paymentPct: pctOf(m),
+          invoiceStatus: m.payment?.invoiceStatus ?? "Not Invoiced",
+          clientSignoff: m.payment?.clientSignoff ?? "Pending",
+          notes: notesHidden ? null : m.payment?.notes ?? null,
+          gatesDone: m.checklistItems.filter((g) => g.status === "COMPLETED" || g.status === "NOT_APPLICABLE").length,
+          gatesTotal: m.checklistItems.length,
         }))}
       />
     </div>

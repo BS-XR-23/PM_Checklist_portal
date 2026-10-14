@@ -280,7 +280,9 @@ function StageGroupCard({
                 <tr className="text-left text-xs font-medium text-slate-500 bg-slate-50">
                   <th className="px-3 py-2.5 w-10">#</th>
                   <th className="px-3 py-2.5 min-w-[260px]">Checklist Item</th>
-                  {showMilestone && <th className="px-3 py-2.5 w-40">Milestone</th>}
+                  {/* milestoneName is a checklist *gate* label — internal checkpoint,
+                      never a payment milestone (those live on Milestones & Payments). */}
+                  {showMilestone && <th className="px-3 py-2.5 w-40">Gate</th>}
                   <th className="px-3 py-2.5 w-52">Owner</th>
                   <th className="px-3 py-2.5 w-32">Planned Date</th>
                   <th className="px-3 py-2.5 w-32">Actual Date</th>
@@ -618,7 +620,7 @@ function ChecklistItemRow({
       {showMilestone && (
         <td className="px-3 py-2">
           {item.milestoneName ? (
-            <span className="inline-flex items-center rounded-full bg-indigo-50 text-indigo-700 px-2 py-0.5 text-xs font-medium">
+            <span className="inline-flex items-center rounded-full bg-indigo-50 text-indigo-700 px-2 py-0.5 text-xs font-medium" title="Gate — an internal checkpoint">
               {item.milestoneName}
             </span>
           ) : (

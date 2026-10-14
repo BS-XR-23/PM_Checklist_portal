@@ -18,6 +18,7 @@
     "seed-demo": "tsx scripts/seed-demo.ts",
     "seed-demo-complete": "tsx scripts/seed-demo-complete.ts",
     "seed-checklist-template": "tsx scripts/seed-checklist-template.ts",
+    "milestone-cleanup": "tsx scripts/milestone-cleanup.ts",
     "test": "vitest run",
     "test:unit": "vitest run lib/rbac.test.ts lib/overload.test.ts lib/resourcing-rbac.test.ts",
     "test:isolation": "vitest run tests/isolation.integration.test.ts",

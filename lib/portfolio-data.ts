@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { PM_STAGES } from "@/lib/seed-data";
-import { toSprintsForBudget, currentStage, trancheAmount, COMPLETED_STAGE_LABEL } from "@/lib/calculations";
+import { toSprintsForBudget, currentStage, COMPLETED_STAGE_LABEL } from "@/lib/calculations";
+import { summarizeMilestones, milestoneDueDate, isMilestoneDone } from "@/lib/milestones";
 import { computeProjectHealth, deliveryIndices, deliveryPct, governancePct } from "@/lib/project-health";
 import type { Rag } from "@/lib/rag";
 
@@ -19,7 +20,8 @@ export const PORTFOLIO_PROJECT_INCLUDE = {
     include: { tasks: { include: { person: { include: { roleRate: true } } } } },
   },
   risks: true,
-  checklistItems: { include: { milestonePayment: true } },
+  checklistItems: true,
+  milestones: { include: { payment: true, ownerPerson: { select: { name: true } } } },
   memberships: { where: { role: "PM" as const }, include: { user: { select: { name: true } } }, take: 1 },
   dependencies: { where: { status: "Blocked" as const }, select: { id: true } },
   wbsTasks: { select: { storyPoints: true, pctComplete: true } },
@@ -58,7 +60,7 @@ export type PortfolioRow = {
   blockedDependencies: number;
   paidAmount: number;
   invoicedAmount: number; // billed, awaiting payment
-  nextPaymentAmount: number; // work done (has an Actual Date) but not yet invoiced
+  nextPaymentAmount: number; // earliest-due milestone tranche not yet invoiced
   financialStatus: FinancialStatus;
   nextMilestone: { name: string; date: Date; owner: string | null } | null;
   updatedAt: Date;
@@ -113,12 +115,12 @@ function buildPortfolioRow(
   p: ProjectWithPortfolioData,
   today: Date
 ): { row: PortfolioRow; milestoneEvents: MilestoneEvent[]; incompleteCount: number; overdueCount: number } {
-  const milestoneItems = p.checklistItems.filter((i) => i.milestonePayment != null);
-  // Same health definition as Dashboard/Delivery (lib/project-health.ts).
+  // Same health definition as Dashboard/Delivery (lib/project-health.ts),
+  // fed the project's client-facing milestones (never checklist gates).
   const health = computeProjectHealth({
     sprints: toSprintsForBudget(p.sprints),
     risks: p.risks,
-    milestones: milestoneItems.map((i) => ({ status: i.status, plannedDate: i.plannedDate })),
+    milestones: p.milestones,
     today,
   });
   const { rag, spi: latestSpi, effortIndex, openHighRisks } = health;
@@ -132,37 +134,36 @@ function buildPortfolioRow(
 
   const openRisks = p.risks.filter((r) => r.type === "Risk" && r.status !== "Closed" && r.status !== "Mitigated").length;
 
-  const paidAmount = milestoneItems
-    .filter((i) => i.milestonePayment!.invoiceStatus === "Paid")
-    .reduce((sum, i) => sum + trancheAmount(p.contractValue, i.milestonePayment!.paymentPct), 0);
-  const invoicedAmount = milestoneItems
-    .filter((i) => i.milestonePayment!.invoiceStatus === "Invoiced")
-    .reduce((sum, i) => sum + trancheAmount(p.contractValue, i.milestonePayment!.paymentPct), 0);
-  // Same "next payment" definition as the single-project Dashboard's tile:
-  // work that's done (has an Actual Date) but hasn't been invoiced yet.
-  const nextPaymentAmount = milestoneItems
-    .filter((i) => i.milestonePayment!.invoiceStatus === "Not Invoiced" && i.actualDate)
-    .reduce((sum, i) => sum + trancheAmount(p.contractValue, i.milestonePayment!.paymentPct), 0);
+  const milestoneSummary = summarizeMilestones(
+    p.milestones.map((m) => ({ ...m, ownerName: m.ownerPerson?.name ?? null })),
+    p.contractValue,
+    today
+  );
+  const { paidAmount, invoicedAmount } = milestoneSummary;
+  const nextPaymentAmount = milestoneSummary.nextPayment?.amount ?? 0;
 
   const financialStatus: FinancialStatus = invoicedAmount > 0 ? "OUTSTANDING" : paidAmount > 0 ? "PAID" : "NOT_INVOICED";
 
-  const upcomingMilestoneItems = milestoneItems
-    .filter((i) => i.status !== "COMPLETED" && i.status !== "NOT_APPLICABLE" && i.plannedDate)
-    .sort((a, b) => a.plannedDate!.getTime() - b.plannedDate!.getTime());
-
-  const milestoneEvents: MilestoneEvent[] = upcomingMilestoneItems.map((i) => ({
-    projectId: p.id,
-    projectName: p.name,
-    name: i.milestoneName ?? i.itemText,
-    date: i.plannedDate as Date,
-    owner: i.owner,
-  }));
+  // Every not-done dated milestone, soonest first — overdue ones included,
+  // so the Portfolio panel can badge them as overdue rather than hide them.
+  const milestoneEvents: MilestoneEvent[] = p.milestones
+    .filter((m) => !isMilestoneDone(m) && milestoneDueDate(m))
+    .map((m) => ({
+      projectId: p.id,
+      projectName: p.name,
+      name: m.name,
+      date: milestoneDueDate(m) as Date,
+      owner: m.ownerPerson?.name ?? null,
+    }))
+    .sort((a, b) => a.date.getTime() - b.date.getTime());
 
   const incomplete = p.checklistItems.filter((i) => i.status !== "COMPLETED" && i.status !== "NOT_APPLICABLE");
   const overdue = incomplete.filter((i) => i.plannedDate && i.plannedDate < today);
 
   const hasMissingData = p.memberships.length === 0 || p.contractValue <= 0;
-  const nextMilestone = milestoneEvents[0] ? { name: milestoneEvents[0].name, date: milestoneEvents[0].date, owner: milestoneEvents[0].owner } : null;
+  // An overdue milestone outranks the next upcoming one here — this field
+  // drives the "<name> overdue" attention issue and the table's Next column.
+  const nextMilestone = milestoneSummary.overdue[0] ?? milestoneSummary.nextMilestone;
 
   const issues = buildAttentionIssues({
     openHighRisks,

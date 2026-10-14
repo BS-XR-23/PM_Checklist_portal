@@ -16,7 +16,6 @@ import { StakeholdersTable } from "@/components/pm-plan/stakeholders-table";
 import { CommsTable } from "@/components/pm-plan/comms-table";
 import { RaciTable } from "@/components/pm-plan/raci-table";
 import { DeliverableTable } from "@/components/pm-plan/deliverable-table";
-import { PmPlanMilestonesTable } from "@/components/pm-plan/pm-plan-milestones-table";
 import { TimelineTable } from "@/components/pm-plan/timeline-table";
 import { ResourceTable } from "@/components/pm-plan/resource-table";
 import { GateTable } from "@/components/pm-plan/gate-table";
@@ -54,15 +53,14 @@ export default async function PmPlanPage({ params }: { params: { projectId: stri
   // Responsibility Plan, and the PMO Gate checklist have no existing home
   // elsewhere in the app, so those three stay PMPlan-owned, editable rows
   // (like Stakeholders/Comms/RACI) rather than a live join.
-  const [riskAccess, depAccess, deliveryAccess] = await Promise.all([
+  const [riskAccess, depAccess, milestonesAccess] = await Promise.all([
     getModuleAccess(params.projectId, "RISK_REGISTER"),
     getModuleAccess(params.projectId, "DEPENDENCIES"),
-    getModuleAccess(params.projectId, "DELIVERY"),
+    getModuleAccess(params.projectId, "MILESTONES"),
   ]);
   const canSeeRisks = meetsLevel(riskAccess, "READ_LIMITED");
   const canSeeDeps = meetsLevel(depAccess, "READ_LIMITED");
-  const canSeeMilestones = meetsLevel(deliveryAccess, "READ_LIMITED");
-  const canWriteMilestones = deliveryAccess === "WRITE";
+  const canSeeMilestones = meetsLevel(milestonesAccess, "READ_LIMITED");
 
   const [pmPlan, people, risks, dependencies, milestones] = await Promise.all([
     prisma.pMPlan.findUniqueOrThrow({
@@ -286,21 +284,14 @@ export default async function PmPlanPage({ params }: { params: { projectId: stri
     edit: canWrite ? <DeliverableTable pmPlanId={pmPlanId} projectId={projectId} rows={pmPlan.deliverableRows} /> : undefined,
   });
 
-  // Milestone stays sourced live from Delivery's Milestone table (not a
-  // PMPlan copy) so it stays accurate for EV/AV tracking, but unlike
-  // Risk/Dependencies it gets real add/delete/edit here too, reusing
-  // Delivery's own milestone actions — a milestone added from this section
-  // is the same real row Delivery sees, not a second, driftable copy. There
-  // is no separate Delivery > Milestones page anymore; this is the one
-  // place milestones get edited.
+  // Read-only, like Risk/Dependencies: milestones have one home (the
+  // Milestones & Payments tab) and every other page just reads them.
   if (canSeeMilestones) {
     sections.push({
       id: "milestone",
       number: sections.length + 1,
       title: "Milestone",
-      hint: canWriteMilestones
-        ? "Sourced live from Delivery's milestone data — add, edit, and delete here; the Delivery tab's own tracking (EV/AV, sprints) stays in sync."
-        : "Sourced live from Delivery's milestone data. You have read-only access to Delivery, so editing isn't available here.",
+      hint: "Sourced live from the Milestones & Payments tab — the project's client-facing delivery commitments. Edit them there.",
       itemCountLabel: `${milestones.length} ${milestones.length === 1 ? "milestone" : "milestones"}`,
       // "Completed" means every milestone is actually baselined (date +
       // owner), not just that at least one row exists.
@@ -309,12 +300,16 @@ export default async function PmPlanPage({ params }: { params: { projectId: stri
         Math.max(milestones.length, 1)
       ),
       view: (
-        <ReadOnlyTable
-          columns={["Milestone", "Baseline Date", "Owner", "Exit Criteria", "Status"]}
-          rows={milestones.map((m) => [m.name, formatShortDate(m.plannedDate), m.ownerPerson?.name ?? "", m.acceptanceCriteria ?? "", milestoneStatusLabel(m.status)])}
-        />
+        <div className="space-y-3">
+          <a href={`/projects/${projectId}/milestones`} className="inline-flex items-center text-xs font-medium text-indigo-600 hover:text-indigo-700">
+            Open Milestones &amp; Payments to add or edit milestones &rarr;
+          </a>
+          <ReadOnlyTable
+            columns={["Milestone", "Baseline Date", "Owner", "Exit Criteria", "Status"]}
+            rows={milestones.map((m) => [m.name, formatShortDate(m.plannedDate), m.ownerPerson?.name ?? "", m.acceptanceCriteria ?? "", milestoneStatusLabel(m.status)])}
+          />
+        </div>
       ),
-      edit: canWriteMilestones ? <PmPlanMilestonesTable projectId={projectId} rows={milestones} people={people} /> : undefined,
     });
   }
 

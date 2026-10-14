@@ -109,6 +109,11 @@ describe("countOverdueMilestones", () => {
       )
     ).toBe(1);
   });
+
+  it("uses the forecast date when a milestone has been re-forecast", () => {
+    expect(countOverdueMilestones([{ status: "IN_PROGRESS", plannedDate: new Date("2026-05-01"), forecastDate: new Date("2026-07-01") }], TODAY)).toBe(0);
+    expect(countOverdueMilestones([{ status: "IN_PROGRESS", plannedDate: new Date("2026-07-01"), forecastDate: new Date("2026-05-01") }], TODAY)).toBe(1);
+  });
 });
 
 describe("computeProjectHealth", () => {

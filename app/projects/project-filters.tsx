@@ -28,7 +28,7 @@ export type ProjectCardData = {
   latestSpi: number | null;
   effortIndex: number | null;
   createdAt: Date;
-  endDate: Date | null; // derived — latest Actual Date across the checklist
+  endDate: Date | null; // derived — planned end, the latest client-milestone date (lib/milestones.ts)
   deletedAt: Date | null;
   overdueCount: number; // items past their Planned Date, empty for viewers who can't see Reminders
 };

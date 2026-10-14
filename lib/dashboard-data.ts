@@ -3,9 +3,9 @@ import { parseDateInput } from "@/lib/format";
 import { ITEM_STATUSES, type ItemStatus } from "@/lib/constants";
 import { CHECKLIST_TYPES, CHECKLIST_TYPE_BY_KEY, type ChecklistType } from "@/lib/checklist-types";
 import { computeProjectHealth, deliveryIndices, deliveryPct, governancePct, wbsBaselinePoints } from "@/lib/project-health";
+import { summarizeMilestones, milestoneDueDate } from "@/lib/milestones";
 import {
   computeEvm,
-  trancheAmount,
   reminderBand,
   budgetEntriesFromSprints,
   toSprintsForBudget,
@@ -25,7 +25,11 @@ export async function getDashboardData(projectId: string) {
       include: { tasks: { include: { person: { include: { roleRate: true } } } } },
       relationLoadStrategy: "join",
     }),
-    prisma.milestonePayment.findMany({ where: { checklistItem: { projectId } }, include: { checklistItem: true } }),
+    prisma.milestone.findMany({
+      where: { projectId },
+      include: { payment: true, ownerPerson: { select: { name: true } } },
+      orderBy: [{ plannedDate: { sort: "asc", nulls: "last" } }, { order: "asc" }],
+    }),
     prisma.actionItem.findMany({ where: { projectId, dueDate: { not: null } }, include: { ownerPerson: { select: { name: true } } } }),
     prisma.decisionLogItem.findMany({ where: { projectId }, orderBy: { order: "desc" }, take: 5, include: { decidedByPerson: { select: { name: true } } } }),
     prisma.pMPlan.findUnique({ where: { projectId }, select: { timelineRows: { orderBy: { order: "asc" } } } }),
@@ -93,16 +97,6 @@ export async function getDashboardData(projectId: string) {
     return { key: c.key, label: c.label, stageLabel: c.stageLabel, stages };
   }).filter((c) => c.stages.length > 0);
 
-  // Derived, not stored — the project's "end date" (latest Actual Date
-  // across every checklist item), so it can't drift out of sync with the
-  // checklist itself. (A "Current Stage (PM Checklist)" figure used to live
-  // here too; dropped — a single stage name pooled from just one of the
-  // project's checklist types didn't earn its place next to Health/Next
-  // Milestone, which are real "where are we" signals.)
-  const endDate = applicableItems.reduce<Date | null>((latest, i) => {
-    if (!i.actualDate) return latest;
-    return !latest || i.actualDate > latest ? i.actualDate : latest;
-  }, null);
 
   // Same reminder-worthy definition as lib/notifications.ts (cross-project
   // sidebar/notifications page) — computed here for free since allItems is
@@ -149,19 +143,21 @@ export async function getDashboardData(projectId: string) {
     .map((t) => ({ id: t.id, label: t.phase, start: parseDateInput(t.start), end: parseDateInput(t.end), status: t.status }))
     .filter((t): t is { id: string; label: string; start: Date; end: Date; status: string } => t.start !== null && t.end !== null);
 
-  const checklistTypeOrder = Object.fromEntries(CHECKLIST_TYPES.map((c, idx) => [c.key, idx]));
-  const milestonesList = milestones
-    .map((m) => ({
-      id: m.id,
-      source: CHECKLIST_TYPE_BY_KEY[m.checklistItem.type as ChecklistType].label,
-      stage: m.checklistItem.stage,
-      milestoneName: m.checklistItem.milestoneName ?? "",
-      actualDate: m.checklistItem.actualDate,
-      status: m.checklistItem.status as ItemStatus,
-      order: m.checklistItem.order,
-      type: m.checklistItem.type,
-    }))
-    .sort((a, b) => (a.type === b.type ? a.order - b.order : checklistTypeOrder[a.type] - checklistTypeOrder[b.type]));
+  // Client-facing milestones (Milestones & Payments tab) — the one list the
+  // Dashboard reads for Key Milestones, Next Milestone, Planned End, and
+  // payments. Checklist gates are not milestones.
+  const milestonesList = milestones.map((m) => ({
+    id: m.id,
+    name: m.name,
+    type: m.type,
+    dueDate: milestoneDueDate(m),
+    actualDate: m.actualDate,
+    status: m.status as ItemStatus,
+  }));
+  const milestoneSummary = summarizeMilestones(
+    milestones.map((m) => ({ ...m, ownerName: m.ownerPerson?.name ?? null })),
+    project.contractValue
+  );
 
   const sprintsForBudget = toSprintsForBudget(sprints);
   // Budget Burn chart only (Detailed Reporting) — dollar PV/EV/AC against
@@ -172,45 +168,18 @@ export async function getDashboardData(projectId: string) {
   const health = computeProjectHealth({
     sprints: sprintsForBudget,
     risks,
-    milestones: milestones.map((m) => ({ status: m.checklistItem.status, plannedDate: m.checklistItem.plannedDate })),
+    milestones,
   });
   const { spiHistory } = deliveryIndices(sprintsForBudget);
   const { rag, openHighRisks } = health;
 
-  // Next not-yet-done milestone by Planned Date — same definition as
-  // lib/portfolio-data.ts's nextMilestone, kept local rather than shared.
-  const upcomingMilestones = milestones
-    .filter((m) => m.checklistItem.status !== "COMPLETED" && m.checklistItem.status !== "NOT_APPLICABLE" && m.checklistItem.plannedDate)
-    .sort((a, b) => a.checklistItem.plannedDate!.getTime() - b.checklistItem.plannedDate!.getTime());
-  const nextMilestone = upcomingMilestones[0]
-    ? { name: upcomingMilestones[0].checklistItem.milestoneName ?? upcomingMilestones[0].checklistItem.itemText, date: upcomingMilestones[0].checklistItem.plannedDate as Date }
-    : null;
 
   const activeCRValue = crs
     .filter((c) => c.status === "Approved" || c.status === "In Progress")
     .reduce((sum, c) => sum + (c.billableManDays ?? 0), 0);
 
-  const notInvoiced = milestones.filter((m) => m.invoiceStatus === "Not Invoiced" && m.checklistItem.actualDate);
-  const nextPaymentDue = notInvoiced.length
-    ? notInvoiced.reduce((min, m) => {
-        const d = m.checklistItem.actualDate!;
-        return !min || d < min ? d : min;
-      }, null as Date | null)
-    : null;
-
-  const totalAllocatedPct = milestones.reduce((sum, m) => sum + m.paymentPct, 0);
-  const nextPaymentAmount = nextPaymentDue
-    ? notInvoiced
-        .filter((m) => m.checklistItem.actualDate?.getTime() === nextPaymentDue.getTime())
-        .reduce((sum, m) => sum + trancheAmount(project.contractValue, m.paymentPct), 0)
-    : 0;
-
-  const paidAmount = milestones
-    .filter((m) => m.invoiceStatus === "Paid")
-    .reduce((sum, m) => sum + trancheAmount(project.contractValue, m.paymentPct), 0);
-  const invoicedAmount = milestones
-    .filter((m) => m.invoiceStatus === "Invoiced")
-    .reduce((sum, m) => sum + trancheAmount(project.contractValue, m.paymentPct), 0);
+  const { nextMilestone, overdue: overdueMilestones, plannedEnd, nextPayment, paidAmount, invoicedAmount, totalAllocatedPct } =
+    milestoneSummary;
 
   return {
     project,
@@ -218,7 +187,8 @@ export async function getDashboardData(projectId: string) {
     completedItems,
     overallPct,
     deliveryPct: deliveryPctValue,
-    endDate,
+    plannedEnd,
+    overdueMilestones,
     rag,
     healthReasons: health.reasons,
     nextMilestone,
@@ -238,8 +208,7 @@ export async function getDashboardData(projectId: string) {
       spiHistory: spiHistory.map((h) => h.spi),
       openHighRisks,
       activeCRValue,
-      nextPaymentDue,
-      nextPaymentAmount,
+      nextPayment,
       totalAllocatedPct,
       contractValue: project.contractValue,
       paidAmount,

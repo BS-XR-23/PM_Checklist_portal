@@ -262,20 +262,22 @@ model ChecklistTemplateItem {
   @@unique([type, order])
 }
 
+/// Payment tranche for one client-facing Milestone (payment %, invoice,
+/// client sign-off). Anchored on milestoneId: deleting the milestone deletes
+/// its payment row. checklistItemId is legacy — payments used to hang off a
+/// checklist "gate" item; it's kept (nullable, SetNull) only so old rows
+/// aren't lost, and nothing reads it for new data. milestoneId stays
+/// nullable until scripts/milestone-cleanup.ts has re-homed or removed the
+/// last unlinked legacy row; tighten it to required after that.
 model MilestonePayment {
-  id              String        @id @default(cuid())
-  checklistItemId String        @unique
-  checklistItem   ChecklistItem @relation(fields: [checklistItemId], references: [id], onDelete: Cascade)
-  // Nullable for now, additive — backfilled onto every existing row by the
-  // Milestone-model migration, then tightened to be the required/unique
-  // anchor (and checklistItemId relaxed to optional) in a later migration
-  // once that backfill has been verified. See prisma/migrations backfill
-  // script + schema.prisma history for the two-step plan.
-  milestoneId     String?       @unique
-  milestone       Milestone?    @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
-  paymentPct      Float         @default(0)
-  invoiceStatus   String        @default("Not Invoiced")
-  clientSignoff   String        @default("Pending")
+  id              String         @id @default(cuid())
+  checklistItemId String?        @unique
+  checklistItem   ChecklistItem? @relation(fields: [checklistItemId], references: [id], onDelete: SetNull)
+  milestoneId     String?        @unique
+  milestone       Milestone?     @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
+  paymentPct      Float          @default(0)
+  invoiceStatus   String         @default("Not Invoiced")
+  clientSignoff   String         @default("Pending")
   notes           String?
 }
 
@@ -636,21 +638,21 @@ model StakeholderRow {
 }
 
 model CommsRow {
-  id             String   @id @default(cuid())
-  pmPlanId       String
-  pmPlan         PMPlan   @relation(fields: [pmPlanId], references: [id], onDelete: Cascade)
-  order          Int
-  audience       String
-  frequency      String
-  channel        String
-  content        String
+  id        String   @id @default(cuid())
+  pmPlanId  String
+  pmPlan    PMPlan   @relation(fields: [pmPlanId], references: [id], onDelete: Cascade)
+  order     Int
+  audience  String
+  frequency String
+  channel   String
+  content   String
   // Links this row to the specific stakeholder it's engaging, not just a
   // broad audience label — lets two stakeholders in the same audience
   // bucket (e.g. both "Client") be tracked with genuinely different
   // engagement/communication forms instead of sharing one row.
-  personId       String?
-  person         Person?  @relation(fields: [personId], references: [id], onDelete: SetNull)
-  updatedAt      DateTime @default(now()) @updatedAt
+  personId  String?
+  person    Person?  @relation(fields: [personId], references: [id], onDelete: SetNull)
+  updatedAt DateTime @default(now()) @updatedAt
 }
 
 model RaciRow {

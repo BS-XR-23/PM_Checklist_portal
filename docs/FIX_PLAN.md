@@ -63,16 +63,23 @@ Notes carried forward:
 
 ## Phase 3 — Milestone restructure (3-5 days)
 
-- [ ] Expand: `MilestonePayment.checklistItemId` optional, `milestoneId` the anchor (plan already noted in `schema.prisma`)
-- [ ] Dry-run report of copied milestones per project; **keep** any with real data (payment > 0, invoice/sign-off set, dates, non-default status), **delete** empty copies only after review; resolve the unlinked payment row
-- [ ] Checklist tagging stops creating payment rows (`create-project.ts`, tag action); UI label "Milestone" → "Gate" (DB column unchanged)
-- [ ] "Milestones & Payments" tab lists Delivery milestones with dates/status/payment/invoice/sign-off; "+ Add Milestone" creates a real Milestone; PM Plan Milestone section becomes read-only + link
-- [ ] Optional: milestone shows required gates ("2/3 gates done") via existing `ChecklistItem.milestoneId`
-- [ ] Re-point Dashboard (Next Milestone, Next Payment Due) and Portfolio (Upcoming Milestones) to the Milestone model; overdue shown separately from "next"
-- [ ] Permissions: Client MILESTONES = READ_FULL (client list), DELIVERY stays NONE; PM Plan Milestone section gated on MILESTONES
+- [x] Expand: `MilestonePayment.checklistItemId` optional, `milestoneId` the anchor (plan already noted in `schema.prisma`)
+- [~] Dry-run report of copied milestones per project; **keep** any with real data (payment > 0, invoice/sign-off set, dates, non-default status), **delete** empty copies only after review; resolve the unlinked payment row
+- [x] Checklist tagging stops creating payment rows (`create-project.ts`, tag action); UI label "Milestone" → "Gate" (DB column unchanged)
+- [x] "Milestones & Payments" tab lists Delivery milestones with dates/status/payment/invoice/sign-off; "+ Add Milestone" creates a real Milestone; PM Plan Milestone section becomes read-only + link
+- [~] Optional: milestone shows required gates ("2/3 gates done") via existing `ChecklistItem.milestoneId`
+- [x] Re-point Dashboard (Next Milestone, Next Payment Due) and Portfolio (Upcoming Milestones) to the Milestone model; overdue shown separately from "next"
+- [x] Permissions: Client MILESTONES = READ_FULL (client list), DELIVERY stays NONE; PM Plan Milestone section gated on MILESTONES
 - [ ] Contract (later release): drop `MilestonePayment.checklistItemId`
 
 Done when: a Client sees only client milestones + sign-off; gates live only on the checklist; Dashboard, Portfolio, and `.docx` export read the same milestones.
+
+**Status (2026-10-14): code committed on branch `fix/phase-1-audit`. Migration APPLIED (step 1). Cleanup (step 2) still to run — the permission system blocked it from an automated session; run it by hand. A JSON backup of every milestone/payment/gate-link row was taken first: `../backups/milestones-before-phase3-2026-10-14.json` (outside the repo).**
+
+1. ✅ **Applied 2026-10-14.** **Apply the migration** `prisma/migrations/20261014120000_milestone_payment_anchor_on_milestone` (`npx prisma migrate deploy`). Schema-only, no rows changed: payment's checklist link becomes optional (SET NULL) and deleting a milestone deletes its payment. Until it's applied, setting payment % on a *newly created* milestone fails (DB still requires checklistItemId); everything else works.
+2. ⏳ **Pending — run by hand.** **Run the cleanup** `npm run milestone-cleanup` (dry run, read-only), then `npm run milestone-cleanup -- --apply --actor pm@bs23.local` (the only active Super Admin). Dry run on 2026-10-14: **54 untouched gate copies to delete, 5 kept** (DED: Experience Flow Approved — 20%, Paid, Signed; Omnizia: 4 with client sign-off Signed), **1 empty orphan payment row** (DED) to delete. Every deleted row is written in full to the AuditLog diff.
+
+Verified in the browser against current data (pre-cleanup): Milestones tab, Dashboard (Planned End / Next Milestone + overdue / Next Payment), PM Plan read-only section, Delivery summary, Portfolio, Checklist "Gate" column — all roles, no errors. 140 unit tests pass (6 new for lib/milestones.ts). Gate linking is display-only ("Gates n/m"); a picker to link gates to a milestone is a follow-up.
 
 ## Phase 4 — Checklist cleanup (1-2 days)
 

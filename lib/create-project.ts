@@ -50,26 +50,14 @@ export async function createProject(input: {
         order: item.order,
         stage: item.stage,
         itemText: item.itemText,
+        // A template milestoneName is a checklist *gate* label (internal
+        // checkpoint), not a client milestone — it no longer spawns a
+        // Milestone/MilestonePayment copy. Client milestones are defined per
+        // project on the Milestones & Payments tab (docs/FIX_PLAN.md, Phase 3).
         milestoneName: item.milestoneName,
-        // Pre-generated so the Milestone row can be created before the
-        // ChecklistItem that references it (FK isn't deferrable).
-        milestoneId: item.milestoneName ? randomUUID() : null,
       }));
 
-      const milestoneItems = checklistItems.filter((item) => item.milestoneName && item.milestoneId);
-      if (milestoneItems.length > 0) {
-        await tx.milestone.createMany({
-          data: milestoneItems.map((item) => ({ id: item.milestoneId!, projectId: project.id, name: item.milestoneName! })),
-        });
-      }
-
       await tx.checklistItem.createMany({ data: checklistItems });
-
-      if (milestoneItems.length > 0) {
-        await tx.milestonePayment.createMany({
-          data: milestoneItems.map((item) => ({ checklistItemId: item.id, milestoneId: item.milestoneId })),
-        });
-      }
 
       const pmPlanId = randomUUID();
       await tx.pMPlan.create({ data: { id: pmPlanId, projectId: project.id } });
