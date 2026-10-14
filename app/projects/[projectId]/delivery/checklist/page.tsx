@@ -43,7 +43,7 @@ export default async function DeliveryChecklistPage({ params }: { params: { proj
           id="delivery-checklist"
           title="How to use this checklist"
           points={[
-            <>This is a quality/governance gate, not a task tracker — day-to-day progress belongs on Tasks and Sprints.</>,
+            <>This is a quality/governance checklist, not a task tracker — day-to-day progress belongs on Tasks and Sprints.</>,
             <>Items are grouped by stage in the order they should actually happen — readiness before execution, execution before the quality gate, and so on.</>,
             <>Only check an item off once its stage&apos;s criteria are genuinely met, not in anticipation of them being met.</>,
           ]}

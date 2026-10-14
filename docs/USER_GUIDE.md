@@ -1,577 +1,510 @@
 # PM Checklist Portal — User Guide
 
-A knowledge-transfer reference for BS23's XR Project Management Portal. This
-document explains **every feature**, **who can see and do what**, and **how
-the numbers on screen are actually calculated** — written so a PM can use it
-to onboard a new teammate without needing to read code.
+A knowledge-transfer reference for BS23's XR Project Management Portal. It
+explains **every feature**, **who can see and do what**, and **how the
+numbers on screen are calculated** — written so a PM can onboard a new
+teammate without reading code.
+
+_Last updated: 2026-10-14 (after the audit fixes in [FIX_PLAN.md](FIX_PLAN.md))._
 
 ---
 
 ## Table of Contents
 
 1. [What this portal is for](#1-what-this-portal-is-for)
-2. [Roles & Permissions](#2-roles--permissions)
-3. [Getting started](#3-getting-started)
-4. [Projects List](#4-projects-list)
-5. [Inside a Project — Dashboard](#5-inside-a-project--dashboard)
-6. [PM Checklist & DevOps Checklist](#6-pm-checklist--devops-checklist)
-7. [Milestones & Payments](#7-milestones--payments)
-8. [Risk & CR (Risk Register + Change Requests)](#8-risk--cr-risk-register--change-requests)
-9. [Budget Tracker](#9-budget-tracker)
-10. [PM Plan](#10-pm-plan)
-11. [Decisions & Action Items](#11-decisions--action-items)
-12. [Team & Resourcing](#12-team--resourcing)
-13. [Escalations](#13-escalations)
-14. [Activity Log](#14-activity-log)
-15. [Presales Pipeline](#15-presales-pipeline)
-16. [My Engagement](#16-my-engagement)
-17. [Portfolio (Management aggregate view)](#17-portfolio-management-aggregate-view)
-18. [Notifications / Reminders](#18-notifications--reminders)
-19. [Admin Tools](#19-admin-tools)
-20. [Login & Account](#20-login--account)
-21. [Cheat sheet: how the numbers are calculated](#21-cheat-sheet-how-the-numbers-are-calculated)
-22. [Quick answers to "why can't I see X?"](#22-quick-answers-to-why-cant-i-see-x)
+2. [Three concepts to get right](#2-three-concepts-to-get-right)
+3. [Roles & Permissions](#3-roles--permissions)
+4. [Getting started](#4-getting-started)
+5. [Projects list](#5-projects-list)
+6. [Inside a project — Dashboard](#6-inside-a-project--dashboard)
+7. [Checklists](#7-checklists)
+8. [Milestones & Payments](#8-milestones--payments)
+9. [Risk & CR](#9-risk--cr)
+10. [Dependencies](#10-dependencies)
+11. [Delivery (Tasks, Sprints, Dev Checklist, Releases, UAT)](#11-delivery)
+12. [Budget Tracker](#12-budget-tracker)
+13. [PM Plan](#13-pm-plan)
+14. [Decisions & Action Items](#14-decisions--action-items)
+15. [Team & Resourcing](#15-team--resourcing)
+16. [Escalations](#16-escalations)
+17. [Activity Log](#17-activity-log)
+18. [Presales pipeline](#18-presales-pipeline)
+19. [My Engagement](#19-my-engagement)
+20. [Portfolio](#20-portfolio)
+21. [Reminders](#21-reminders)
+22. [Admin tools](#22-admin-tools)
+23. [Login & account](#23-login--account)
+24. [Cheat sheet: how the numbers are calculated](#24-cheat-sheet-how-the-numbers-are-calculated)
+25. [Quick answers to "why can't I see X?"](#25-quick-answers-to-why-cant-i-see-x)
 
 ---
 
 ## 1. What this portal is for
 
-The portal is a **daily working tool for a Project Manager**, not a
-reporting-only dashboard. It replaces the old spreadsheet-based PM Checklist
-with a live, role-aware, multi-project system that:
+A **daily working tool for a Project Manager** on fixed-budget XR projects —
+it replaced the old `PM_Checklist_Tracker.xlsx` and generates the BS23
+`PMP_Template.docx` Project Management Plan. It is **not** a task tracker for
+the whole team: day-to-day engineering tasks stay in Jira; the portal holds
+the governance, delivery, and commercial picture.
 
-- Tracks the standard delivery checklist (PM + DevOps) stage by stage, with
-  owners, dates, and status per item.
-- Rolls that data up automatically into financials (SPI/CPI, budget burn),
-  milestones/payments, risk register, change requests, and a project health
-  (RAG) status — so a PM doesn't maintain those separately.
-- Tracks the **presales pipeline** (pitches before a project exists) and,
-  when a deal is won, hands the pitch's decisions/action items/checklist
-  straight into the newly created project.
-- Surfaces what's overdue or due soon across every project a user can see,
-  in one place (Notifications), instead of a PM having to remember to check
-  each project.
-- Keeps a full audit trail of every change, per project and portal-wide.
+- **Checklists** — the standard stage-by-stage governance process (PM,
+  Delivery & QA, DevOps, Creative & XR, plus a Development checklist inside
+  Delivery).
+- **Milestones & Payments** — what the project delivers to the client, when,
+  and how it gets paid.
+- **Delivery** — WBS tasks, sprints, releases, and UAT, with schedule
+  tracking (SPI).
+- **PM Plan** — the formal plan, exported back to Word.
+- **Risks, CRs, Dependencies, Decisions, Action Items** — the PM's registers.
+- **Presales** — deals before they become projects; a won deal becomes a
+  project automatically.
+- **Portfolio** — one health picture across every project for management.
+- A full **audit trail** of every change.
 
-## 2. Roles & Permissions
+## 2. Three concepts to get right
 
-Every user has exactly one global **Role**. Roles decide what a user can
-reach at all; for `PM`/`CLIENT`/`LIMITED`, actual project access is then
-governed by whether (and how) they're added to that specific project's
-**Team** tab.
+These are the ideas people most often mix up. Each has exactly one home.
 
-Role *names* shown throughout the portal (Super Admin, Admin, Management,
-PM, Client, Guest) are display labels only — the underlying system role
-(`ADMIN`, `TPM`, `PROGRAM_MANAGER`, `CLIENT`, `PM`, `LIMITED`, shown in
-code font below) is unchanged, so this table always names both.
+| Concept | What it is | Example | Where it lives |
+|---|---|---|---|
+| **Milestone** | A client-facing delivery commitment. Carries dates, status, owner, **payment %, invoice status, client sign-off**. | "Phase 1 MVP delivered" | **Milestones & Payments** tab (everything else only reads it) |
+| **Checkpoint** | An internal step tagged on a checklist item. Never carries payment. | "DoR Approved", "CI Pipeline Green" | **Checklist** tab ("Checkpoint" column) |
+| **Gate (G0–G6)** | The PMO stage-gate framework — formal sign-off evidence per phase. | "G4 UAT Ready" | **PM Plan** → PMO Health & Control Gates |
 
-| Role (display name) | System role | Can open individual projects? | Write access | Notes |
+And two progress numbers, always shown side by side:
+
+| Number | Meaning | Calculated from |
+|---|---|---|
+| **Governance %** | How much of the process has been followed | Checklist items completed ÷ tracked items |
+| **Delivery %** | How much of the actual product work is done | Story points done ÷ total WBS story points |
+
+## 3. Roles & Permissions
+
+Every user has one global **Role**. The portal shows display names; the
+system role (in code font) is what the code checks.
+
+| Display name | System role | Opens projects | Can write | Notes |
 |---|---|---|---|---|
-| **Super Admin** | `ADMIN` | Every project | Full write on every module, every project | Only role that can create/archive/delete projects, edit Users/People, edit checklist templates, see the global Audit Log, and permanently delete anything. Also the only role that can see actual $ rate / competency multiplier figures on the People registry. |
-| **Admin** | `TPM` | Every project (read) | Read-only on the 10 delivery modules; write only on **Escalations** and via the audited **Override** control on checklist items | Also has read-only access to the Users and People directories (rate figures hidden). Deliberately can't quietly edit a PM's real project data — every write is either on the Escalations tab or logged as an explicit override. |
-| **Management** | `PROGRAM_MANAGER` | Every project (read) | None — read-only everywhere it can reach | Read-only drill-down into every project's delivery modules **except** Decision Log and Action Items (off limits, same as Escalations/Activity/Budget Tracker). Read-only on the People directory (rate figures hidden) but **no access to Users at all**. Also confined to the aggregate **Portfolio** page and a read-only view of **Presales**; excluded from My Engagement and Notifications. |
-| **PM** | `PM` | Only projects they're a member of | Full write on all modules of their own projects (except Budget Tracker — Super Admin-only for every role) | The working role for most day-to-day use. Also has write access to Presales opportunities, and read-only access to the Users and People directories (rate figures hidden). |
-| **Client** | `CLIENT` | Only projects they're added to | Per-module, set by whoever manages that project's Team tab | Starts locked-down by default (see below) — a Super Admin opens up specific modules as needed, or applies a preset. |
-| **Guest** | `LIMITED` | Only projects they're added to | Per-module, set by whoever manages that project's Team tab | Starts at **READ_LIMITED on every module** (Budget Tracker excluded — Super Admin-only for every role) — a broader baseline than Client, narrowed or widened per project as needed. |
+| **Super Admin** | `ADMIN` | Every project | Everything | Only role that creates/archives/deletes projects, edits Users/People/Checklist Template, sees the global Audit Log and Budget Tracker, reopens closed sprints, and sees rate/competency figures. |
+| **Admin** | `TPM` | Every project (read) | Escalations, and the audited **Override** on checklist items | Read-only on Users/People (rates hidden). Can't quietly edit a PM's data — every write is an Escalation or a logged override. |
+| **Management** | `PROGRAM_MANAGER` | Every project (read) | Nothing | Read-only drill-down into every project except Decisions, Action Items, Escalations, Activity, Budget Tracker. Sees Portfolio and Presales (read-only) and People (read-only). No Users, Reminders, or My Engagement. |
+| **PM** | `PM` | Projects they're a member of | Everything on their projects (except Budget Tracker) | Can also create/edit Presales opportunities. Read-only Users/People. |
+| **Client** | `CLIENT` | Projects they're added to | Per module, as configured | Starts locked down (see below). |
+| **Guest** | `LIMITED` | Projects they're added to | Per module, as configured | Starts at read-limited on every module except Budget Tracker. |
 
-**Per-module access levels** (used for Client/Guest members): `NONE` →
-`READ_LIMITED` → `READ_FULL` → `WRITE`. `READ_LIMITED` hides financial
-fields and Notes on most pages — a member at this level sees status and
-dates, not cost or internal commentary. A Team tab **preset** dropdown
-(Standard Client, Full Visibility Read-Only, No Access) can set a whole
-member's grid in one click, still freely editable per-module afterward.
+**Per-module access** (Client/Guest only), set on a project's Team tab:
+`NONE` → `READ_LIMITED` → `READ_FULL` → `WRITE`. `READ_LIMITED` hides
+financial fields and Notes. Presets: **Standard Client**, **Full Visibility
+(Read-Only)**, **No Access**.
 
-**Default access for a newly-added Client**: Dashboard and both Checklists
-at `READ_LIMITED`, Milestones at `READ_FULL`, everything else (Risk & CR,
-Budget, PM Plan, Decisions, Action Items) at `NONE`. **Default access for a
-newly-added Guest**: `READ_LIMITED` on every module except Budget Tracker
-(`NONE`). Either can be adjusted per member on the project's Team tab.
+**Default for a new Client:** Dashboard and checklists read-limited,
+**Milestones read-full** (so the client sees their milestones and sign-off),
+Releases/UAT/Dev Checklist read-limited; Risk, CR, Budget, PM Plan,
+Decisions, Action Items, Delivery, Dependencies hidden.
 
-**"BA" isn't a separate system role.** Business Analysts who run presales
-opportunities are simply given the `PM` role — that role already has
-exactly the write access presales work needs (create/edit/archive/delete
-opportunities), so no dedicated role was added.
+"BA" isn't a separate role — Business Analysts running presales use `PM`.
 
-## 3. Getting started
+## 4. Getting started
 
-- **No self-service signup.** Accounts are created by a Super Admin (Admin
-  → Users). If you don't have a login, ask your Super Admin.
-- **Log in** with your email and password at the login page.
-- **Sidebar** — your persistent navigation on the left. It only shows the
-  sections your role can actually reach (e.g. a Guest (`LIMITED`) user with
-  no memberships mostly just sees "My Engagement").
-- **Change your password** any time via the account menu in the sidebar
-  (requires your current password, new password minimum 8 characters).
-- **Notifications bell** — shows a live count of overdue/due-soon items
-  relevant to you (see [§18](#18-notifications--reminders)).
+- **No self-signup.** A Super Admin creates accounts (Admin → Users), one at
+  a time or bulk-imported from CSV/XLSX.
+- **Sidebar** shows only what your role can reach.
+- **Change password** from the sidebar (needs your current password; new
+  password at least 8 characters).
+- **Reminders** badge — your count of overdue/due-soon items (§21).
 
-## 4. Projects List
+## 5. Projects list
 
-The landing page for Super Admin, Admin, Management, and PM — Management
-(`PROGRAM_MANAGER`) now sees this list too (read-only, same as Admin),
-having gained project drill-down.
+Landing page for Super Admin, Admin, Management, and PM (PMs see only their
+own projects).
 
-**Top stats**: Active Projects count, Average Completion % (active projects
-only), Total Contract Value (active projects only) — archived projects are
-deliberately excluded so they don't dilute "what's currently in flight."
+**Top stats:** Total Projects, Active, Total Contract Value, **Avg. Delivery**
+(mean Delivery % across projects that have WBS story points).
 
-**Filter pills**: Active / Archived / All / Deleted (Deleted is Super Admin-only),
-plus a **Stage** dropdown to jump straight to "everything currently in
-Kickoff," etc.
+**Filters:** All / Active / At Risk / Critical / Completed / Archived /
+Deleted (Deleted is Super Admin only), a search box (project, client, or
+PM), and a **Filters** panel (client, stage, health).
 
-**Each project card shows**:
-- Name, client, a colored avatar
-- A red **"⚠ N overdue"** badge — count of this project's overdue
-  checklist/action items (same feed as Notifications)
-- A **RAG badge** (Red/Amber/Green — see [§21](#21-cheat-sheet-how-the-numbers-are-calculated)) with the completion %
-- A progress bar and stat chips: items completed/total, contract value,
-  start date, end date (latest forecast date across the checklist), and
-  current PM stage
+**Each card:** name, client, PM, a health dot, a red **"⚠ N overdue"** badge
+(overdue checklist + action items), a **Delivery** bar (story points),
+**Governance %**, **SPI**, contract value, and start → **planned end** (the
+latest milestone date; "Project Timeline" runs from the project's creation date).
 
-**Super Admin-only actions on a card**: Archive/Unarchive, Delete (soft —
-moves it to the Deleted tab), and from the Deleted tab: Restore or
-**Permanent Delete** (only reachable after it's already soft-deleted — you
-can't skip straight to a permanent delete).
+**Super Admin actions:** Archive/Unarchive, Delete (soft — goes to the
+Deleted tab), Restore, and Permanent Delete (only from the Deleted tab).
 
-**Create Project** (Super Admin only): name, client, contract value, planned
-man-days. This seeds the full standard PM Checklist (51 items), DevOps
-Checklist (18 items), milestone rows for any milestone-tagged items, and a
-PM Plan pre-filled with default stakeholders/comms/RACI rows. This is the
-same creation path used automatically when a presales opportunity is Won.
+**Create Project** (Super Admin): name, client, contract value, planned
+man-days. Seeds every checklist from the Checklist Template and a PM Plan
+with default stakeholder/comms/RACI rows. **No milestones are created** —
+the PM adds the real client milestones on Milestones & Payments. Winning a
+presales opportunity uses the same creation path.
 
-## 5. Inside a Project — Dashboard
+## 6. Inside a project — Dashboard
 
-The first tab of every project, and the only one visible at `READ_LIMITED`
-(in which case everything financial/risk-related below is hidden, leaving
-just the completion hero, current stage, end date, and recent decisions).
+The first tab. A read-limited viewer (Client default) sees the progress
+hero and the "where are we" row only.
 
-- **Overall % Complete** — computed across PM + DevOps checklist items
-  combined, with `Not Applicable` items excluded from both the numerator
-  and denominator (they neither count as done nor as "still to do").
-- **Current Stage** — the first stage that still has an incomplete item;
-  shows "Complete" once none remain.
-- **End Date** — not a stored field; it's the latest Forecast Date across
-  every applicable checklist item.
-- **Overdue & Due Soon panel** — this project's slice of the Notifications
-  feed (checklist + action items only; hidden below `READ_FULL`).
+- **Governance gauge** — Governance % with per-checklist breakdown and item
+  counts (total, completed, in progress, not started, overdue, at risk).
+- **Health** — Red / Amber / Green with the **reasons** listed under it
+  (e.g. "3 open high risks · 1 overdue milestone"). Reasons are only shown
+  to viewers who can see the financial/risk tiles. See §24 for the rule.
+- **Delivery** — Delivery % (story points).
+- **Planned End** — the latest milestone date.
+- **Next Milestone** — the next milestone due **today or later**; overdue
+  milestones are counted separately underneath ("1 overdue"), never shown
+  as "next".
+- **Overdue & Due Soon** — this project's checklist and action items past
+  or within 7 days of their date (recurring items excluded).
 - **Recent Decisions** — last 5 Decision Log entries.
-- **Financial stat tiles** (hidden below `READ_FULL`): Latest SPI, Latest
-  CPI (green ≥1.0 / red <1.0), Open High Risks count, Active CR Value in
-  man-days, Next Payment Due date + amount.
-- **Contract value tiles**: Total Contract Value, Paid to Date, Invoiced
-  (Awaiting Payment).
-- **Charts**: Status Breakdown (pie), % Complete by Checklist (PM vs
-  DevOps), Budget Burn (PV/EV/AC line chart, financials-visible only).
-- **Stage/Category Breakdown** — per-stage progress bars, PM and DevOps
-  shown separately.
-- **Timeline strip** — planned→forecast date range per stage.
-- **Key Milestones table** — every milestone-tagged checklist item with its
-  forecast date and status.
+- **Financial tiles** (read-full and above): **SPI**, **Effort Index**, Open
+  High Risks, Active CR Value (man-days), **Next Payment Due** (the
+  earliest-due milestone with an un-invoiced tranche above 0%), Total
+  Contract Value, Paid to Date, Invoiced (awaiting payment).
+- **Detailed Reporting** (expand): status breakdown, completion by
+  checklist, budget burn chart, per-stage breakdown and timeline, project
+  Gantt (from PM Plan Timeline), and the **Key Milestones** table.
 
-## 6. PM Checklist & DevOps Checklist
+## 7. Checklists
 
-The backbone of the portal — the digitized version of BS23's standard
-delivery checklist.
+The governance backbone. Five checklist types, each seeded from the
+Checklist Template when a project is created:
 
-- **PM Checklist**: 51 fixed items across 7 stages, in order —
-  *Pre-Sales & Initiation, Planning, Kickoff, Creative Huddle, Development,
-  Release, Closing & Maintenance*. (An 8th stage, **Presales**, only
-  appears on projects that were won from a presales opportunity — see
-  [§15](#15-presales-pipeline).)
-- **DevOps Checklist**: 18 fixed items across 5 categories — *Infrastructure,
-  CI/CD, Security, Reliability, Release & Ops*.
+| Checklist | Stages / categories | Where |
+|---|---|---|
+| **PM** | (Presales) · Governance · Planning · Approvals · Baselines · Closure | Checklist tab |
+| **Delivery & QA** | Architecture · Development · Code Review · Performance · Technical QA · Test Planning · Functional Testing · Device Testing · Regression · UAT | Checklist tab |
+| **DevOps** | Infrastructure · CI/CD · Security · Monitoring | Checklist tab |
+| **Creative & XR** | Storyboard · 3D · UX · Assets · XR Validation | Checklist tab |
+| **Development** | Development Readiness · Development Execution · Quality Gate · Development Completion | Delivery → Dev Checklist |
 
-**Each item has**:
-- **Item text** — editable only if it's a custom item you added; the
-  wording of a fixed template item can only be changed by a Super Admin
-  (from the Checklist Template, affecting future projects — not retroactively).
-- **Status**: `Not Started`, `In Progress`, `Completed`, `At Risk`,
-  `Delayed`, `Blocked`, `Not Applicable`. Color-coded pills. `Not
-  Applicable` lets you exclude an out-of-scope step (e.g. a 3D-only step on
-  a 2D project) from the completion % without deleting a fixed item.
-- **Owner** — picked from the People registry (or legacy free text if not
-  linked to a person).
-- **Planned Date** and **Forecast Date**. If the Forecast slips past the
-  Planned date on an incomplete item, a red **⚠ slipped** icon appears —
-  that's a "the estimate moved" signal, separate from overdue/due-soon.
-- **Notes** — hidden at `READ_LIMITED`.
-- A **Milestone badge** if the item carries a payment tranche, and a
-  **Custom** badge if you added it.
+The **Presales** stage only exists on projects won from a presales
+opportunity (its items are copied from the deal).
 
-**Stage tabs** across the top show a live `completed/applicable` count per
-stage, turning green once every applicable item in that stage is
-Completed. The page opens on the **first incomplete stage** by default, so
-you land on current work rather than always Stage 1.
+**Each item:** text, **Checkpoint** label (if tagged), owner (from the People
+registry), planned date, actual date, link, notes (hidden at read-limited),
+status: Not Started · In Progress · Completed · At Risk · Delayed · Blocked ·
+Not Applicable. A ⚠ **slipped** flag appears when the actual date passed the
+planned date on an incomplete item.
 
-**Actions**: anyone with `WRITE` can inline-edit status/owner/dates/notes.
-**"+ Add Item"** adds a project-specific custom item to a stage (only
-custom items can be deleted — fixed items can only be marked `Not
-Applicable`). An **Admin** (`TPM`) with read access sees an **Override**
-button instead — a modal requiring a typed reason, logged distinctly in
-Activity as a "TPM Override," never blended in as if the PM made the edit.
+- **Not Applicable** removes an item from Governance % entirely.
+- **Checkpoint** — an internal checkpoint tag (e.g. "DoR Approved"). It never
+  carries payment; see §2.
+- **Ongoing cadence** — recurring activities (weekly CPI/SPI report, monthly
+  retro, status meetings, sprint demo, daily standups) sit in their own
+  block above the stages with **Owner** and **Last done**. Update Last done
+  each time it happens. They never count toward Governance %, current stage,
+  or reminders. Any item can be moved in or out of the block from its row
+  menu (•••).
+- **Stage pills** show completed/tracked per stage and turn green when
+  done. The page opens on the **current stage** — the first stage with
+  unfinished tracked items.
+- **+ Add Item** adds a custom item to a stage; only custom items can be
+  deleted. Only a Super Admin can reword a template item.
+- An **Admin (TPM)** sees an **Override** button instead of edit controls —
+  a typed reason is required and the change is tagged "TPM Override" in the
+  Activity log.
 
-## 7. Milestones & Payments
+## 8. Milestones & Payments
 
-Milestones aren't created separately — any checklist item (PM or DevOps)
-tagged with a milestone name automatically becomes a payment row here.
-**"+ Add Milestone"** creates a new custom checklist item and its payment
-tranche in one step (pick checklist, stage, and name).
+The single home of the project's **client-facing milestones**. Dashboard,
+Delivery, Portfolio, PM Plan, health, and the `.docx` export all read this
+list.
 
-**Per milestone**: name, source checklist/stage (read-only — edit status
-and forecast date on the checklist itself), **Payment %**, **Tranche
-Amount** (= Total Contract Value × Payment %, auto-computed), **Invoice
-Status** (`Not Invoiced` / `Invoiced` / `Paid`), **Client Signoff**
-(`Pending` / `Signed` / `Acknowledged` / `N/A`), Notes (hidden at
-`READ_LIMITED`).
+**+ Add Milestone:** name, type (Planning · Design · Development · QA · UAT ·
+Release · Custom), planned date.
 
-**Payment Summary panel**: Total % Allocated (flagged red if it doesn't sum
-to 100%), Paid Amount, Invoiced (Awaiting Payment), Not Yet Invoiced.
+**Each milestone row:** name, type, **Checkpoints n/m** (checklist
+checkpoints linked to it, if any), owner, **planned / forecast / actual**
+dates (⚠ when the forecast slips past the plan), status, **payment %**,
+tranche amount (= contract value × payment %), invoice status (Not Invoiced ·
+Invoiced · Paid), client sign-off (Pending · Signed · Acknowledged · N/A),
+notes.
 
-## 8. Risk & CR (Risk Register + Change Requests)
+- **Total Contract Value** is editable here (PM or Super Admin) — the same
+  single value Budget Tracker uses.
+- Payment % across all milestones should total **100%**; the table flags it
+  in red otherwise.
+- A milestone that's already **Invoiced or Paid can't be deleted** until its
+  invoice status is set back to Not Invoiced.
+- **Stats:** total, completed, in progress, overdue (past due date), total
+  paid, remaining.
 
-Two tabs under one sub-nav, because the CR rate policy is set in the PM
-Checklist's Planning stage and both pages remind you to keep them
-consistent.
+## 9. Risk & CR
 
 ### Risk & Issue Register
-Type (`Risk` / `Opportunity` / `Issue`), Category, Description,
-**Probability** & **Impact** (`Low`/`Medium`/`High` each), Owner,
-Mitigation Plan, **Status** (`Open, Monitoring, Mitigated, Closed,
-Realized, Not Pursued`), Date Raised/Closed, Notes.
+Type (Risk · Opportunity · Issue), category, description, **probability** and
+**impact** (Low/Medium/High), owner, mitigation, status (Open · Monitoring ·
+Mitigated · Closed · Realized · Not Pursued), date raised/closed, notes.
+**Risk score** = probability × impact (1–9): 1–2 Low, 3–4 Medium, 6–9 High.
+An **open high risk** (type Risk, not Closed/Mitigated, score ≥ 6) makes the
+project **Red**.
 
-**Risk Score** = Probability × Impact (Low=1, Med=2, High=3 → range 1–9),
-shown as a colored badge: **1–2 Low** (green), **3–4 Medium** (amber),
-**6–9 High** (red). The "Open High Risks" number used on the Dashboard and
-Portfolio counts risks (not Issues/Opportunities) with status not
-Closed/Mitigated and score ≥ 6.
+### Change Request Log
+CR code (auto), title, date raised, description, man-days planned, billable
+man-days, rate (hidden at read-limited), type (Paid · Free · Exchange), client
+sign-off, WBS updated, status (Proposed · Approved · In Progress · Completed ·
+Rejected), notes. **Amount** = billable man-days × rate. KPI tiles: Upcoming
+(planned man-days of Proposed), Work Order (billable man-days of Approved +
+In Progress), Remaining (billable man-days of In Progress).
 
-### Change Request (CR) Log
-CR Code (auto), Title, Date Raised, Description, Man-Days Planned, Billable
-Man-Days, Rate (hidden at `READ_LIMITED`), Type (`Paid, Free, Exchange`),
-Client Signoff, WBS Updated, **Status** (`Proposed, Approved, In Progress,
-Completed, Rejected`), Notes. **Amount** = Billable Man-Days × Rate
-(hidden at `READ_LIMITED`).
+## 10. Dependencies
 
-**KPI tiles**: Upcoming CR # (sum of planned man-days across `Proposed`),
-Work Order CR # (sum of billable man-days across `Approved`+`In Progress`),
-Remaining CR # (sum of billable man-days across `In Progress` only).
+What the project is waiting on from **outside the delivery team** — the
+client, another internal team, or a third party. Category, description,
+preferred format, responsible (organisation), priority (Low · Medium · High ·
+Extreme), expected date, status (Due · Done · Blocked), notes. Blocked
+dependencies appear as attention items on Portfolio.
 
-## 9. Budget Tracker
+## 11. Delivery
 
-Formulas shown on-page: `EV = %Actual Complete × Contract Value`,
-`PV = %Planned Complete × Contract Value`, `SPI = EV/PV`, `CPI = EV/AC`
-(≥1.0 favorable, <1.0 unfavorable).
+Sub-tabs: **Overview · Tasks · Sprints · Dev Checklist · Releases · UAT.**
 
-**Top inputs** (WRITE only): Total Contract Value, Total Planned Man-Days
-→ auto-computed Man-Day Rate = Contract Value ÷ Planned Man-Days.
+### Overview
+Nothing is entered here — everything is aggregated: Delivery %, planned
+start/end (from sprints), forecast end, schedule variance (EV − PV, story
+points), current sprint and milestone, **Health** (same rating as the
+Dashboard, with reasons), task counts, current sprint progress, **SPI**,
+**Effort Index**, and Milestone / Release / UAT summaries.
 
-**Weekly Entries** — one row per week: % Planned Complete and % Actual
-Complete (cumulative inputs), PV/EV computed, Actual Cost (input, hidden at
-`READ_LIMITED`), CV = EV − AC, SPI, CPI (both hidden at `READ_LIMITED`,
-colored green/red by ≥1.0), Notes. Rows are addable/deletable by WRITE
-users.
+### Tasks (WBS)
+The project-wide WBS, defined once: WBS #, title, **story points** (the
+estimate unit), default assignee, sprint. Import from Excel, export to
+Excel, bulk select, duplicate-title warnings. **Done points** = story points
+× % complete. The sum of all story points is the project's **baseline**.
 
-**Charts** (hidden at `READ_LIMITED`): Budget Burn (PV/EV/AC), SPI/CPI
-Trend.
+### Sprints
+Lifecycle: **Draft** (plan freely; numbers are zero) → **Open** (started;
+PV/EV/AV tracked live) → **Closed** (numbers frozen permanently; only a Super
+Admin can reopen). In an open sprint, update each task's % complete, actual
+hours (e.g. from Jira), and assignee. **0/100 rule:** a task earns its story
+points only at 100%. Closing a sprint with unfinished tasks asks you to move
+them to another sprint or accept them as spillover. A task that leaves an
+open sprint keeps its contribution to that sprint. Each sprint shows PV, EV,
+AV, **SPI** and **Effort Index**; per-person allocation and Jira hours are
+reference only. Sprint Playbook and Excel export are on this tab.
 
-## 10. PM Plan
+### Dev Checklist
+The Development checklist (§7) — a quality/governance checklist, not a task
+tracker.
 
-One record per project, structured to match BS23's `PMP_Template.docx`
-exactly, in 8 independently-editable sections:
+### Releases
+A shipped version/build ("1.4.0 deployed to UAT"): version, name, type
+(Internal · Development · QA · Staging · UAT · Production · Hotfix),
+environment, release date, owner, related milestone, build number, release
+notes, deployment status (Planned · In Progress · Deployed · Rolled Back ·
+Failed), approval (Pending · Approved · Rejected), rollback version,
+post-release validation, known issues, and **UAT sign-off** (Pending · Signed
+· Rejected) with date and feedback.
 
-1. **Project Details** — Prepared By, Date, Version
-2. **Rationale** — why the project, ROI, alignment
-3. **Stakeholders & Access** — table, pre-filled with 6 default rows
-   (Sponsor, Client/Product Owner, PM, Dev Team, QA Team, Ops/DevOps)
-4. **Charter** — Objective, Scope In/Out, Success Criteria, Timeline,
-   Budget, Assumptions & Constraints, PM Authority
-5. **Methodology** — Approach, Cadence, Ceremonies, Tools, Roles, Change
-   Management
-6. **Test Plan** — Levels, Environments, Entry/Exit Criteria, Defect
-   Management, UAT Process, Deliverables
-7. **Deployment Plan** — Environments, Release Strategy, Steps, Rollback,
-   Go-Live Checklist, Post-Deployment Monitoring
-8. **Communications Plan** — table, pre-filled with 4 default rows, plus
-   Escalation Path
-9. **RACI Matrix** — 17 default activity rows × 5 role columns (PM, TL, BA,
-   Lead Eng, Creative Lead)
+### UAT
+Client acceptance testing, separate from internal QA.
+**Test cases:** code, title, scenario, preconditions, steps, expected result,
+priority, status (Not Started · In Progress · Passed · Failed · Blocked),
+owner, executed date, actual result — optionally linked to a release and a
+milestone. **Defects:** code, title, description, severity (Low · Medium ·
+High · Critical), priority, status (Open · In Progress · Fixed · Retest ·
+Closed · Rejected), owner, reported date, target fix date, retest result,
+closed date.
 
-**Export .docx** regenerates the plan back into the original Word template
-format — useful for sharing outside the portal.
+## 12. Budget Tracker
 
-## 11. Decisions & Action Items
+**Super Admin only, testing purposes only** — real budget tracking lives in
+a separate portal. It never affects project Health.
 
-### Decision Log
-Date, Decision, Rationale, Decided By, Notes. **Append-only** — no status
-field, since it's a permanent record of "what we decided and why," not a
-task to close out. Distinct from Change Requests (scope changes with a
-cost/date impact) and the Checklist (the fixed, stage-gated backbone).
+- Inputs: Total Contract Value (shared with Milestones & Payments) and
+  Planned Man-Days (reference man-day rate only). **Baseline story points**
+  are not typed in — they're the WBS total.
+- One row per sprint: % planned / % actual complete (cumulative), PV, EV,
+  **cumulative actual cost** (with this sprint's own cost and a per-role
+  breakdown), CV, SPI, CPI.
+- **CPI here is a dollar ratio** (EV ÷ actual cost), where EV is based on
+  contract value — it behaves like a margin indicator, not classic EVM CPI.
 
-### Action Items
-Description, Owner, Due Date, **Status** (`Open` / `Done`, one-click
-toggle), Notes. Positioned as "small follow-ups with an owner and a due
-date — too lightweight for the Checklist, still too easy to forget."
-Feeds the Notifications/Reminders system exactly like checklist items.
+## 13. PM Plan
 
-## 12. Team & Resourcing
+One plan per project, matching BS23's `PMP_Template.docx`, in 15 sections
+(each shows Completed / In Progress / Not Started by how much is filled in):
 
-Two tabs.
+1. Rationale · 2. Stakeholders & Access (with influence/interest) ·
+3. Charter · 4. Scope & Deliverables Baseline · 5. **Milestone** (read-only —
+from Milestones & Payments) · 6. Timeline (phases with start/end) ·
+7. Methodology · 8. Resource & Responsibility Plan · 9. **Risk & Issue
+Management** (read-only — from the Risk Register) · 10. Test Plan ·
+11. Deployment Plan · 12. Communications Plan (+ escalation path) · 13. RACI
+Matrix · 14. **Dependency Management** (read-only — from Dependencies) ·
+15. **PMO Health & Control Gates** (G0–G6, editable here).
 
-### Access
-Who can log into this specific project, and what Client/Guest members
-can see. Visible to Super Admin/Admin/Management/PM; **only Super Admin can
-edit**. You assign `PM`, `CLIENT`, or `LIMITED` (Super Admin/Admin/
-Management never need a row here — their global role already governs their
-access). The person being added must already exist as a User (create them
-under Admin → Users first). PM members get full read/write on everything
-automatically; Client/Guest members get a per-module dropdown grid
-(NONE/READ_LIMITED/READ_FULL/WRITE) — an **Apply preset…** dropdown
-(Standard Client, Full Visibility Read-Only, No Access) sets the whole grid
-in one click, still editable per-module afterward.
+Read-only sections link to their source tab. Long text fields are rich text
+and can carry a reference link. **Export .docx** regenerates the Word plan.
+
+## 14. Decisions & Action Items
+
+**Decision Log** — date, decision, rationale, decided by, notes. A permanent
+record; no status. **Action Items** — description, owner, due date, status
+(Open/Done), notes. Overdue action items feed Reminders and the Dashboard.
+
+## 15. Team & Resourcing
+
+### Access (Team tab)
+Who can log in to this project and, for Client/Guest members, which modules
+they see. Visible to Super Admin, Admin, Management, PM; **only a Super Admin
+edits**. Add existing users as PM, Client, or Guest; set Client/Guest module
+access by dropdown or preset.
 
 ### Engagement (Resourcing)
-A lightweight staffing record — who's working on this project, in what
-capacity. Visible to Super Admin/Admin/Management/PM; editable by Super
-Admin anywhere, or by the project's own PM for that project (Management
-sees it read-only, same as the Access tab). Fields: Person, Role on Project
-(free text), **Intensity %** (presets Low=25/Med=50/High=90, or any custom
-value), Start/End Date, Notes. New people are created only under Admin →
-People — this tab just assigns existing ones.
+Who is working on the project and how hard. Editable by a Super Admin, or by
+the project's PM for their own project; read-only for Admin and Management.
 
-**Overload & conflict badges** (also drive the Portfolio panel):
-- 🔴 **Overloaded** — a person's summed intensity across all their
-  currently-active engagements (across *every* project, not just this one)
-  exceeds 100%.
-- 🟠 **Overlap conflict** — two or more of a person's engagements are each
-  individually ≥60% intensity *and* their date ranges overlap, even if the
-  combined total doesn't cross 100%. This catches "the same senior person
-  needed hard by two projects in the same sprint" even when neither
-  engagement alone looks unusual. Pairs within the same project don't
-  count as a conflict.
+- Assign an existing person (from Admin → People) with a role and optional
+  start/end dates. Presets: Low 25% · Med 50% · High 90%.
+- **Intensity is set per calendar month** — use the month strip to move
+  between months.
+- **Intensity on this project:** Low 0–39% · Medium 40–59% · High 60%+.
+- **Signals (total utilization across all projects):** Healthy < 70% · High
+  70–100% · **Over-utilized > 100%**; plus Ending Soon (within 7 days) and New
+  to Project.
+- An **overlap conflict** is flagged when one person has two or more ≥ 60%
+  engagements on different projects with overlapping dates.
 
-## 13. Escalations
+## 16. Escalations
 
-Visible **and writable only by Super Admin and Admin (`TPM`)** — everyone
-else is redirected to the Dashboard, including Management (`PROGRAM_MANAGER`)
-despite its new project drill-down elsewhere. This is deliberately Admin's
-own write surface, separate from the delivery data itself: an Admin
-raises/tracks a concern here rather than editing the PM's
-checklist/risk/budget data directly (that's what the audited Override
-control on checklist items is for). Fields:
-Type, Title, Notes, **Status** (`Open, Acknowledged, Resolved`), Raised By
-(auto-set).
+Super Admin and Admin (TPM) only — the Admin's own write surface. Type,
+title, notes, status (Open · Acknowledged · Resolved), raised by.
 
-## 14. Activity Log
+## 17. Activity Log
 
-Per-project change history, visible to Super Admin/Admin/PM (Management
-still excluded, same as Escalations). Shows the last 200 actions: When,
-Actor (name + role), Action type (`create, update, delete, override,
-role_change`), Summary. Admin (`TPM`) overrides get a distinct amber "TPM
-Override" tag so they're never mistaken for a normal PM edit. Every write
-anywhere in the app is captured here (and in the portal-wide Audit Log —
-see [§19](#19-admin-tools)), including a before/after diff stored
-internally.
+Per-project history for Super Admin, Admin, and PM: the last 200 changes with
+who, role, action, and summary. TPM overrides are tagged distinctly.
 
-## 15. Presales Pipeline
+## 18. Presales pipeline
 
-A separate tracker for **deals that haven't become projects yet**. Visible
-to Super Admin, PM, Admin (`TPM`), Management (`PROGRAM_MANAGER`) — never
-Client/Guest; only Super Admin and PM can create/edit/delete — Admin and
-Management see it read-only.
+Deals that aren't projects yet. Visible to Super Admin, PM, Admin,
+Management; only Super Admin and PM edit.
 
-### List (`Presales`)
-Stats: Open Opportunities count, Open Pipeline Value, Win Rate
-(`Won / (Won + Lost)`). Filter pills: Open / Won / Lost / All / Deleted
-(Deleted = Super Admin only). Each card shows name, client, estimated value,
-expected close date, an outcome badge, and — for still-Open opportunities
-— an ⚠ overdue/due-soon badge if the expected close date has passed or is
-within 7 days.
+- **List:** open opportunities, open pipeline value, win rate; filters Open /
+  Won / Lost / All / Deleted. Cards flag overdue or due-soon close dates and
+  **stale** deals (no activity for 10 days, unless on hold).
+- **Details:** name, client, deal owner, estimated value (USD or BDT,
+  converted at a fixed 122 BDT/USD), expected close date, **stage** (Lead ·
+  Qualifying · Proposal · Negotiation), forecast category, start date, sales
+  contact, estimated by, lead type, POC done, practice area, industry,
+  technology, source, on hold (+ reason), presale folder link, description.
+- **Presales checklist** (flat, from the template), **Decision Log**,
+  **Action Items**.
+- **Mark as Won** creates a real project (same seeding as Create Project) and
+  copies the deal's decisions and action items into it, and its checklist
+  items into the PM checklist's **Presales** stage. The new project links
+  back to the deal. **Mark as Lost** asks for a reason; **Reopen** reverses
+  it. Delete is soft; Permanent Delete is Super Admin only.
 
-### Detail page
-- **Overview** — editable Name, Client, Description, Estimated Value,
-  Expected Close Date.
-- **Presales Checklist** — a flat (no stages — presales is a short,
-  single-phase process) checklist auto-seeded from a Super Admin-managed
-  template when the opportunity is created. Same status set as the real
-  Checklist, editable the same way.
-- **Decision Log** and **Action Items** — same shape as the project-level
-  versions.
-- **Outcome actions**:
-  - **Mark as Won** — confirms, then runs the Win flow (below).
-  - **Mark as Lost** — prompts for a "why was this lost?" reason.
-  - **Reopen** (if Lost) — resets to Open and clears the reason.
-  - Once Won, the card just links to the resulting project instead.
+## 19. My Engagement
 
-### What happens when you mark an opportunity Won
-1. A brand-new real **Project** is created (name/client/contract value
-   from the opportunity) — same seeding as manually creating a project:
-   full PM + DevOps checklist, milestone rows, default PM Plan.
-2. All presales **Decisions** and **Action Items** are copied into the new
-   project's Decision Log and Action Items, so nothing discussed during
-   the pitch is lost.
-3. The presales **Checklist items** are copied into the new project's PM
-   Checklist as their own **"Presales" stage** (shown first, before
-   Pre-Sales & Initiation) — with their existing status/dates/owner/notes
-   intact, and **counted toward the project's overall % complete**.
-4. The opportunity is marked `WON` and linked to the new project. Opening
-   the new project's Dashboard/Checklist shows a small "↳ Won from
-   presales opportunity" link back to the original pitch record.
+Your own assignments only — project, role, intensity, dates, and your total
+current allocation. Needs your account linked to a Person (Admin → People).
+Not shown to Management.
 
-### Delete / Restore
-- **Delete** (PM/Super Admin) — soft delete, moves to the Deleted tab.
-- **Restore** (PM/Super Admin) — brings it back.
-- **Permanent Delete** (Super Admin only) — irreversible, only reachable
-  from the Deleted tab.
+## 20. Portfolio
 
-## 16. My Engagement
+Super Admin, Admin, and Management.
 
-A personal-only page: your own project assignments, role, and current
-allocation — nothing about anyone else. It's resolved through your linked
-**Person** record, so even a Guest (`LIMITED`) user with no project
-memberships at all can still see this (as long as a Super Admin has linked
-their account to a Person under Admin → People). Shows total current
-allocation % and a table of every engagement (Project, Role, Intensity %,
-dates). If your account isn't linked to a Person yet, the page tells you
-to ask a Super Admin. **Management (`PROGRAM_MANAGER`) is excluded** — redirected
-to the Projects list instead, even if linked to a Person.
+- **Stats:** total and active projects; Healthy / At Risk / Critical counts
+  (active projects only); contract value, collected, outstanding.
+- **Portfolio Health bars** (need ≥ 2 projects with data): Schedule (avg
+  SPI), Effort (avg Effort Index), Checklist (share of remaining checklist
+  work not overdue), Risk (share of projects with no open high risk).
+- **Needs Management Attention** — every active non-green project with its
+  reasons (high risks, overdue milestone, SPI, blocked dependencies, missing
+  PM/contract value).
+- **Overload & Conflicts** (Super Admin/Admin) — people over 100% or with
+  overlapping high-intensity engagements.
+- **Project table** — stage, health (hover for reasons; archived projects
+  show none), Gov/Del progress, contract value, SPI, Effort, risks, next
+  milestone. Export to Excel.
+- **Upcoming Milestones** — not-done milestones across active projects,
+  overdue ones badged.
+- **Trends** — portfolio average SPI and Effort Index by sprint end.
 
-## 17. Portfolio (Management aggregate view)
+## 21. Reminders
 
-Visible only to Super Admin, Admin, Management. A deliberate dead end — no
-links into any project's detail pages from *here*, so this view stays
-aggregate-only even though Management can now open individual projects
-directly from the Projects list (§4).
+Super Admin, Admin, and PM only (a PM sees their own projects). Everything
+overdue or due within 7 days from: checklist items (not done, with a planned
+date, **excluding recurring cadence items**), action items, open presales
+opportunities (expected close date), presales action items on open deals,
+and stale presales opportunities. Overdue first, then soonest.
 
-- **Stats**: Total Projects, Total Contract Value, Exceptions (Red count).
-- **Exceptions panel** — every RED project with the reason (open high
-  risks and/or SPI/CPI below 0.9).
-- **Overload & Conflicts panel** — Super Admin/Admin only (not Management):
-  every person over 100% allocation and every cross-project overlap
-  conflict, computed across the whole People registry.
-- **Project table** — RAG, Project, Client, Contract Value, Latest SPI,
-  Latest CPI, Open High Risks, one row per non-deleted project.
+## 22. Admin tools
 
-## 18. Notifications / Reminders
+- **Users** — Super Admin edits (name, email, role, reset password,
+  activate/deactivate, delete when safe, CSV/XLSX import); Admin and PM view
+  read-only. You can't change your own role or deactivate yourself.
+- **People** — the registry every owner field picks from: name, title,
+  email, phone, linked portal account, **rate role** and **competency**
+  (figures visible to Super Admin only). Also manages the role rate card and
+  competency multipliers. Super Admin edits; Admin, Management, PM read.
+- **Checklist Template** — the master items new projects (and presales
+  opportunities) are seeded from; editing affects **future** projects only.
+  Per item: text, **checkpoint** label, and the **↻ recurring** toggle.
+  Add, reorder, delete; export to Excel.
+- **Audit Log** — every write across the portal, filterable by project,
+  actor, and action.
 
-One page collecting everything overdue or due within 7 days, from exactly
-four sources:
+## 23. Login & account
 
-1. **Checklist items** — not Completed/N/A, with a Planned Date, on active
-   projects you can see.
-2. **Action items** — not Done, with a Due Date, same scoping.
-3. **Presales opportunities** — still Open, with an Expected Close Date.
-4. **Presales action items** — not Done, with a Due Date, only while the
-   opportunity is still Open (once Won they're already living in the real
-   project's Action Items; once Lost there's nothing left to chase).
+Email + password. Wrong password and deactivated account show the same
+message. Role changes and deactivation take effect on the very next request.
 
-Sorted Overdue first, then soonest due date. Only `ADMIN`, `TPM`, `PM` get
-reminders at all — a PM sees only their own projects' items; Admin/TPM see
-everything active. Program Manager (aggregate-only) and Client/Limited
-(not meant to be chasing internal deadlines) never see this page.
+## 24. Cheat sheet: how the numbers are calculated
 
-## 19. Admin Tools
-
-Users and People are no longer Super Admin-only — the other two sections
-below still require `ADMIN` (Super Admin).
-
-### Users (`Admin → Users`)
-**Super Admin edits**; Admin (`TPM`) and PM see the same directory
-**read-only** (Management/`PROGRAM_MANAGER` has no access here at all).
-Every account: Name/Email (inline editable, Super Admin only), **Role**
-(dropdown, Super Admin only — you can't change your own role or deactivate
-your own account), Reset Password (Super Admin only — generates a new temp
-password shown once), Active/Inactive toggle (view-only for non-Super
-Admin). A deactivated account is blocked **immediately**, not just on next
-login — every request re-checks the user's status fresh from the database.
-Assigning someone to a specific project happens on that project's Team
-tab, not here.
-
-### People (`Admin → People`)
-The canonical registry that Owner fields, "Decided By," and PM Plan
-stakeholder rows all pick from, instead of free-typed names. **Super Admin
-edits**; Admin (`TPM`), Management (`PROGRAM_MANAGER`), and PM see it
-**read-only**, with the Avg. Rate stat tile and the actual $ / multiplier
-figures in the Role Rates and Competencies panels hidden — only Super Admin
-sees those numbers. Fields: Name, Title, Email, Phone, and an optional link
-to a portal User account (so that person can see their own My Engagement
-page). Shows each person's current active engagements as intensity badges.
-New people and account links are created only here; assigning a person to
-a project's roster happens on that project's Resourcing tab.
-
-### Checklist Template (`Admin → Checklist Template`)
-Super Admin only. The master template new projects/opportunities are
-seeded from — **editing here only affects future projects**, not ones
-that already exist. Three sections:
-1. **PM Checklist template** — grouped by stage (excluding "Presales,"
-   which only ever comes from a Win, never from this seedable template).
-   Add/edit/delete/reorder items within a stage.
-2. **DevOps Checklist template** — same, grouped by category.
-3. **Presales Checklist template** — flat list used to seed every new
-   presales opportunity's checklist.
-
-### Global Audit Log (`Admin → Audit Log`)
-Super Admin only. Every write across every project plus user/role and
-project-creation events, paginated. Filterable by Project, Actor, and
-Action type. A permanently-deleted project's history stays visible but can
-no longer be filtered by name (the row is gone).
-
-## 20. Login & Account
-
-- Email + password login (no SSO). No self-service signup — a Super Admin
-  creates accounts (one at a time, or bulk-imported from a CSV/XLSX —
-  both Super Admin only; Admin and PM can view the directory but not add
-  to it).
-- Deactivated accounts get the same generic "Incorrect email or password"
-  message as a wrong password — no hint given about why.
-- Change your own password any time from the sidebar (needs your current
-  password; new password minimum 8 characters).
-- Role changes and deactivation take effect on your **very next request**,
-  not your next login.
-
-## 21. Cheat sheet: how the numbers are calculated
-
-| Metric | Formula / rule |
+| Metric | Rule |
 |---|---|
-| **Overall % Complete** | Completed items ÷ (all items − Not Applicable), across PM + DevOps checklists |
-| **Current Stage** | First stage (in fixed order) with any item not Completed/N/A; "Complete" if none |
-| **End Date** | Latest Forecast Date across all applicable checklist items |
-| **Slipped ⚠** | Forecast Date has moved past Planned Date on an incomplete item |
-| **Overdue** | Item not done, and its Planned/Due/Expected date is already in the past |
-| **Due Soon** | Item not done, and its date falls within the next 7 days |
-| **Risk Score** | Probability × Impact (Low=1, Medium=2, High=3) → 1–9. 1–2 Low, 3–4 Medium, 6–9 High |
-| **Open High Risks** | Type = Risk, status not Closed/Mitigated, score ≥ 6 |
-| **CR Amount** | Billable Man-Days × Rate |
-| **PV (Planned Value)** | % Planned Complete × Contract Value |
-| **EV (Earned Value)** | % Actual Complete × Contract Value |
-| **CV (Cost Variance)** | EV − Actual Cost |
-| **SPI** | EV ÷ PV — ≥1.0 favorable, <1.0 unfavorable |
-| **CPI** | EV ÷ Actual Cost — ≥1.0 favorable, <1.0 unfavorable |
-| **Man-Day Rate** | Contract Value ÷ Total Planned Man-Days |
-| **Tranche Amount** | Total Contract Value × Payment % |
-| **RAG status** | RED if any open high risk exists or worse of SPI/CPI < 0.9; AMBER if worse of SPI/CPI is 0.9–0.99; GREEN otherwise |
-| **Overloaded (person)** | Sum of intensity % across all currently-active engagements, any project, > 100% |
-| **Overlap conflict (person)** | Two+ engagements each ≥60% intensity, with overlapping date ranges (same-project pairs excluded) |
+| **Tracked checklist item** | Not "Not Applicable" and not a recurring cadence item |
+| **Governance %** | Completed tracked items ÷ all tracked items (all checklists pooled) |
+| **Current stage** | First stage (in order) with an unfinished tracked item; "Completed" if none |
+| **Delivery %** | Σ (story points × % complete) ÷ Σ story points of all WBS tasks |
+| **Baseline story points** | Σ story points of all WBS tasks |
+| **SPI** | Story points earned ÷ story points committed, across started and closed sprints (0/100 rule). Draft sprints don't count |
+| **Effort Index** | Story points earned ÷ competency-adjusted man-days (actual hours ÷ 8 × competency multiplier). > 1 = less effort than estimated |
+| **Health — Red** | Any open high risk, **or** SPI < 0.9 |
+| **Health — Amber** | SPI 0.9–0.99, **or** any overdue milestone |
+| **Health — Green** | None of the above (missing data never counts against a project) |
+| **Milestone due date** | Forecast date if set, otherwise planned date |
+| **Overdue milestone** | Not completed/N/A and due date before today |
+| **Next milestone** | Earliest not-done milestone due today or later |
+| **Planned end** | Latest milestone date (actual if done, else due date) |
+| **Next payment due** | Earliest-due milestone with payment > 0% that's Not Invoiced |
+| **Tranche amount** | Contract value × payment % |
+| **Overdue / Due soon (reminders)** | Not done and date passed / within the next 7 days |
+| **Slipped ⚠** | Actual (checklist) or forecast (milestone) date is later than planned, item not done |
+| **Risk score** | Probability × impact, Low=1 · Medium=2 · High=3 |
+| **Open high risk** | Type Risk, status not Closed/Mitigated, score ≥ 6 |
+| **CR amount** | Billable man-days × rate |
+| **Budget Tracker PV / EV** | Cumulative committed / earned story points ÷ baseline × contract value |
+| **Budget Tracker CPI** | EV ÷ cumulative actual cost (dollar ratio; testing only) |
+| **Overloaded person** | Current total intensity across projects > 100% |
+| **Overlap conflict** | Two+ engagements ≥ 60% on different projects with overlapping dates |
 
-## 22. Quick answers to "why can't I see X?"
+## 25. Quick answers to "why can't I see X?"
 
-- **"I don't see Risk/Budget/CR on this project."** You're probably a
-  Client at the default access level — those modules default to `NONE`.
-  Ask a Super Admin to raise your access (or apply a broader preset) on the
+- **"I can't see Risk/Budget/CR."** You're probably a Client on default
+  access. Ask a Super Admin to widen your access on the Team tab. Budget
+  Tracker is Super Admin only for everyone.
+- **"I can only view, not edit."** Admin (TPM) and Management are
+  read-only by design (Admin writes through Escalations/Override); Client and
+  Guest depend on their module access.
+- **"I can't open this project."** PM/Client/Guest need membership on the
   project's Team tab.
-- **"I can't edit anything, only view it."** Check your role and access
-  level (§2). Admin (`TPM`) and Management (`PROGRAM_MANAGER`) are
-  intentionally read-only outside their own dedicated write surfaces
-  (Escalations/Override for Admin, nothing for Management); Client/Guest
-  depend entirely on what's been granted on the project's Team tab.
-- **"I can't open this project at all."** As PM/Client/Guest you need an
-  explicit membership row on that project's Team tab. Management
-  (`PROGRAM_MANAGER`) and Admin (`TPM`) always get in, read-only, no
-  membership row needed.
-- **"I don't get any Notifications."** Only `ADMIN`/`TPM`/`PM` receive
-  reminders. Also check the item actually has a date set — items with no
-  Planned/Due date never generate a reminder.
-- **"A checklist item is stuck as 'Presales'."** That stage only appears
-  on a project won from a presales opportunity, and only for items copied
-  over from the pitch — it's expected, not a bug.
-- **"I can't permanently delete something."** Only Admins can, and only
-  after it's already been soft-deleted (moved to the Deleted tab) first.
+- **"The page says it doesn't exist."** The portal shows "not found" both
+  for missing pages and ones you don't have access to — it doesn't reveal
+  which.
+- **"My recurring item isn't counted."** By design — cadence items never
+  count toward progress. Update its **Last done** date instead.
+- **"Where did the milestones from the checklist go?"** Checklist tags are
+  **checkpoints**. Client milestones are added on Milestones & Payments.
+- **"Why is Health red when the project feels fine?"** Hover the health
+  badge or read the reasons under the Health tile — it's either an open high
+  risk or SPI below 0.9.
+- **"I get no reminders."** Only Super Admin, Admin, and PM get them, and
+  only for items that have a date.
+- **"I can't permanently delete something."** Only a Super Admin can, and
+  only after it's been soft-deleted.

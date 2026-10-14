@@ -49,7 +49,7 @@ export default async function ReleasesPage({ params }: { params: { projectId: st
         id="delivery-releases"
         title="How to fill this in"
         points={[
-          <>A Release is a shipped version/build — &quot;1.4.0 deployed to UAT&quot; — distinct from a Milestone, which is a checkpoint like &quot;Development Complete&quot;.</>,
+          <>A Release is a shipped version/build — &quot;1.4.0 deployed to UAT&quot; — distinct from a Milestone, which is a client-facing commitment like &quot;Phase 1 MVP delivered&quot; (Milestones &amp; Payments tab).</>,
           <>Optionally link a release to the Milestone it fulfills, so its scope is traceable.</>,
           <><strong>Deployment Status</strong> and <strong>Approval Status</strong> are tracked independently — a build can be deployed before it&apos;s formally approved, or vice versa, depending on your process.</>,
         ]}

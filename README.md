@@ -9,13 +9,31 @@ Stack: Next.js 14 (App Router) + TypeScript, Prisma + Postgres (Supabase), NextA
 
 ## Modules
 
-Dashboard · PM Checklist (51 items / 7 stages) · DevOps Checklist (18 items / 5
-categories) · Milestones & Payments (derived from both checklists) · Risk Register ·
-CR Log · Budget Tracker (EVM) · PM Plan (editable form, exports back to `.docx`).
+Per project: Dashboard · Checklists (PM, Delivery & QA, DevOps, Creative & XR,
+plus a Development checklist under Delivery) · Milestones & Payments · Risk &
+CR · Dependencies · Delivery (Tasks/WBS, Sprints, Dev Checklist, Releases,
+UAT) · PM Plan (editable form, exports back to `.docx`) · Decisions & Action
+Items · Team & Resourcing · Escalations · Activity. Portal-wide: Projects,
+Presales, Portfolio, Reminders, My Engagement, and Admin (Users, People,
+Checklist Template, Audit Log). Budget Tracker is Super-Admin-only and for
+testing; real budget tracking lives in a separate portal.
 
-Every project you create gets a fresh instance of all 8 modules. Status colors, the
-Forecast-slipped-past-Planned flag, risk severity, and SPI/CPI favorability all use
-the exact hex values from the source spreadsheet's conditional formatting.
+Every new project gets a fresh copy of each checklist from the Admin-editable
+Checklist Template. Three concepts are kept deliberately separate (see
+`docs/USER_GUIDE.md` §2):
+
+- **Milestones** — client-facing delivery commitments, the only thing that
+  carries payment %, invoice status, and client sign-off (Milestones &
+  Payments tab; everything else reads them).
+- **Checkpoints** — internal steps tagged on checklist items; never payment.
+- **Gates (G0–G6)** — the PMO stage-gate framework in the PM Plan.
+
+Health and progress have one definition each, in `lib/project-health.ts` and
+`lib/milestones.ts`: **Governance %** (checklist), **Delivery %** (story
+points), **SPI** (earned ÷ committed story points), and a Red/Amber/Green
+rating from open high risks, SPI, and overdue milestones. Recurring cadence
+checklist items are excluded from progress. Full formulas:
+`docs/USER_GUIDE.md` §24. Audit fixes and their status: `docs/FIX_PLAN.md`.
 
 ## Resourcing (People & Engagements)
 
@@ -23,12 +41,12 @@ A `Person` registry is the single source of truth for a real person — name, ti
 and (optionally) a linked portal account. Checklist/Risk "Owner" and PM Plan Stakeholder rows can
 reference a `Person` instead of re-typing a name each time (the old free-text field is kept as a
 fallback for anything not yet linked — nothing is deleted). Each project has a `Resourcing` tab
-listing who's engaged on it: role on that project, a coarse intensity (0-100%, shown as Low/Med/
-High presets), and an optional date range — deliberately not a scheduling, timesheet, or cost
-tool.
+listing who's engaged on it: role on that project, an optional date range, and a coarse
+intensity (0-100%, Low/Med/High presets) set **per calendar month** — deliberately not a
+scheduling, timesheet, or cost tool.
 
-- **Admin > People** creates/edits the registry (Admin-only, to keep it from fragmenting into
-  duplicates). A project's **Resourcing** tab (Admin or that project's PM) assigns *existing*
+- **Admin > People** creates/edits the registry (Super Admin only, to keep it from fragmenting
+  into duplicates). A project's **Resourcing** tab (Admin or that project's PM) assigns *existing*
   people to that project.
 - A Person linked to a portal account (typically **Limited**) sees only their own assignments at
   **My Engagement** — never anyone else's, resolved by their linked account, not by project
@@ -70,12 +88,17 @@ Every write is recorded in `AuditLog`, visible per-project (`Activity` tab) and
 globally (`Admin > Audit Log`).
 
 ```bash
-npm test              # all unit + integration tests (role x module matrix, overload math, isolation)
-npm run test:unit      # just the fast, DB-free logic tests
+npm test              # all unit + integration tests — integration tests WRITE [TEST] rows to the DB
+npm run test:unit      # just the fast, DB-free logic tests (everything under lib/)
 npm run test:isolation # just the Supabase-backed cross-project isolation test
 ```
 
 ## Local development
+
+> **Warning:** if your `.env` points at the same Supabase project as the live site
+> (it currently does), local dev, `npm test`'s integration tests, migrations, and
+> scripts all act on production data and share its connection cap. Use a separate
+> Supabase project for development (Phase 0 of `docs/FIX_PLAN.md`).
 
 ```bash
 cp .env.example .env      # set DATABASE_URL/DIRECT_URL from Supabase, NEXTAUTH_SECRET, seed admin creds
@@ -102,8 +125,9 @@ To add another PM:
 npm run create-user -- someone@bs23.com "Their Name"   # or Admin > Users in the app
 ```
 
-This prints a one-time temporary password — there's no self-serve signup or password
-reset UI, matching the "handful of PMs, no enterprise auth" requirement.
+This prints a one-time temporary password. There's no self-serve signup; a Super Admin
+creates accounts and resets passwords from **Admin > Users**, matching the "handful of
+PMs, no enterprise auth" requirement.
 
 ## Docker
 

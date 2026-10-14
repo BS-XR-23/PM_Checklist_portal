@@ -20,7 +20,7 @@
     "seed-checklist-template": "tsx scripts/seed-checklist-template.ts",
     "milestone-cleanup": "tsx scripts/milestone-cleanup.ts",
     "test": "vitest run",
-    "test:unit": "vitest run lib/rbac.test.ts lib/overload.test.ts lib/resourcing-rbac.test.ts",
+    "test:unit": "vitest run lib",
     "test:isolation": "vitest run tests/isolation.integration.test.ts",
     "test:resourcing": "vitest run tests/resourcing.integration.test.ts"
   },

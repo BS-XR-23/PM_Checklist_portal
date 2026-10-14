@@ -133,7 +133,7 @@ export default async function DeliveryOverviewPage({ params }: { params: { proje
         id="delivery-overview"
         title="How to read this page"
         points={[
-          <>Nothing is entered here — every figure is aggregated live from the Tasks, Sprints, Milestones, Releases, and UAT tabs. To change a number, go edit it at its source.</>,
+          <>Nothing is entered here — every figure is aggregated live from the Tasks, Sprints, Releases, and UAT tabs plus the project&apos;s Milestones &amp; Payments tab. To change a number, go edit it at its source.</>,
           <><strong>Health</strong> is the same rating shown on the Dashboard and Portfolio: red for any open high risk or SPI under 0.9, amber for SPI under 1.0 or an overdue milestone, green otherwise.</>,
           <><strong>Effort Index</strong> is story points earned ÷ competency-adjusted man-days spent — above 1.0 means work took less effort than estimated. It measures estimate accuracy and doesn&apos;t affect Health.</>,
           <><strong>Schedule Variance</strong> is EV − PV in story points — negative means the project is behind its plan.</>,

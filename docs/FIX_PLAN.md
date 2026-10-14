@@ -112,9 +112,11 @@ If all suggestions are taken, the Development checklist shrinks from 35 to ~13 i
 
 ## Phase 5 — Docs and regression (1 day)
 
-- [ ] Update `docs/USER_GUIDE.md` (checklists, milestones, budget, PM Plan, health formulas) and README module list
-- [ ] Update in-page help boxes (PageGuide) to match
-- [ ] Rerun smoke crawler + unit + integration tests on staging; release
+- [x] Update `docs/USER_GUIDE.md` (checklists, milestones, budget, PM Plan, health formulas) and README module list
+- [x] Update in-page help boxes (PageGuide) to match
+- [~] Rerun smoke crawler + unit + integration tests on staging; release
+
+**Status (2026-10-14): done and committed, except the staging items.** USER_GUIDE rewritten (adds Delivery, Dependencies, the Milestone / Checkpoint / Gate distinction, recurring items, and the current formulas); README modules/resourcing/testing sections updated with a shared-database warning; stale help boxes on Releases, Dev Checklist, and Delivery Overview fixed; `npm run test:unit` now runs every DB-free test under `lib/`. Regression: typecheck + lint clean; 144 unit tests pass; every route crawled as all 5 roles — 0 server errors, 0 overflow, only the intended 404 access denials; 21 pages on mobile (390px) — 0 errors, 0 overflow. **Not done:** integration tests and a staging run, because no staging database exists yet (Phase 0) and those tests write to the live one. **Not deployed:** branch `fix/phase-1-audit` isn't pushed.
 
 ---
 
