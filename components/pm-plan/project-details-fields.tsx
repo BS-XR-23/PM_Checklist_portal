@@ -17,7 +17,7 @@ export function ProjectDetailsFields({
   version: string;
 }) {
   return (
-    <div className="grid sm:grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
       <div>
         <label className="block text-xs font-medium text-slate-600 mb-1">Prepared By</label>
         <InlineText value={preparedBy} onSave={(v) => updatePmPlanField(pmPlanId, projectId, "preparedBy", v)} />

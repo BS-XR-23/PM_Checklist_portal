@@ -1,3 +1,4 @@
+import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser, requireProjectAccess } from "@/lib/rbac";
 import { AuditLogTable } from "@/components/rbac/audit-log-table";
@@ -7,7 +8,9 @@ export default async function ActivityPage({ params }: { params: { projectId: st
   await requireProjectAccess(params.projectId);
 
   if (user.role !== "ADMIN" && user.role !== "TPM" && user.role !== "PM") {
-    throw new Error("Not authorized to view this project's activity log.");
+    // 404 like every other RBAC denial (existence isn't revealed) — a throw
+    // here surfaced as a 500 for Guest/Management.
+    notFound();
   }
 
   const logs = await prisma.auditLog.findMany({

@@ -114,7 +114,7 @@ export function DetailedReporting({
             </div>
           )}
 
-          <div className="grid lg:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <div className="rounded-xl border border-slate-200 bg-white p-4">
               <SectionHeader icon={<IconLayers />} iconWrapClass="bg-blue-50 text-blue-600" title="Stage / Category Breakdown" />
               <div className="space-y-3">

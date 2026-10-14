@@ -265,7 +265,7 @@ export default async function DeliveryOverviewPage({ params }: { params: { proje
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Milestone Summary */}
         <div>
           <SectionHeader icon={<IconFolder />} iconWrapClass="bg-blue-50 text-blue-600" title="Milestone Summary" />

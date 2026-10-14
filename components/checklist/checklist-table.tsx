@@ -20,11 +20,11 @@ import {
   IconExternalLink,
   IconFileText,
 } from "@/components/layout/icons";
-import { STATUS_COLORS, STATUS_ORDER, SLIPPED_FLAG_COLOR, avatarColorFromString } from "@/lib/colors";
+import { STATUS_COLORS, SLIPPED_FLAG_COLOR, avatarColorFromString } from "@/lib/colors";
 import { ITEM_STATUSES, type ItemStatus } from "@/lib/constants";
 import type { ChecklistType } from "@/lib/checklist-types";
 import { formatPct, formatDate, toDateInputValue, initials } from "@/lib/format";
-import { isSlipped, currentStage } from "@/lib/calculations";
+import { isSlipped, currentStage, reminderBand } from "@/lib/calculations";
 import { updateChecklistItem, createChecklistItem, deleteChecklistItem } from "@/app/projects/[projectId]/checklist-actions";
 import { TpmOverrideChecklistModal } from "@/components/rbac/tpm-override-checklist-modal";
 import { PersonPicker } from "@/components/resourcing/person-picker";
@@ -46,12 +46,6 @@ export type ChecklistTableItem = {
   notes: string | null; // null when stripped by READ_LIMITED access
   isCustom: boolean;
 };
-
-// Reads as "Overdue" on this page (a not-yet-done item past its planned
-// date) even though the underlying status value is still DELAYED — same
-// status everywhere else in the app calls "Delayed". Display-only alias, so
-// filters/exports elsewhere keep the one true label.
-const LEGEND_LABEL: Partial<Record<ItemStatus, string>> = { DELAYED: "Overdue" };
 
 const PAGE_SIZES = [10, 25, 50] as const;
 
@@ -83,7 +77,12 @@ export function ChecklistTable({
   const overallPct = applicable.length ? completedCount / applicable.length : 0;
   const inProgressCount = applicable.filter((i) => i.status === "IN_PROGRESS").length;
   const notStartedCount = applicable.filter((i) => i.status === "NOT_STARTED").length;
-  const overdueCount = applicable.filter((i) => i.status === "DELAYED").length;
+  // Date-based, same rule as the Dashboard's Overdue & Due Soon panel and
+  // Notifications (reminderBand) — counting the manual DELAYED status here
+  // instead made this page say "Overdue 0" while the Dashboard said 4.
+  const overdueCount = applicable.filter(
+    (i) => reminderBand(i.plannedDate, i.status === "COMPLETED") === "OVERDUE"
+  ).length;
 
   const groups = stageOrder
     .map((stage) => ({ stage, rows: items.filter((i) => i.stage === stage) }))
@@ -127,7 +126,7 @@ export function ChecklistTable({
         <StatTile
           icon={<IconCheckCircle />}
           iconWrapClass="bg-emerald-50 text-emerald-600"
-          label="On Track"
+          label="Completed"
           value={String(completedCount)}
           subtitle={formatPct(applicable.length ? completedCount / applicable.length : 0)}
         />
@@ -198,10 +197,10 @@ export function ChecklistTable({
       </div>
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-1">
-        {STATUS_ORDER.map((s) => (
+        {ITEM_STATUSES.map((s) => (
           <div key={s} className="flex items-center gap-1.5 text-xs text-slate-500">
             <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: STATUS_COLORS[s].bg }} />
-            {LEGEND_LABEL[s] ?? STATUS_COLORS[s].label}
+            {STATUS_COLORS[s].label}
           </div>
         ))}
       </div>

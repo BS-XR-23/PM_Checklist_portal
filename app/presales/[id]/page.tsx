@@ -63,7 +63,7 @@ export default async function PresalesDetailPage({ params }: { params: { id: str
       <main className="p-4 sm:p-6 space-y-6">
         <PresalesOverview data={presales} canWrite={canWrite} people={people} />
 
-        <div className="grid gap-6 xl:grid-cols-5">
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-5">
           <div className="xl:col-span-3 space-y-3">
             <div className="flex items-start justify-between">
               <div>

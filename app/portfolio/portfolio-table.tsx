@@ -29,10 +29,12 @@ function matchesTab(r: PortfolioRow, tab: Tab): boolean {
       return r.status === "ACTIVE";
     case "HEALTHY":
       return r.status === "ACTIVE" && r.rag === "GREEN";
+    // Same ACTIVE-only scope as the summary counts in buildPortfolioData —
+    // an archived project has no live health to be at risk/critical with.
     case "AT_RISK":
-      return r.rag === "AMBER";
+      return r.status === "ACTIVE" && r.rag === "AMBER";
     case "CRITICAL":
-      return r.rag === "RED";
+      return r.status === "ACTIVE" && r.rag === "RED";
     case "COMPLETED":
       return r.stage === "Completed";
   }
@@ -394,12 +396,16 @@ function ProjectRow({ row: r }: { row: PortfolioRow }) {
       </td>
       <td className="px-3 py-2.5 text-slate-600 whitespace-nowrap">{r.stage}</td>
       <td className="px-3 py-2.5 whitespace-nowrap">
-        <span
-          className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium"
-          style={{ backgroundColor: ragColor.bg, color: ragColor.text }}
-        >
-          {r.rag === "GREEN" ? "Healthy" : r.rag === "AMBER" ? "At Risk" : "Critical"}
-        </span>
+        {r.status === "ARCHIVED" ? (
+          <span className="text-slate-400">—</span>
+        ) : (
+          <span
+            className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium"
+            style={{ backgroundColor: ragColor.bg, color: ragColor.text }}
+          >
+            {r.rag === "GREEN" ? "Healthy" : r.rag === "AMBER" ? "At Risk" : "Critical"}
+          </span>
+        )}
       </td>
       <td className="px-3 py-2.5 whitespace-nowrap">
         <div className="flex items-center gap-2 w-28">

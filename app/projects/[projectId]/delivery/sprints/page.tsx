@@ -143,8 +143,8 @@ export default async function DeliverySprintsPage({ params }: { params: { projec
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-3">
-        <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
           <h2 className="text-base font-semibold text-slate-900">Delivery — Sprints</h2>
           <p className="text-sm text-slate-500">
             0/100 rule: a committed task earns its full story points only once it&apos;s fully done. Open a sprint to
@@ -152,7 +152,7 @@ export default async function DeliverySprintsPage({ params }: { params: { projec
             a sprint to freeze its PV/EV/AV permanently once it ends. New tasks are defined on the Tasks tab.
           </p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
           <SprintPlaybookModal />
           <a
             href={`/api/projects/${params.projectId}/delivery/export`}

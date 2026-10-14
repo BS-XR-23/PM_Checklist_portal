@@ -74,7 +74,7 @@ export default async function ChecklistPage({ params }: { params: { projectId: s
           title="How to fill this in"
           points={[
             <>Marking an item <strong>Not Applicable</strong> removes it from the completion % entirely — it counts as out of scope, not as incomplete.</>,
-            <>Tagging an item with a <strong>Milestone Name</strong> is what creates a row on the project&apos;s Milestones &amp; Payments tab — that&apos;s the only way a payment milestone gets created, there&apos;s no separate &quot;add milestone&quot; step.</>,
+            <>Tagging an item with a <strong>Milestone Name</strong> is what creates a row on the project&apos;s Milestones &amp; Payments tab (that tab&apos;s <strong>+ Add Milestone</strong> button does the same thing in one step).</>,
             <>A read-limited viewer sees every item&apos;s Notes stripped out — that&apos;s deliberate, not missing data.</>,
           ]}
         />

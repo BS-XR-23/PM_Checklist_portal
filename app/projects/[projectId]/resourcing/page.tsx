@@ -6,6 +6,7 @@ import { canViewResourcing } from "@/lib/resourcing-rbac";
 import { computePersonLoad, findOverlapConflicts, isActiveDuringMonth, intensityForMonth, type EngagementLike } from "@/lib/overload";
 import { toDateInputValue, parseMonthParam, toMonthParam, addMonthsUTC, formatMonthShortLabel } from "@/lib/format";
 import { INTENSITY_BAND_COLORS } from "@/lib/colors";
+import { HIGH_INTENSITY_THRESHOLD_PCT, MEDIUM_INTENSITY_THRESHOLD_PCT, HIGH_UTILIZATION_THRESHOLD_PCT, OVERLOAD_THRESHOLD_PCT } from "@/lib/constants";
 import { SubNav } from "@/components/ui/sub-nav";
 import { IconInfo, IconHeart, IconGauge, IconAlertCircle, IconClock, IconUserPlus } from "@/components/layout/icons";
 import { AssignEngagementForm } from "./assign-engagement-form";
@@ -171,11 +172,16 @@ export default async function ResourcingPage({
         </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-slate-500">
-          <span className="font-medium text-slate-600">Utilization guide</span>
+          <span className="font-medium text-slate-600">Intensity on this project</span>
           {(["low", "medium", "high"] as const).map((band) => (
             <span key={band} className="flex items-center gap-1.5">
               <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: INTENSITY_BAND_COLORS[band].text }} />
-              {INTENSITY_BAND_COLORS[band].label} {band === "low" ? "0–39%" : band === "medium" ? "40–59%" : "60%+"}
+              {INTENSITY_BAND_COLORS[band].label}{" "}
+              {band === "low"
+                ? `0–${MEDIUM_INTENSITY_THRESHOLD_PCT - 1}%`
+                : band === "medium"
+                  ? `${MEDIUM_INTENSITY_THRESHOLD_PCT}–${HIGH_INTENSITY_THRESHOLD_PCT - 1}%`
+                  : `${HIGH_INTENSITY_THRESHOLD_PCT}%+`}
             </span>
           ))}
         </div>
@@ -211,11 +217,11 @@ export default async function ResourcingPage({
 
         {rows.length > 0 && (
           <div className="border-t border-slate-100 px-4 py-3">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2.5">Signals</p>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2.5">Signals — total utilization across all projects</p>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-              <SignalLegendItem icon={<IconHeart />} iconWrapClass="bg-emerald-50 text-emerald-600" label="Healthy" hint="Utilization < 70%" />
-              <SignalLegendItem icon={<IconGauge />} iconWrapClass="bg-amber-50 text-amber-600" label="High Utilization" hint="Utilization 70–100%" />
-              <SignalLegendItem icon={<IconAlertCircle />} iconWrapClass="bg-rose-50 text-rose-600" label="Over Utilized" hint="Utilization > 100%" />
+              <SignalLegendItem icon={<IconHeart />} iconWrapClass="bg-emerald-50 text-emerald-600" label="Healthy" hint={`Total < ${HIGH_UTILIZATION_THRESHOLD_PCT}%`} />
+              <SignalLegendItem icon={<IconGauge />} iconWrapClass="bg-amber-50 text-amber-600" label="High Utilization" hint={`Total ${HIGH_UTILIZATION_THRESHOLD_PCT}–${OVERLOAD_THRESHOLD_PCT}%`} />
+              <SignalLegendItem icon={<IconAlertCircle />} iconWrapClass="bg-rose-50 text-rose-600" label="Over Utilized" hint={`Total > ${OVERLOAD_THRESHOLD_PCT}%`} />
               <SignalLegendItem icon={<IconClock />} iconWrapClass="bg-blue-50 text-blue-600" label="Ending Soon" hint="Ends in next 7 days" />
               <SignalLegendItem icon={<IconUserPlus />} iconWrapClass="bg-violet-50 text-violet-600" label="New to Project" hint="Assigned in this month" />
             </div>

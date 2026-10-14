@@ -109,7 +109,7 @@ export function ReleasesTable({
 
             {isOpen && (
               <div className="border-t border-slate-100 p-4 space-y-4 bg-slate-50/40">
-                <div className="grid sm:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <Field label="Version">
                     {canWrite ? <InlineText value={r.version} onSave={(v) => updateRelease(r.id, projectId, { version: v })} /> : <p className="text-sm">{r.version}</p>}
                   </Field>
@@ -199,7 +199,7 @@ export function ReleasesTable({
                   </Field>
                 </div>
 
-                <div className="grid sm:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <Field label="Release Notes">
                     {canWrite ? <InlineTextarea value={r.releaseNotes ?? ""} onSave={(v) => updateRelease(r.id, projectId, { releaseNotes: v })} /> : <p className="text-sm whitespace-pre-wrap">{r.releaseNotes ?? "—"}</p>}
                   </Field>

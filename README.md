@@ -51,14 +51,17 @@ npm run apply-people-matches -- "Exact Name" ["Another Name" ...]   # only the n
 
 ## Roles & access
 
-Six roles, enforced server-side (not just hidden UI): **Admin** (full control, manages
-users/roles/projects), **TPM** (read-everywhere, writes only through the Escalations
-tab or an explicit "TPM Override" — always logged and tagged distinctly from a PM's
-own edits), **Program Manager** (portfolio-only RAG rollup at `/portfolio`, never
-project detail), **Client** (hard-isolated to their assigned project(s), locked-down
-default visibility — no Risk Register/CR Log/Budget, no internal notes), **PM**
-(full read/write on their assigned project(s) only), **Limited** (per-project,
-per-module access an Admin configures by hand, starts at nothing).
+Six roles, enforced server-side (not just hidden UI). The UI shows display labels
+(in brackets) over the system role names: **ADMIN** [Super Admin] (full control,
+manages users/roles/projects), **TPM** [Admin] (read-everywhere, writes only through
+the Escalations tab or an explicit "TPM Override" — always logged and tagged
+distinctly from a PM's own edits), **PROGRAM_MANAGER** [Management] (the
+`/portfolio` RAG rollup plus read-only drill-down into every project, except
+Decisions/Action Items/Escalations/Activity), **CLIENT** (hard-isolated to their
+assigned project(s), locked-down default visibility — no Risk Register/CR
+Log/Budget, no internal notes), **PM** (full read/write on their assigned
+project(s) only), **LIMITED** [Guest] (per-project, per-module access an Admin
+configures; starts at read-limited on every module except Budget Tracker).
 
 `lib/rbac.ts` is the single authorization module every page and server action goes
 through — `Admin > Users` sets a user's global role; a project's `Team` tab assigns
@@ -96,7 +99,7 @@ from `.env`.
 To add another PM:
 
 ```bash
-npm run create-user -- someone@bs23.com "Their Name"
+npm run create-user -- someone@bs23.com "Their Name"   # or Admin > Users in the app
 ```
 
 This prints a one-time temporary password — there's no self-serve signup or password

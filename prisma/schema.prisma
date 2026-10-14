@@ -128,7 +128,7 @@ model Project {
 
 /// Organizational-only mapping of which projects a PROGRAM_MANAGER oversees.
 /// Deliberately does NOT grant access — a PROGRAM_MANAGER's actual access
-/// stays the blanket "portfolio-only, no project drill-down" rule in
+/// stays the blanket "read-only on every project" rule in
 /// rbac-core.ts (computeProjectAccess/computeModuleAccess never consult this
 /// table), so adding or removing a row here can never widen or narrow what
 /// they can open. It exists purely so "who oversees what" is a recorded fact

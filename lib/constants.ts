@@ -1,6 +1,6 @@
-// SQLite has no native enum support in Prisma, so these are plain strings
-// at the DB layer. These types/lists are the single source of truth for
-// valid values across the app.
+// Most status-like columns are plain strings at the DB layer (not Postgres
+// enums), so these types/lists are the single source of truth for valid
+// values across the app.
 import type { Role } from "@prisma/client";
 
 // Display names only — the underlying Role enum values (ADMIN, TPM,
@@ -109,3 +109,13 @@ export const OVERLOAD_THRESHOLD_PCT = 100;
 // the overlapping-date-range conflict check (item 5b), independent of the
 // person's total.
 export const HIGH_INTENSITY_THRESHOLD_PCT = 60;
+
+// Lower edge of the Medium band for a single engagement's intensity
+// (Low < this <= Medium < HIGH_INTENSITY_THRESHOLD_PCT <= High).
+export const MEDIUM_INTENSITY_THRESHOLD_PCT = 40;
+
+// A person's TOTAL utilization across all active engagements at or above
+// this reads as "High Utilization" (amber), up to OVERLOAD_THRESHOLD_PCT.
+// A separate scale from the per-engagement bands above: those describe one
+// project's claim on someone, this describes how stretched they are overall.
+export const HIGH_UTILIZATION_THRESHOLD_PCT = 70;

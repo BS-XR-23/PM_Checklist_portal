@@ -4,16 +4,11 @@ import { useState, useTransition } from "react";
 import { InlineSelect, InlineDate } from "@/components/ui/inline-edit";
 import { RowActionsMenu } from "@/components/ui/row-actions-menu";
 import { INTENSITY_BAND_COLORS, intensityBand, avatarColorFromString } from "@/lib/colors";
+import { HIGH_UTILIZATION_THRESHOLD_PCT, OVERLOAD_THRESHOLD_PCT } from "@/lib/constants";
 import { initials } from "@/lib/format";
 import { IconHeart, IconGauge, IconAlertCircle, IconClock, IconUserPlus, IconAlertTriangle } from "@/components/layout/icons";
 import { updateEngagement, removeEngagement, setEngagementMonthIntensity } from "./resourcing-actions";
 
-// Distinct from HIGH_INTENSITY_THRESHOLD_PCT (which bands a single
-// engagement's own intensity) — this bands a person's TOTAL utilization
-// across every active engagement, so it needs its own cutoffs. Matches
-// OVERLOAD_THRESHOLD_PCT (100) at the top end, where isOverloaded already
-// flips.
-const SIGNAL_HIGH_UTIL_PCT = 70;
 
 export type OverlapInfo = {
   otherProjectName: string;
@@ -87,14 +82,14 @@ function MonthIntensityInput({
 }
 
 function UtilizationSignal({ totalActivePct }: { totalActivePct: number }) {
-  if (totalActivePct > 100) {
+  if (totalActivePct > OVERLOAD_THRESHOLD_PCT) {
     return (
       <span className="flex h-6 w-6 items-center justify-center rounded-full bg-rose-50 text-rose-600" title={`Over Utilized — ${totalActivePct}% total across active engagements`}>
         <IconAlertCircle className="h-3.5 w-3.5" />
       </span>
     );
   }
-  if (totalActivePct >= SIGNAL_HIGH_UTIL_PCT) {
+  if (totalActivePct >= HIGH_UTILIZATION_THRESHOLD_PCT) {
     return (
       <span className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-50 text-amber-600" title={`High Utilization — ${totalActivePct}% total across active engagements`}>
         <IconGauge className="h-3.5 w-3.5" />

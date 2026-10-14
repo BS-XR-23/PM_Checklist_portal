@@ -105,7 +105,7 @@ export default async function PortfolioPage() {
             </span>
           }
         />
-        <div className="grid lg:grid-cols-[1.1fr_1.4fr] gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-[1.1fr_1.4fr] gap-6">
           <div>
             <p className="text-xs font-medium text-slate-500 mb-2">Active projects by health</p>
             <HealthDistributionBar healthy={summary.healthy} atRisk={summary.atRisk} critical={summary.critical} />
@@ -116,7 +116,7 @@ export default async function PortfolioPage() {
               <LegendDot color="#475569" bg="#E2E8F0" label={`Completed (${summary.completed})`} />
             </div>
           </div>
-          <div className="grid sm:grid-cols-2 gap-x-6 gap-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
             <HealthIndexBar label="Schedule Health" index={summary.scheduleHealth} unit="SPI" />
             <HealthIndexBar label="Budget Health" index={summary.budgetHealth} unit="CPI" />
             <HealthIndexBar label="Delivery Health" index={summary.deliveryHealth} unit="checklist" />
@@ -134,7 +134,7 @@ export default async function PortfolioPage() {
             title="Needs Management Attention"
             action={<span className="text-xs text-slate-500">{attentionRows.length} project{attentionRows.length > 1 ? "s" : ""} need review</span>}
           />
-          <div className="grid sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {attentionRows.map((r) => (
               <AttentionCard key={r.id} row={r} />
             ))}
@@ -187,7 +187,7 @@ export default async function PortfolioPage() {
       {/* Financial Overview */}
       <div id="financial-overview" className="scroll-mt-4 rounded-xl border border-slate-200 bg-white p-4">
         <SectionHeader icon={<IconDollar />} iconWrapClass="bg-emerald-50 text-emerald-600" title="Financial Overview" />
-        <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
           <FinancialStat label="Total Contract Value" value={formatMoney(summary.totalContractValue)} />
           <FinancialStat
             label="Invoiced"
@@ -246,7 +246,7 @@ export default async function PortfolioPage() {
       <main className="max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
         <PortfolioClient rows={rows} summary={summary} middleContent={middleContent} />
 
-        <div className="grid lg:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Upcoming Milestones */}
           <div className="rounded-xl border border-slate-200 bg-white p-4">
             <SectionHeader icon={<IconClock />} iconWrapClass="bg-blue-50 text-blue-600" title="Upcoming Milestones" />

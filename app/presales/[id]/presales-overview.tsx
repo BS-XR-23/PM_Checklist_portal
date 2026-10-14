@@ -304,7 +304,7 @@ export function PresalesOverview({
       )}
 
       {data.outcome === "OPEN" && (
-        <div className="grid sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
             <p className="text-xs font-medium text-slate-500 mb-1">On Hold?</p>
             {canWrite ? (

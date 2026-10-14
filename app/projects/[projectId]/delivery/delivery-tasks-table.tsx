@@ -556,7 +556,7 @@ export function WbsTasksTable({
                 </th>
               )}
               <SortHeader label="WBS#" sortKey="wbsNumber" active={sort?.key === "wbsNumber"} dir={sort?.dir ?? "asc"} onClick={toggleSort} className="px-4 py-3 w-24" />
-              <th className="px-4 py-3">Title</th>
+              <th className="px-4 py-3 min-w-[280px]">Title</th>
               <SortHeader label="Story Pts" sortKey="storyPoints" active={sort?.key === "storyPoints"} dir={sort?.dir ?? "asc"} onClick={toggleSort} className="px-4 py-3 w-24" />
               <SortHeader label="Done" sortKey="done" active={sort?.key === "done"} dir={sort?.dir ?? "asc"} onClick={toggleSort} className="px-4 py-3 w-24" />
               <SortHeader label="Remaining" sortKey="remaining" active={sort?.key === "remaining"} dir={sort?.dir ?? "asc"} onClick={toggleSort} className="px-4 py-3 w-28" />
@@ -600,7 +600,10 @@ export function WbsTasksTable({
                   )}
                 </td>
                 <td className="px-4 py-2">
-                  <div className="flex items-center gap-1.5">
+                  {/* min-w: every other column has a fixed width, so without
+                      a floor the title (the column people actually read)
+                      was the one squeezed down to a single character. */}
+                  <div className="flex items-center gap-1.5 min-w-[260px]">
                     <div className="min-w-0 flex-1">
                       {canWrite ? (
                         <InlineText value={t.title} onSave={(v) => updateWbsTask(t.id, projectId, { title: v })} />

@@ -252,7 +252,7 @@ export function CrTable({
                   {expanded && (
                     <tr className="border-t border-slate-100 bg-slate-50/60">
                       <td colSpan={colSpan} className="px-4 py-4">
-                        <div className="grid sm:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           <div className="flex items-start gap-2.5">
                             <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
                               <IconFileText className="h-3.5 w-3.5" />

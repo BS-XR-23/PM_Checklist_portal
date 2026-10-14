@@ -13,7 +13,8 @@ async function requireAdmin() {
 /**
  * Organizational bookkeeping only — never consulted by rbac-core.ts, so
  * adding/removing a row here can't widen or narrow what a PROGRAM_MANAGER
- * can actually open (still portfolio-only, per computeProjectAccess).
+ * can actually open (read-only on every project regardless, per
+ * computeProjectAccess).
  */
 export async function addProgramOversight(programManagerId: string, projectId: string) {
   const admin = await requireAdmin();

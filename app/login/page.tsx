@@ -85,7 +85,7 @@ function LoginForm() {
         </form>
 
         <p className="mt-4 text-center text-xs text-slate-400">
-          No account? Ask your admin to run <code>npm run create-user</code>.
+          No account? Ask your Super Admin to create one for you.
         </p>
       </div>
     </div>

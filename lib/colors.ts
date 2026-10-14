@@ -1,6 +1,6 @@
 import type { AccessLevel, PresalesForecastCategory, PresalesStage, Role } from "@prisma/client";
 import type { ItemStatus } from "@/lib/constants";
-import { HIGH_INTENSITY_THRESHOLD_PCT } from "@/lib/constants";
+import { HIGH_INTENSITY_THRESHOLD_PCT, MEDIUM_INTENSITY_THRESHOLD_PCT } from "@/lib/constants";
 
 // Exact hex values taken from the conditional-formatting `dxf` rules in
 // PM_Checklist_Tracker.xlsx (PM Checklist / DevOps Checklist H column).
@@ -172,7 +172,7 @@ export const INTENSITY_BAND_COLORS = {
 
 export function intensityBand(pct: number): keyof typeof INTENSITY_BAND_COLORS {
   if (pct >= HIGH_INTENSITY_THRESHOLD_PCT) return "high";
-  if (pct >= 40) return "medium";
+  if (pct >= MEDIUM_INTENSITY_THRESHOLD_PCT) return "medium";
   return "low";
 }
 

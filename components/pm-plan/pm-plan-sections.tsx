@@ -48,7 +48,7 @@ export function PmPlanSections({ sections, canWrite }: { sections: PmPlanSection
   }, [expandedId]);
 
   return (
-    <div className="grid lg:grid-cols-[220px_1fr] gap-4">
+    <div className="grid grid-cols-1 lg:grid-cols-[220px_minmax(0,1fr)] gap-4">
       <nav className="rounded-xl border border-slate-200 bg-white p-2 h-fit lg:sticky lg:top-4">
         <p className="px-2 py-1.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">Sections</p>
         <ul className="space-y-0.5">

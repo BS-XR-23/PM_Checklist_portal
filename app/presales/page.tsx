@@ -66,7 +66,7 @@ export default async function PresalesPage() {
       </header>
 
       <main className="p-4 sm:p-6 space-y-6">
-        <div className="grid sm:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-5 gap-4">
           <StatTile icon={<IconTarget />} iconWrapClass="bg-blue-50 text-blue-600" label="Total Opportunities" value={String(nonDeleted.length)} />
           <StatTile icon={<IconCheckCircle />} iconWrapClass="bg-amber-50 text-amber-600" label="Open" value={String(openCards.length)} />
           <StatTile icon={<IconBadge />} iconWrapClass="bg-emerald-50 text-emerald-600" label="Won" value={String(wonCount)} />

@@ -1,3 +1,4 @@
+import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser, requireProjectAccess } from "@/lib/rbac";
 import { canViewResourcing } from "@/lib/resourcing-rbac";
@@ -14,7 +15,9 @@ export default async function TeamPage({ params }: { params: { projectId: string
 
   // Admin edits; TPM, Program Manager, and the project's own PM can see who has access.
   if (user.role !== "ADMIN" && user.role !== "TPM" && user.role !== "PROGRAM_MANAGER" && user.role !== "PM") {
-    throw new Error("Not authorized to view the project team.");
+    // 404 like every other RBAC denial (existence isn't revealed) — a throw
+    // here surfaced as a 500 for Guest/Management.
+    notFound();
   }
   const canEdit = user.role === "ADMIN";
 

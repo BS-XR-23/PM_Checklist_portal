@@ -33,9 +33,9 @@ export default async function ProjectLayout({
   const canSeeResourcing = canViewResourcing(user.role);
   // Same ADMIN/TPM/PM scope as canSeeTeam/canSeeActivity above — never
   // CLIENT/LIMITED, who have no access to the opportunity this would link
-  // to. PROGRAM_MANAGER is omitted too: that role never reaches this layout
-  // at all (computeProjectAccess always denies it — portfolio-only, see
-  // lib/rbac-core.ts), so there's nothing to gate here for it.
+  // to. PROGRAM_MANAGER is omitted too — it can open projects read-only
+  // (computeProjectAccess, lib/rbac-core.ts) but the presales pipeline link
+  // stays a deal-team (ADMIN/TPM/PM) affordance.
   const canSeePresalesOrigin = user.role === "ADMIN" || user.role === "TPM" || user.role === "PM";
 
   // Checklist / Risk & CR / Team are each a merge of two modules that used

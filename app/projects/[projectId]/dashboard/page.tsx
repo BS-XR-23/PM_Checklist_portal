@@ -120,12 +120,12 @@ export default async function DashboardPage({ params }: { params: { projectId: s
       </div>
 
       {(showOverdue || showDecisions) && (
-        <div className={showOverdue && showDecisions ? "grid lg:grid-cols-2 gap-4 items-start" : undefined}>
+        <div className={showOverdue && showDecisions ? "grid grid-cols-1 lg:grid-cols-2 gap-4 items-start" : undefined}>
           {/* Same visibility as the financial stat tiles below — an overdue-item
               list is a PM/TPM/Admin safety net, not something to surface to a
               Client. */}
           {showOverdue && (
-            <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-4">
               <SectionHeader
                 icon={<IconBell />}
                 iconWrapClass="bg-rose-50 text-rose-600"
@@ -172,7 +172,7 @@ export default async function DashboardPage({ params }: { params: { projectId: s
           )}
 
           {showDecisions && (
-            <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-4">
               <SectionHeader
                 icon={<IconBadge />}
                 iconWrapClass="bg-violet-50 text-violet-600"
@@ -196,7 +196,7 @@ export default async function DashboardPage({ params }: { params: { projectId: s
                     prefetch={false}
                     className="flex items-center justify-between gap-3 rounded-md px-2 py-1.5 hover:bg-slate-50"
                   >
-                    <p className="text-sm text-slate-800 truncate">{d.decision}</p>
+                    <p className="min-w-0 text-sm text-slate-800 truncate">{d.decision}</p>
                     <p className="text-xs text-slate-400 shrink-0">
                       {d.decidedByName ?? "—"}{d.date ? ` · ${formatDate(d.date)}` : ""}
                     </p>
@@ -212,7 +212,7 @@ export default async function DashboardPage({ params }: { params: { projectId: s
           mismatched 3-tile row — the ragged second row left a chunk of
           empty width on anything wide enough for 5 columns. */}
       {financialsVisible && (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatTile
             icon={<IconChart />}
             iconWrapClass="bg-blue-50 text-blue-600"

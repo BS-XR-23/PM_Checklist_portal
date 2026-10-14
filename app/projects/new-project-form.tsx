@@ -28,7 +28,7 @@ export function NewProjectForm() {
         Creates a fresh instance of all 8 modules: 51 PM Checklist items, 18 DevOps Checklist items, their 15
         derived milestones, and a PM Plan pre-filled with the template defaults.
       </p>
-      <div className="grid sm:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">Project Name *</label>
           <input name="name" required className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />

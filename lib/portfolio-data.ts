@@ -285,7 +285,9 @@ export function buildPortfolioData(projects: ProjectWithPortfolioData[]): Portfo
     eligible: active.length,
   };
 
-  const upcomingMilestones = built.flatMap((b) => b.milestoneEvents).sort((a, b) => a.date.getTime() - b.date.getTime());
+  // Archived projects are closed out — their leftover milestones aren't
+  // "upcoming" and shouldn't read as overdue work needing attention.
+  const upcomingMilestones = active.flatMap((b) => b.milestoneEvents).sort((a, b) => a.date.getTime() - b.date.getTime());
 
   // Portfolio-wide weekly average SPI/CPI — real history from each project's
   // own sprint-derived EVM series (lib/calculations.ts#computeEvm), grouped
@@ -293,7 +295,7 @@ export function buildPortfolioData(projects: ProjectWithPortfolioData[]): Portfo
   // project has data still shows — it's just that week's average of
   // whichever projects reported one.
   const weekMap = new Map<string, { spi: number[]; cpi: number[] }>();
-  for (const p of projects) {
+  for (const p of projects.filter((p) => p.status === "ACTIVE")) {
     const budgetEntries = budgetEntriesFromSprints(toSprintsForBudget(p.sprints), p.plannedStoryPoints);
     const evm = computeEvm(budgetEntries, p.contractValue);
     for (const e of evm) {

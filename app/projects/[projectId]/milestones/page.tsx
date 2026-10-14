@@ -46,8 +46,8 @@ export default async function MilestonesPage({ params }: { params: { projectId: 
         <div>
           <h2 className="text-base font-semibold text-slate-900">Milestones & Payments</h2>
           <p className="text-sm text-slate-500">
-            Milestones are pulled automatically from PM and DevOps checklists — set payment %, invoice status, and
-            sign-off here.
+            Payment milestones come from checklist items tagged with a milestone name — set payment %, invoice
+            status, and sign-off here.
           </p>
         </div>
         {canWrite && <AddMilestoneModal projectId={project.id} />}
@@ -57,13 +57,13 @@ export default async function MilestonesPage({ params }: { params: { projectId: 
         id="milestones-payments"
         title="This is payment tracking, not delivery tracking"
         points={[
-          <>A row here isn&apos;t created directly — it&apos;s pulled automatically from any PM or DevOps checklist item tagged with a milestone name. To add a new one, tag it on that checklist item, not on this page.</>,
+          <>Each row comes from a checklist item (any checklist) tagged with a milestone name. <strong>+ Add Milestone</strong> creates a new tagged checklist item for you; you can also tag an existing item on its checklist.</>,
           <>Payment % across every milestone should add up to 100% of Contract Value — the page flags it if the allocation is off.</>,
-          <>These are payment tranches, tied to invoicing and client sign-off. For development delivery checkpoints that aren&apos;t tied to payment, see the project&apos;s <strong>Delivery → Milestones</strong> tab instead — the two lists are separate on purpose.</>,
+          <>These are payment tranches, tied to invoicing and client sign-off. For development delivery checkpoints that aren&apos;t tied to payment, see the <strong>Milestone</strong> section of the project&apos;s <strong>PM Plan</strong> tab instead — the two lists are separate for now.</>,
         ]}
       />
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,260px)_1fr] items-start">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,260px)_1fr] items-start">
         {canWrite ? (
           <div className="rounded-xl border border-slate-200 bg-white p-4">
             <ContractValueField projectId={project.id} value={project.contractValue} />

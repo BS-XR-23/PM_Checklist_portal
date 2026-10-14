@@ -15,7 +15,7 @@ export function ContractInputsForm({
   plannedManDays: number;
 }) {
   return (
-    <div className="grid sm:grid-cols-2 gap-4 max-w-md">
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-md">
       <div>
         <label className="block text-xs font-medium text-slate-600 mb-1">Total Contract Value ($)</label>
         <InlineNumber

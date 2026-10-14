@@ -84,7 +84,13 @@ export default async function PmPlanPage({ params }: { params: { projectId: stri
     // left a READ_LIMITED/READ_FULL viewer unable to see who a stakeholder
     // row was actually linked to.
     prisma.person.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
-    canSeeRisks ? prisma.riskItem.findMany({ where: { projectId: params.projectId }, orderBy: { order: "asc" } }) : Promise.resolve([]),
+    canSeeRisks
+      ? prisma.riskItem.findMany({
+          where: { projectId: params.projectId },
+          orderBy: { order: "asc" },
+          include: { ownerPerson: { select: { name: true } } },
+        })
+      : Promise.resolve([]),
     canSeeDeps ? prisma.dependencyItem.findMany({ where: { projectId: params.projectId }, orderBy: { order: "asc" } }) : Promise.resolve([]),
     canSeeMilestones
       ? prisma.milestone.findMany({
@@ -296,7 +302,12 @@ export default async function PmPlanPage({ params }: { params: { projectId: stri
         ? "Sourced live from Delivery's milestone data — add, edit, and delete here; the Delivery tab's own tracking (EV/AV, sprints) stays in sync."
         : "Sourced live from Delivery's milestone data. You have read-only access to Delivery, so editing isn't available here.",
       itemCountLabel: `${milestones.length} ${milestones.length === 1 ? "milestone" : "milestones"}`,
-      status: statusFromCounts(milestones.length > 0 ? 1 : 0, 1),
+      // "Completed" means every milestone is actually baselined (date +
+      // owner), not just that at least one row exists.
+      status: statusFromCounts(
+        milestones.filter((m) => m.plannedDate && m.ownerPersonId).length,
+        Math.max(milestones.length, 1)
+      ),
       view: (
         <ReadOnlyTable
           columns={["Milestone", "Baseline Date", "Owner", "Exit Criteria", "Status"]}
@@ -409,7 +420,10 @@ export default async function PmPlanPage({ params }: { params: { projectId: stri
       title: "Risk & Issue Management",
       hint: "Sourced live from the Risk Register tab. Risk Score = Probability x Impact (Low=1, Medium=2, High=3). Edit entries on the Risk Register tab.",
       itemCountLabel: `${risks.length} ${risks.length === 1 ? "item" : "items"}`,
-      status: statusFromCounts(risks.length > 0 ? 1 : 0, 1),
+      status: statusFromCounts(
+        risks.filter((r) => (r.ownerPersonId || r.owner) && r.mitigation?.trim()).length,
+        Math.max(risks.length, 1)
+      ),
       view: (
         <div className="space-y-3">
           <a href={`/projects/${projectId}/risks`} className="inline-flex items-center text-xs font-medium text-indigo-600 hover:text-indigo-700">
@@ -425,7 +439,7 @@ export default async function PmPlanPage({ params }: { params: { projectId: stri
               r.impact,
               String(riskScore(r.probability, r.impact)),
               r.mitigation ?? "",
-              r.owner ?? "",
+              r.ownerPerson?.name ?? r.owner ?? "",
               r.status,
             ])}
           />
@@ -626,10 +640,13 @@ export default async function PmPlanPage({ params }: { params: { projectId: stri
     sections.push({
       id: "dependency-decision-management",
       number: sections.length + 1,
-      title: "Dependency & Decision Management",
+      title: "Dependency Management",
       hint: "Sourced live from the Dependencies tab. Edit entries on the Dependencies tab.",
       itemCountLabel: `${dependencies.length} ${dependencies.length === 1 ? "item" : "items"}`,
-      status: statusFromCounts(dependencies.length > 0 ? 1 : 0, 1),
+      status: statusFromCounts(
+        dependencies.filter((d) => d.responsible?.trim() && d.expectedDate).length,
+        Math.max(dependencies.length, 1)
+      ),
       view: (
         <div className="space-y-3">
           <a href={`/projects/${projectId}/dependencies`} className="inline-flex items-center text-xs font-medium text-indigo-600 hover:text-indigo-700">

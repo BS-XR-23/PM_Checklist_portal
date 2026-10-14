@@ -97,7 +97,7 @@ export default async function BudgetTrackerPage({ params }: { params: { projectI
             <p className="mt-2 text-xs text-slate-500">Man-Day Rate (auto): {formatMoney(rate)}</p>
           </>
         ) : (
-          <div className="grid sm:grid-cols-2 gap-4 max-w-md text-sm">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-md text-sm">
             <div>
               <p className="text-xs font-medium text-slate-600">Total Contract Value</p>
               <p className="text-slate-800">{formatMoney(project.contractValue)}</p>
@@ -111,7 +111,7 @@ export default async function BudgetTrackerPage({ params }: { params: { projectI
       </div>
 
       {!costHidden && (
-        <div className="grid lg:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div className="rounded-lg border border-slate-200 bg-white p-4">
             <h3 className="text-sm font-semibold text-slate-700 mb-2">Budget Burn: PV vs EV vs AC</h3>
             <EvmLineChart data={chartData} />

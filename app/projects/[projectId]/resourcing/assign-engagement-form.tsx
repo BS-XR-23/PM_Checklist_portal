@@ -13,8 +13,10 @@ export function AssignEngagementForm({
   people: { id: string; name: string; title: string | null }[];
   roleOptions: string[];
 }) {
-  const [personId, setPersonId] = useState(people[0]?.id ?? "");
-  const [roleOnProject, setRoleOnProject] = useState(people[0]?.title || roleOptions[0] || "");
+  // Start empty: pre-selecting the alphabetically-first person/role made it
+  // easy to click Assign and staff the wrong person on a project.
+  const [personId, setPersonId] = useState("");
+  const [roleOnProject, setRoleOnProject] = useState("");
   const [intensityPct, setIntensityPct] = useState(50);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -43,6 +45,8 @@ export function AssignEngagementForm({
               startDate: startDate || null,
               endDate: endDate || null,
             });
+            setPersonId("");
+            setRoleOnProject("");
             setIntensityPct(50);
             setStartDate("");
             setEndDate("");
@@ -56,6 +60,7 @@ export function AssignEngagementForm({
       <div className="min-w-[180px]">
         <label className="block text-xs font-medium text-slate-600 mb-1">Person</label>
         <select
+          required
           value={personId}
           onChange={(e) => {
             setPersonId(e.target.value);
@@ -64,6 +69,9 @@ export function AssignEngagementForm({
           }}
           className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
         >
+          <option value="" disabled>
+            Select person
+          </option>
           {people.map((p) => (
             <option key={p.id} value={p.id}>
               {p.name}
