@@ -109,9 +109,9 @@ export function MilestonesTable({
                     <p className="text-xs text-slate-400 mt-0.5">
                       {MILESTONE_TYPE_LABELS[m.type] ?? m.type}
                       {m.gatesTotal > 0 && (
-                        <span title="Checklist gates linked to this milestone">
+                        <span title="Checklist checkpoints linked to this milestone">
                           {" "}
-                          · Gates {m.gatesDone}/{m.gatesTotal}
+                          · Checkpoints {m.gatesDone}/{m.gatesTotal}
                         </span>
                       )}
                     </p>

@@ -231,6 +231,11 @@ model ChecklistItem {
   status        String    @default("NOT_STARTED") // see ItemStatus in lib/constants.ts
   notes         String?
   isCustom      Boolean   @default(false) // true only for items added via "+ Add Item" / "Add Milestone", never the fixed template
+  // An ongoing cadence activity (weekly report, monthly retro, ...) rather
+  // than a one-off step: never "done", so it's excluded from completion %,
+  // current stage, and overdue reminders, and shown in its own "Ongoing
+  // cadence" block where actualDate reads as "last done".
+  isRecurring   Boolean   @default(false)
 
   // Optional links into the Delivery restructure's data model — a checklist
   // item may (not must) evidence a Milestone/WbsTask/Sprint without
@@ -258,6 +263,7 @@ model ChecklistTemplateItem {
   stage         String
   itemText      String
   milestoneName String?
+  isRecurring   Boolean @default(false) // copied to ChecklistItem.isRecurring at project creation
 
   @@unique([type, order])
 }

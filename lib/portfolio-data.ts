@@ -1,6 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { PM_STAGES } from "@/lib/seed-data";
-import { toSprintsForBudget, currentStage, COMPLETED_STAGE_LABEL } from "@/lib/calculations";
+import { toSprintsForBudget, currentStage, isTrackedChecklistItem, COMPLETED_STAGE_LABEL } from "@/lib/calculations";
 import { summarizeMilestones, milestoneDueDate, isMilestoneDone } from "@/lib/milestones";
 import { computeProjectHealth, deliveryIndices, deliveryPct, governancePct } from "@/lib/project-health";
 import type { Rag } from "@/lib/rag";
@@ -157,7 +157,7 @@ function buildPortfolioRow(
     }))
     .sort((a, b) => a.date.getTime() - b.date.getTime());
 
-  const incomplete = p.checklistItems.filter((i) => i.status !== "COMPLETED" && i.status !== "NOT_APPLICABLE");
+  const incomplete = p.checklistItems.filter((i) => isTrackedChecklistItem(i) && i.status !== "COMPLETED");
   const overdue = incomplete.filter((i) => i.plannedDate && i.plannedDate < today);
 
   const hasMissingData = p.memberships.length === 0 || p.contractValue <= 0;

@@ -48,8 +48,8 @@ export async function GET(req: NextRequest) {
           "#": `${stageIdx + 1}.${itemIdx + 1}`,
           Section: stage,
           "Item Text": item.itemText,
-          Gate: item.milestoneName ?? "",
-          Type: item.milestoneName ? "Gate" : "Task",
+          Checkpoint: item.milestoneName ?? "",
+          Type: item.isRecurring ? "Recurring" : item.milestoneName ? "Checkpoint" : "Task",
         });
       });
   });

@@ -192,7 +192,7 @@ export function ChecklistTemplateBoard({
           iconWrapClass="bg-emerald-100 text-emerald-700"
           bgClass="bg-emerald-50/60"
           accentColor="#10b981"
-          label="Gates Set"
+          label="Checkpoints Set"
           value={String(milestonesSet)}
         />
         <StatTile
@@ -290,7 +290,7 @@ export function ChecklistTemplateBoard({
                       <tr className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200 bg-slate-50">
                         <th className="px-4 py-2.5 w-12">#</th>
                         <th className="px-4 py-2.5">Item Text</th>
-                        <th className="px-4 py-2.5 w-48">Gate</th>
+                        <th className="px-4 py-2.5 w-48">Checkpoint</th>
                         <th className="px-4 py-2.5 w-28">Type</th>
                         <th className="px-4 py-2.5 w-28">Actions</th>
                       </tr>

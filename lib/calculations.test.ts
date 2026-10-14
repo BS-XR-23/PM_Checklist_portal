@@ -4,6 +4,7 @@ import {
   isSlipped,
   reminderBand,
   checklistCompletionPct,
+  isTrackedChecklistItem,
   wbsPlannedValue,
   wbsActualValue,
   competencyCpi,
@@ -406,5 +407,37 @@ describe("budgetEntriesFromSprints", () => {
 
   it("returns an empty array for no sprints", () => {
     expect(budgetEntriesFromSprints([], 10)).toEqual([]);
+  });
+});
+
+describe("recurring cadence items (isTrackedChecklistItem)", () => {
+  it("are excluded from completion % — never 'done', so they can't drag it down", () => {
+    expect(
+      checklistCompletionPct([
+        { status: "COMPLETED" },
+        { status: "NOT_STARTED", isRecurring: true },
+        { status: "NOT_STARTED", isRecurring: true },
+      ])
+    ).toBe(1);
+  });
+
+  it("regression: don't pin the current stage to the first stage that holds one", () => {
+    const STAGES = ["Governance", "Planning", "Closure"] as const;
+    const items = [
+      { stage: "Governance", status: "COMPLETED" },
+      { stage: "Governance", status: "IN_PROGRESS", isRecurring: true }, // weekly CPI/SPI report
+      { stage: "Planning", status: "IN_PROGRESS" },
+    ];
+    expect(currentStage(items, STAGES)).toBe("Planning"); // was "Governance" forever
+  });
+
+  it("a stage holding only recurring items is skipped entirely", () => {
+    expect(currentStage([{ stage: "Governance", status: "NOT_STARTED", isRecurring: true }], ["Governance"])).toBeNull();
+  });
+
+  it("isTrackedChecklistItem: N/A and recurring are untracked, everything else is tracked", () => {
+    expect(isTrackedChecklistItem({ status: "NOT_STARTED" })).toBe(true);
+    expect(isTrackedChecklistItem({ status: "NOT_APPLICABLE" })).toBe(false);
+    expect(isTrackedChecklistItem({ status: "COMPLETED", isRecurring: true })).toBe(false);
   });
 });

@@ -6,6 +6,7 @@ import { computeProjectHealth, deliveryIndices, deliveryPct, governancePct, wbsB
 import { summarizeMilestones, milestoneDueDate } from "@/lib/milestones";
 import {
   computeEvm,
+  isTrackedChecklistItem,
   reminderBand,
   budgetEntriesFromSprints,
   toSprintsForBudget,
@@ -43,10 +44,9 @@ export async function getDashboardData(projectId: string) {
     decidedByName: d.decidedByPerson?.name ?? d.decidedBy ?? null,
   }));
 
-  // N/A items don't count toward completion at all — not the numerator
-  // (obviously not completed) and not the denominator either (they're not
-  // part of this project's plan, same as if the template item weren't there).
-  const applicableItems = allItems.filter((i) => i.status !== "NOT_APPLICABLE");
+  // N/A and recurring cadence items don't count toward completion at all —
+  // see isTrackedChecklistItem (lib/calculations.ts).
+  const applicableItems = allItems.filter(isTrackedChecklistItem);
   const totalItems = applicableItems.length;
   const completedItems = applicableItems.filter((i) => i.status === "COMPLETED").length;
   const overallPct = governancePct(allItems);
@@ -66,7 +66,7 @@ export async function getDashboardData(projectId: string) {
   // "disorganized" scroll depth on this page.
   const perChecklistSummary = CHECKLIST_TYPES.map((c) => {
     const items = allItems.filter((i) => i.type === c.key);
-    const applicable = items.filter((i) => i.status !== "NOT_APPLICABLE");
+    const applicable = items.filter(isTrackedChecklistItem);
     const completed = applicable.filter((i) => i.status === "COMPLETED").length;
     return { name: c.label, total: applicable.length, completed, pct: applicable.length ? completed / applicable.length : 0 };
   }).filter((c) => c.total > 0);
@@ -74,7 +74,7 @@ export async function getDashboardData(projectId: string) {
   function stageSummary(items: typeof allItems, stages: readonly string[]) {
     return stages.map((stage) => {
       const rows = items.filter((i) => i.stage === stage);
-      const applicable = rows.filter((i) => i.status !== "NOT_APPLICABLE");
+      const applicable = rows.filter(isTrackedChecklistItem);
       const completed = applicable.filter((i) => i.status === "COMPLETED").length;
       const plannedDates = applicable.map((r) => r.plannedDate).filter((d): d is Date => d != null);
       const actualDates = applicable.map((r) => r.actualDate).filter((d): d is Date => d != null);
@@ -104,6 +104,7 @@ export async function getDashboardData(projectId: string) {
   // here by construction (reminderBand only returns null when plannedDate
   // is null or the item's done), so plannedDate is guaranteed non-null too.
   const checklistReminders = allItems
+    .filter((i) => !i.isRecurring) // cadence items have no single due date to be overdue against
     .map((i) => ({ i, band: reminderBand(i.plannedDate, i.status === "COMPLETED" || i.status === "NOT_APPLICABLE") }))
     .filter((x): x is { i: (typeof allItems)[number]; band: "OVERDUE" | "DUE_SOON" } => x.band !== null)
     .map(({ i, band }) => ({

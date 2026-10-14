@@ -60,10 +60,10 @@ export default async function MilestonesPage({ params }: { params: { projectId: 
 
       <PageGuide
         id="milestones-payments"
-        title="Milestones vs. Gates"
+        title="Milestones vs. Checkpoints"
         points={[
           <><strong>Milestones</strong> (this page) are what you deliver to the client — e.g. Phase 1 MVP, UAT Complete, Go-Live. Each carries its dates, owner, payment %, invoice status, and client sign-off. Dashboard, Delivery, Portfolio, and the PM Plan all read this list.</>,
-          <><strong>Gates</strong> are internal checkpoints on the Checklist tab (e.g. &quot;DoR Approved&quot;, &quot;CI Pipeline Green&quot;). They never carry payment. A milestone shows <em>Gates 2/3</em> when checklist gates are linked to it.</>,
+          <><strong>Checkpoints</strong> are internal steps tagged on the Checklist tab (e.g. &quot;DoR Approved&quot;, &quot;CI Pipeline Green&quot;). They never carry payment. A milestone shows <em>Checkpoints 2/3</em> when checklist checkpoints are linked to it.</>,
           <>Payment % across every milestone should add up to 100% of Contract Value — the table flags it if the allocation is off. A milestone that&apos;s already invoiced or paid can&apos;t be deleted until its invoice status is reset.</>,
         ]}
       />

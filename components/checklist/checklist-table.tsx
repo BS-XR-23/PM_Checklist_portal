@@ -45,6 +45,7 @@ export type ChecklistTableItem = {
   status: string;
   notes: string | null; // null when stripped by READ_LIMITED access
   isCustom: boolean;
+  isRecurring: boolean;
 };
 
 const PAGE_SIZES = [10, 25, 50] as const;
@@ -72,7 +73,12 @@ export function ChecklistTable({
   const notesHidden = access === "READ_LIMITED";
   const canOverride = viewerRole === "TPM" && access === "READ_FULL";
 
-  const applicable = items.filter((i) => i.status !== "NOT_APPLICABLE");
+  // Recurring cadence items (weekly report, monthly retro, ...) are never
+  // "done" — they live in their own block below, outside the stage groups,
+  // stats, and current-stage logic (see isTrackedChecklistItem).
+  const recurringItems = items.filter((i) => i.isRecurring);
+  const stagedItems = items.filter((i) => !i.isRecurring);
+  const applicable = stagedItems.filter((i) => i.status !== "NOT_APPLICABLE");
   const completedCount = applicable.filter((i) => i.status === "COMPLETED").length;
   const overallPct = applicable.length ? completedCount / applicable.length : 0;
   const inProgressCount = applicable.filter((i) => i.status === "IN_PROGRESS").length;
@@ -85,7 +91,7 @@ export function ChecklistTable({
   ).length;
 
   const groups = stageOrder
-    .map((stage) => ({ stage, rows: items.filter((i) => i.stage === stage) }))
+    .map((stage) => ({ stage, rows: stagedItems.filter((i) => i.stage === stage) }))
     .filter((g) => g.rows.length > 0);
 
   // Dev Checklist (and any other checklist type that never tags an item
@@ -100,7 +106,8 @@ export function ChecklistTable({
   // page-level capability) or a row that's a custom (PM-added) item with
   // delete access — most viewers on most checklist types get an empty
   // column on every single row otherwise.
-  const showActions = canOverride || items.some((i) => canWrite && i.isCustom);
+  // Every row has at least "Move to ongoing cadence" for a writer.
+  const showActions = canOverride || canWrite;
 
   // Default to the first stage/category that isn't fully complete yet, so
   // opening the checklist lands you on the work still in front of you
@@ -156,7 +163,7 @@ export function ChecklistTable({
 
       {groups.length > 1 && (
         <div className="flex flex-wrap gap-1.5">
-          <StagePill label={`All (${items.length})`} active={activeStage === "ALL"} onClick={() => setActiveStage("ALL")} />
+          <StagePill label={`All (${stagedItems.length})`} active={activeStage === "ALL"} onClick={() => setActiveStage("ALL")} />
           {groups.map((g) => {
             // N/A items are excluded from the denominator entirely and count
             // as "done" for the stage's completion flag (nothing left to do).
@@ -174,6 +181,16 @@ export function ChecklistTable({
             );
           })}
         </div>
+      )}
+
+      {recurringItems.length > 0 && (
+        <CadenceBlock
+          rows={recurringItems}
+          projectId={projectId}
+          checklistType={checklistType}
+          canWrite={canWrite}
+          people={people}
+        />
       )}
 
       <div className="space-y-4">
@@ -280,9 +297,10 @@ function StageGroupCard({
                 <tr className="text-left text-xs font-medium text-slate-500 bg-slate-50">
                   <th className="px-3 py-2.5 w-10">#</th>
                   <th className="px-3 py-2.5 min-w-[260px]">Checklist Item</th>
-                  {/* milestoneName is a checklist *gate* label — internal checkpoint,
-                      never a payment milestone (those live on Milestones & Payments). */}
-                  {showMilestone && <th className="px-3 py-2.5 w-40">Gate</th>}
+                  {/* milestoneName is a checklist *checkpoint* label — internal step,
+                      never a payment milestone (those live on Milestones & Payments),
+                      and not a G0-G6 gate (those live in the PM Plan). */}
+                  {showMilestone && <th className="px-3 py-2.5 w-40">Checkpoint</th>}
                   <th className="px-3 py-2.5 w-52">Owner</th>
                   <th className="px-3 py-2.5 w-32">Planned Date</th>
                   <th className="px-3 py-2.5 w-32">Actual Date</th>
@@ -620,7 +638,7 @@ function ChecklistItemRow({
       {showMilestone && (
         <td className="px-3 py-2">
           {item.milestoneName ? (
-            <span className="inline-flex items-center rounded-full bg-indigo-50 text-indigo-700 px-2 py-0.5 text-xs font-medium" title="Gate — an internal checkpoint">
+            <span className="inline-flex items-center rounded-full bg-indigo-50 text-indigo-700 px-2 py-0.5 text-xs font-medium" title="Checkpoint — an internal step, not a payment milestone">
               {item.milestoneName}
             </span>
           ) : (
@@ -722,8 +740,19 @@ function ChecklistItemRow({
         <td className="px-3 py-2">
           <div className="flex items-center gap-1.5">
             {canOverride && viewerRole === "TPM" && <TpmOverrideChecklistModal projectId={projectId} checklistType={checklistType} item={item} />}
-            {canWrite && item.isCustom && (
-              <RowActionsMenu actions={[{ label: "Delete item", pendingLabel: "Deleting...", danger: true, onClick: () => deleteChecklistItem(item.id, projectId, checklistType) }]} />
+            {canWrite && (
+              <RowActionsMenu
+                actions={[
+                  {
+                    label: "Move to ongoing cadence",
+                    pendingLabel: "Moving...",
+                    onClick: () => updateChecklistItem(item.id, projectId, checklistType, { isRecurring: true }),
+                  },
+                  ...(item.isCustom
+                    ? [{ label: "Delete item", pendingLabel: "Deleting...", danger: true, onClick: () => deleteChecklistItem(item.id, projectId, checklistType) }]
+                    : []),
+                ]}
+              />
             )}
           </div>
         </td>
@@ -732,6 +761,91 @@ function ChecklistItemRow({
   );
 }
 
+
+/**
+ * Ongoing cadence activities — recurring work (weekly CPI/SPI report, monthly
+ * retro, status meetings) that's never "done", so it sits outside the stage
+ * groups and doesn't count toward completion % or current stage. Actual Date
+ * reads as "Last done" here: update it each time the activity happens.
+ */
+function CadenceBlock({
+  rows,
+  projectId,
+  checklistType,
+  canWrite,
+  people,
+}: {
+  rows: ChecklistTableItem[];
+  projectId: string;
+  checklistType: ChecklistType;
+  canWrite: boolean;
+  people: { id: string; name: string }[];
+}) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+      <div className="px-4 py-3 border-b border-slate-100">
+        <p className="text-sm font-semibold text-slate-900">Ongoing cadence</p>
+        <p className="text-xs text-slate-500">
+          Recurring activities — not counted in completion % or stage progress. Set <strong>Last done</strong> each time
+          one happens.
+        </p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[640px]">
+          <thead>
+            <tr className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide bg-slate-50">
+              <th className="px-3 py-2.5">Activity</th>
+              <th className="px-3 py-2.5 w-52">Owner</th>
+              <th className="px-3 py-2.5 w-44">Last done</th>
+              {canWrite && <th className="px-3 py-2.5 w-14" />}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((item) => (
+              <tr key={item.id} className="border-t border-slate-100 align-top">
+                <td className="px-3 py-2.5 text-slate-800">{item.itemText}</td>
+                <td className="px-3 py-2.5">
+                  {canWrite ? (
+                    <div className="min-w-[160px]">
+                      <PersonPicker
+                        personId={item.ownerPersonId}
+                        legacyText={item.owner}
+                        people={people}
+                        onSave={(personId) => updateChecklistItem(item.id, projectId, checklistType, { ownerPersonId: personId })}
+                      />
+                    </div>
+                  ) : (
+                    <span className="text-slate-600">{item.ownerPersonName ?? item.owner ?? "—"}</span>
+                  )}
+                </td>
+                <td className="px-3 py-2.5">
+                  {canWrite ? (
+                    <InlineDate value={toDateInputValue(item.actualDate)} onSave={(v) => updateChecklistItem(item.id, projectId, checklistType, { actualDate: v })} />
+                  ) : (
+                    <span className="text-slate-600">{formatDate(item.actualDate)}</span>
+                  )}
+                </td>
+                {canWrite && (
+                  <td className="px-3 py-2.5">
+                    <RowActionsMenu
+                      actions={[
+                        {
+                          label: "Move back to its stage",
+                          pendingLabel: "Moving...",
+                          onClick: () => updateChecklistItem(item.id, projectId, checklistType, { isRecurring: false }),
+                        },
+                      ]}
+                    />
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
 
 function AddItemButton({ projectId, checklistType, stage }: { projectId: string; checklistType: ChecklistType; stage: string }) {
   const [pending, startTransition] = useTransition();

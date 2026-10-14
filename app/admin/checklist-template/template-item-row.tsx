@@ -10,6 +10,7 @@ export type TemplateItemRowData = {
   order: number;
   itemText: string;
   milestoneName: string | null;
+  isRecurring: boolean;
 };
 
 export function TemplateItemRow({
@@ -42,18 +43,21 @@ export function TemplateItemRow({
               : "inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-400"
           }
         >
-          {item.milestoneName || "Not a gate"}
+          {item.milestoneName || "Not a checkpoint"}
         </span>
       </td>
       <td className="px-4 py-2 align-top">
         <span
           className={
-            isMilestone
-              ? "inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700"
-              : "inline-flex items-center rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-600"
+            item.isRecurring
+              ? "inline-flex items-center rounded-full bg-violet-50 px-2.5 py-0.5 text-xs font-medium text-violet-700"
+              : isMilestone
+                ? "inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700"
+                : "inline-flex items-center rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-600"
           }
+          title={item.isRecurring ? "Recurring cadence item — excluded from completion % and stage progress" : undefined}
         >
-          {isMilestone ? "Gate" : "Task"}
+          {item.isRecurring ? "Recurring" : isMilestone ? "Checkpoint" : "Task"}
         </span>
       </td>
       <td className="px-4 py-2 align-top">
@@ -76,6 +80,20 @@ export function TemplateItemRow({
               ▼
             </button>
           </div>
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => startTransition(() => updateTemplateItem(item.id, { isRecurring: !item.isRecurring }))}
+            title={item.isRecurring ? "Make a one-off item (counts toward completion)" : "Mark as recurring cadence item"}
+            aria-pressed={item.isRecurring}
+            className={
+              item.isRecurring
+                ? "rounded p-1 text-violet-600 bg-violet-50 hover:bg-violet-100 text-xs leading-none disabled:opacity-50"
+                : "rounded p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-100 text-xs leading-none disabled:opacity-50"
+            }
+          >
+            ↻
+          </button>
           <button
             type="button"
             onClick={() => itemTextRef.current?.querySelector("input")?.focus()}

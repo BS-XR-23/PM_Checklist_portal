@@ -26,7 +26,7 @@ export const PM_CHECKLIST_SEED: ChecklistSeedItem[] = [
   { order: 11, stage: "Planning", itemText: "Build WBS Level 1", milestoneName: null },
   { order: 12, stage: "Baselines", itemText: "Map each milestone (~1 month cadence) to a payment tranche in the schedule", milestoneName: "Payment Schedule Approved" },
   { order: 13, stage: "Planning", itemText: "Set up WBS ID <-> SRS traceability (Product Backlog)", milestoneName: null },
-  { order: 14, stage: "Gates", itemText: "Hold project kickoff meeting with client present", milestoneName: "Kickoff Complete" },
+  { order: 14, stage: "Planning", itemText: "Hold project kickoff meeting with client present", milestoneName: "Kickoff Complete" },
   { order: 15, stage: "Approvals", itemText: "Share SRS with estimation with client", milestoneName: null },
   { order: 16, stage: "Baselines", itemText: "Review and confirm payment terms and schedule", milestoneName: null },
   { order: 17, stage: "Planning", itemText: "Upload final pre-development documents to the project repository", milestoneName: null },
@@ -38,7 +38,7 @@ export const PM_CHECKLIST_SEED: ChecklistSeedItem[] = [
   { order: 23, stage: "Governance", itemText: "Update CPI/SPI report weekly; escalate if beyond defined threshold", milestoneName: null },
   { order: 24, stage: "Governance", itemText: "Hold sprint retrospective (minimum monthly)", milestoneName: null },
   { order: 25, stage: "Governance", itemText: "Hold project status update meeting (minimum monthly, twice preferred)", milestoneName: null },
-  { order: 26, stage: "Gates", itemText: "Submit and obtain platform/app-store certification", milestoneName: "Store Approved" },
+  { order: 26, stage: "Approvals", itemText: "Submit and obtain platform/app-store certification", milestoneName: "Store Approved" },
   { order: 27, stage: "Approvals", itemText: "Obtain UAT sign-off from client", milestoneName: "UAT Signed Off" },
   { order: 28, stage: "Closure", itemText: "Send completion & release report to stakeholders; raise invoice per payment schedule", milestoneName: null },
   { order: 29, stage: "Closure", itemText: "Send Project Closure Report; obtain formal completion certificate", milestoneName: "Project Closed" },
@@ -125,7 +125,10 @@ export const PM_STAGES = [
   "Planning",
   "Approvals",
   "Baselines",
-  "Gates",
+  // A "Gates" stage used to sit here holding just two unrelated items
+  // (kickoff -> now Planning, store certification -> now Approvals). Removed
+  // so "gate" means only PM Plan's G0-G6 stage-gate framework — see the
+  // 20261014150000 migration and docs/FIX_PLAN.md Phase 4.
   "Closure",
 ] as const;
 

@@ -37,7 +37,7 @@ export async function createTemplateItem(type: ChecklistType, stage: string) {
   revalidateTemplate();
 }
 
-export async function updateTemplateItem(id: string, data: Partial<{ itemText: string; milestoneName: string | null }>) {
+export async function updateTemplateItem(id: string, data: Partial<{ itemText: string; milestoneName: string | null; isRecurring: boolean }>) {
   const user = await requireAdmin();
   const existing = await prisma.checklistTemplateItem.findUniqueOrThrow({ where: { id } });
 
@@ -46,6 +46,7 @@ export async function updateTemplateItem(id: string, data: Partial<{ itemText: s
     data: {
       ...(data.itemText !== undefined ? { itemText: data.itemText } : {}),
       ...(data.milestoneName !== undefined ? { milestoneName: data.milestoneName || null } : {}),
+      ...(data.isRecurring !== undefined ? { isRecurring: data.isRecurring } : {}),
     },
   });
 

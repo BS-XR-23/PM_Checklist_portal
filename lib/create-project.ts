@@ -55,6 +55,7 @@ export async function createProject(input: {
         // Milestone/MilestonePayment copy. Client milestones are defined per
         // project on the Milestones & Payments tab (docs/FIX_PLAN.md, Phase 3).
         milestoneName: item.milestoneName,
+        isRecurring: item.isRecurring,
       }));
 
       await tx.checklistItem.createMany({ data: checklistItems });

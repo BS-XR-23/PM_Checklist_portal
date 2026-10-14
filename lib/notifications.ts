@@ -60,7 +60,9 @@ function fetchChecklistItems(projectIds: string[]) {
   return projectIds.length === 0
     ? Promise.resolve([])
     : prisma.checklistItem.findMany({
-        where: { projectId: { in: projectIds }, status: { notIn: ["COMPLETED", "NOT_APPLICABLE"] }, plannedDate: { not: null } },
+        // isRecurring: cadence items (weekly report, monthly retro) have no
+        // single due date to be overdue against — see isTrackedChecklistItem.
+        where: { projectId: { in: projectIds }, status: { notIn: ["COMPLETED", "NOT_APPLICABLE"] }, isRecurring: false, plannedDate: { not: null } },
         include: { project: { select: { id: true, name: true } } },
       });
 }

@@ -32,6 +32,7 @@ type ChecklistUpdateData = Partial<{
   link: string;
   status: ItemStatus;
   notes: string;
+  isRecurring: boolean;
 }>;
 
 function toPrismaData(data: ChecklistUpdateData) {
@@ -44,6 +45,7 @@ function toPrismaData(data: ChecklistUpdateData) {
     ...(data.link !== undefined ? { link: data.link || null } : {}),
     ...(data.status !== undefined ? { status: data.status } : {}),
     ...(data.notes !== undefined ? { notes: data.notes || null } : {}),
+    ...(data.isRecurring !== undefined ? { isRecurring: data.isRecurring } : {}),
   };
 }
 

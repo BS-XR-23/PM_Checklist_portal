@@ -11,8 +11,9 @@ import type { MilestoneType } from "@prisma/client";
 // the "Milestones & Payments" tab — and are gated on the MILESTONES module.
 // PM Plan, Dashboard, Delivery, and Portfolio only read them.
 //
-// Checklist items tagged with a name are internal "gates", not milestones:
-// they never create or own a payment (see docs/FIX_PLAN.md, Phase 3).
+// Checklist items tagged with a name are internal "checkpoints", not
+// milestones: they never create or own a payment (docs/FIX_PLAN.md, Phase 3).
+// "Gate" means only the PM Plan's G0-G6 stage-gate framework (Phase 4).
 
 function revalidateMilestones(projectId: string) {
   revalidatePath(`/projects/${projectId}/milestones`);

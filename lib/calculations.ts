@@ -92,14 +92,25 @@ export function trancheAmount(contractValue: number, paymentPct: number): number
 }
 
 /**
- * App-derived: fraction of checklist items actually done. NOT_APPLICABLE
- * items are excluded from both the numerator and denominator entirely —
- * out of scope, not "not done". Shared by the Dashboard's "Overall %
- * Complete" and Budget Tracker's "Sync from Checklist" so the two can never
- * disagree about what "done" means.
+ * Does this checklist item count toward completion %, current stage, and
+ * overdue reminders? Not if it's NOT_APPLICABLE (out of scope), and not if
+ * it's a recurring cadence activity (weekly report, monthly retro, ...) —
+ * those are never "done", so counting them kept every project's current
+ * stage stuck on the first stage that held one. Every completion-style
+ * calculation goes through this one predicate.
  */
-export function checklistCompletionPct(items: { status: string }[]): number {
-  const applicable = items.filter((i) => i.status !== "NOT_APPLICABLE");
+export function isTrackedChecklistItem(i: { status: string; isRecurring?: boolean }): boolean {
+  return i.status !== "NOT_APPLICABLE" && !i.isRecurring;
+}
+
+/**
+ * App-derived: fraction of tracked checklist items actually done (see
+ * isTrackedChecklistItem — N/A and recurring items are excluded from both
+ * the numerator and the denominator). Shared by every Governance % on the
+ * Dashboard, Projects, and Portfolio so they can never disagree.
+ */
+export function checklistCompletionPct(items: { status: string; isRecurring?: boolean }[]): number {
+  const applicable = items.filter(isTrackedChecklistItem);
   if (applicable.length === 0) return 0;
   return applicable.filter((i) => i.status === "COMPLETED").length / applicable.length;
 }
@@ -415,12 +426,12 @@ export function isSlipped(
  * filter/label, so both definitions of "current stage" can't drift apart.
  */
 export function currentStage(
-  items: { stage: string; status: string }[],
+  items: { stage: string; status: string; isRecurring?: boolean }[],
   stageOrder: readonly string[]
 ): string | null {
   for (const stage of stageOrder) {
-    const rows = items.filter((i) => i.stage === stage);
-    if (rows.length > 0 && rows.some((r) => r.status !== "COMPLETED" && r.status !== "NOT_APPLICABLE")) return stage;
+    const rows = items.filter((i) => i.stage === stage && isTrackedChecklistItem(i));
+    if (rows.some((r) => r.status !== "COMPLETED")) return stage;
   }
   return null;
 }
