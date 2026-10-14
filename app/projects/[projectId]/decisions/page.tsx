@@ -1,52 +1,58 @@
+import { notFound } from "next/navigation";
+import clsx from "clsx";
 import { prisma } from "@/lib/prisma";
-import { requireModuleAccess, getModuleAccess } from "@/lib/rbac";
-import { SubNav } from "@/components/ui/sub-nav";
-import { AddDecisionButton } from "./add-decision-button";
-import { DecisionRow } from "./decision-row";
+import { getModuleAccess } from "@/lib/rbac";
+import { ActionItemsList } from "./action-items-list";
+import { DecisionTimeline } from "./decision-timeline";
 
-export default async function DecisionLogPage({ params }: { params: { projectId: string } }) {
-  const [access, actionItemsAccess] = await Promise.all([
-    requireModuleAccess(params.projectId, "DECISION_LOG", "READ_LIMITED"),
+/**
+ * Decisions & action items on one page — they come out of the same calls
+ * and meetings. Each half is still its own module (DECISION_LOG /
+ * ACTION_ITEMS) with its own access level; a viewer sees only the half (or
+ * halves) they can reach. /action-items redirects here.
+ */
+export default async function DecisionsPage({ params }: { params: { projectId: string } }) {
+  const [decisionAccess, actionAccess] = await Promise.all([
+    getModuleAccess(params.projectId, "DECISION_LOG"),
     getModuleAccess(params.projectId, "ACTION_ITEMS"),
   ]);
-  const canWrite = access === "WRITE";
-  const subNavOptions = [
-    { href: "/decisions", label: "Decision Log" },
-    ...(actionItemsAccess !== "NONE" ? [{ href: "/action-items", label: "Action Items" }] : []),
-  ];
+  if (decisionAccess === "NONE" && actionAccess === "NONE") notFound();
+  const canWriteDecisions = decisionAccess === "WRITE";
+  const canWriteActions = actionAccess === "WRITE";
 
-  const rawItems = await prisma.decisionLogItem.findMany({
-    where: { projectId: params.projectId },
-    orderBy: { order: "asc" },
-    include: { decidedByPerson: { select: { id: true, name: true } } },
-  });
-  const items = rawItems.map((i) => ({ ...i, decidedByPersonName: i.decidedByPerson?.name ?? null }));
+  const [rawDecisions, rawActions, people] = await Promise.all([
+    decisionAccess !== "NONE"
+      ? prisma.decisionLogItem.findMany({
+          where: { projectId: params.projectId },
+          orderBy: { order: "asc" },
+          include: { decidedByPerson: { select: { id: true, name: true } } },
+        })
+      : Promise.resolve([]),
+    actionAccess !== "NONE"
+      ? prisma.actionItem.findMany({
+          where: { projectId: params.projectId },
+          orderBy: { order: "asc" },
+          include: { ownerPerson: { select: { id: true, name: true } } },
+        })
+      : Promise.resolve([]),
+    canWriteActions ? prisma.person.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }) : Promise.resolve([]),
+  ]);
+  const decisions = rawDecisions.map((d) => ({ ...d, decidedByPersonName: d.decidedByPerson?.name ?? null }));
+  const actions = rawActions.map((a) => ({ ...a, ownerPersonName: a.ownerPerson?.name ?? null }));
+  const both = decisionAccess !== "NONE" && actionAccess !== "NONE";
 
   return (
-    <div className="space-y-4">
-      <SubNav projectId={params.projectId} options={subNavOptions} />
-      <div className="flex items-start justify-between">
-        <div>
-          <h2 className="text-base font-semibold text-slate-900">Decision Log</h2>
-          <p className="text-sm text-slate-500">What was decided, when, and why — a permanent record so it doesn&apos;t get re-litigated later.</p>
+    <div className={clsx("grid grid-cols-1 gap-6 items-start", both && "xl:grid-cols-5")}>
+      {actionAccess !== "NONE" && (
+        <div className={clsx(both && "xl:col-span-2")}>
+          <ActionItemsList projectId={params.projectId} items={actions} canWrite={canWriteActions} people={people} />
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <a
-            href={`/api/projects/${params.projectId}/decisions/export`}
-            className="rounded-md border border-slate-300 text-slate-700 text-sm font-medium px-4 py-2 hover:bg-slate-50"
-          >
-            Export .xlsx
-          </a>
-          {canWrite && <AddDecisionButton projectId={params.projectId} />}
+      )}
+      {decisionAccess !== "NONE" && (
+        <div className={clsx(both && "xl:col-span-3")}>
+          <DecisionTimeline projectId={params.projectId} items={decisions} canWrite={canWriteDecisions} />
         </div>
-      </div>
-
-      <div className="space-y-3">
-        {items.map((i) => (
-          <DecisionRow key={i.id} projectId={params.projectId} item={i} canWrite={canWrite} />
-        ))}
-        {items.length === 0 && <p className="text-sm text-slate-400">No decisions logged yet.</p>}
-      </div>
+      )}
     </div>
   );
 }

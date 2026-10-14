@@ -142,7 +142,7 @@ function buildReminders(source: ReminderSource, today: Date): ReminderItem[] {
     .map((a) => ({ a, band: reminderBand(a.dueDate, a.status === "Done", today) }))
     .filter((x): x is { a: (typeof source.actionItems)[number]; band: "OVERDUE" | "DUE_SOON" } => x.band !== null)
     .map(({ a, band }) => ({
-      href: `/projects/${a.project.id}/action-items`,
+      href: `/projects/${a.project.id}/decisions#action-items`,
       contextLabel: a.project.name,
       groupId: a.project.id,
       projectId: a.project.id,

@@ -135,7 +135,7 @@ export async function getDashboardData(projectId: string) {
     .map(({ a, band }) => ({
       id: a.id,
       source: "ACTION_ITEM" as const,
-      route: "action-items",
+      route: "decisions#action-items",
       context: a.ownerPerson?.name ?? a.owner ?? "Unassigned",
       itemText: a.description,
       plannedDate: a.dueDate as Date,

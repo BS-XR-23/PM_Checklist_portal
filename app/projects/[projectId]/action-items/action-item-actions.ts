@@ -5,18 +5,29 @@ import { prisma } from "@/lib/prisma";
 import { parseDateInput } from "@/lib/format";
 import { requireModuleWrite, writeAudit } from "@/lib/rbac";
 
+// Action items render on the combined Decisions page (/decisions); the old
+// /action-items route just redirects there.
 function revalidateActionItems(projectId: string) {
-  revalidatePath(`/projects/${projectId}/action-items`);
+  revalidatePath(`/projects/${projectId}/decisions`);
   revalidatePath(`/projects/${projectId}/dashboard`);
   revalidatePath(`/projects/${projectId}/activity`);
 }
 
-export async function createActionItem(projectId: string) {
+export async function createActionItem(
+  projectId: string,
+  input?: { description?: string; dueDate?: string | null; ownerPersonId?: string | null }
+) {
   const user = await requireModuleWrite(projectId, "ACTION_ITEMS");
 
   const count = await prisma.actionItem.count({ where: { projectId } });
   const created = await prisma.actionItem.create({
-    data: { projectId, description: "New action item", order: count },
+    data: {
+      projectId,
+      description: input?.description?.trim() || "New action item",
+      dueDate: input?.dueDate ? parseDateInput(input.dueDate) : null,
+      ownerPersonId: input?.ownerPersonId || null,
+      order: count,
+    },
   });
 
   await writeAudit({
@@ -25,7 +36,7 @@ export async function createActionItem(projectId: string) {
     action: "create",
     entityType: "ActionItem",
     entityId: created.id,
-    summary: "Added a new action item",
+    summary: `Added action item "${created.description.slice(0, 60)}"`,
   });
 
   revalidateActionItems(projectId);

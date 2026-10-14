@@ -371,9 +371,23 @@ and can carry a reference link. **Export .docx** regenerates the Word plan.
 
 ## 14. Decisions & Action Items
 
-**Decision Log** — date, decision, rationale, decided by, notes. A permanent
-record; no status. **Action Items** — description, owner, due date, status
-(Open/Done), notes. Overdue action items feed Reminders and the Dashboard.
+One page (the **Decisions** tab), two columns. Each half is still its own
+module with its own access, so a viewer only sees the half they can reach.
+The old Action Items link redirects here.
+
+- **Action items** — a to-do list. Tick the circle to mark done; open items
+  are sorted by due date (overdue in red), done items fold away. Counts at
+  the top: open · overdue · due this week · done. Items with **no owner or
+  no due date** are flagged — they never reach Reminders or the Dashboard.
+  Add with the one-line quick-add (text, then owner and due date). Overdue
+  action items feed Reminders and the Dashboard.
+- **Decision log** — a permanent, dated record: newest first, grouped by
+  month, shown as text (decision · **Why** · notes · decided by). **Edit**
+  on an entry opens its fields; **Delete** sits inside Edit and asks first.
+  Search appears once there are more than three. **Log a decision** quick-
+  add dates the entry today. "Decided by" is free text — often a client or
+  team, not one person.
+- **Export .xlsx** for each list.
 
 ## 15. Team & Resourcing
 

@@ -11,12 +11,23 @@ function revalidateDecisions(projectId: string) {
   revalidatePath(`/projects/${projectId}/activity`);
 }
 
-export async function createDecision(projectId: string) {
+export async function createDecision(
+  projectId: string,
+  input?: { decision?: string; rationale?: string; decidedBy?: string; date?: string | null }
+) {
   const user = await requireModuleWrite(projectId, "DECISION_LOG");
 
   const count = await prisma.decisionLogItem.count({ where: { projectId } });
   const created = await prisma.decisionLogItem.create({
-    data: { projectId, decision: "New decision", order: count },
+    data: {
+      projectId,
+      decision: input?.decision?.trim() || "New decision",
+      rationale: input?.rationale?.trim() || null,
+      decidedBy: input?.decidedBy?.trim() || null,
+      // A log entry is dated — default to today rather than leaving it blank.
+      date: input?.date ? parseDateInput(input.date) : new Date(),
+      order: count,
+    },
   });
 
   await writeAudit({
@@ -25,7 +36,7 @@ export async function createDecision(projectId: string) {
     action: "create",
     entityType: "DecisionLogItem",
     entityId: created.id,
-    summary: "Added a new decision",
+    summary: `Added decision "${created.decision.slice(0, 60)}"`,
   });
 
   revalidateDecisions(projectId);
