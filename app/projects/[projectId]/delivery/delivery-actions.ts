@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import * as XLSX from "xlsx";
 import { prisma } from "@/lib/prisma";
 import { parseDateInput, normalizeTaskTitle } from "@/lib/format";
-import { requireModuleWrite, requireUser, writeAudit, type CurrentUser } from "@/lib/rbac";
+import { requireModuleWrite, requireProjectAccess, requireUser, writeAudit, type CurrentUser } from "@/lib/rbac";
 import {
   liveSprintContribution,
   parseSprintContributions,
@@ -17,8 +17,9 @@ import {
  * global Admin role regardless of a PM's normal Delivery WRITE access. Once
  * a sprint is closed its PV/EV/AV are a permanent record; un-freezing that
  * is a deliberate reorganize decision, not day-to-day PM work. Every other
- * sprint action (rename/re-date/delete while open, close it) just uses
- * requireModuleWrite like the rest of Delivery.
+ * sprint action (re-date/delete while open, close it) just uses
+ * requireModuleWrite like the rest of Delivery; renameSprint additionally
+ * lets Admin/Super Admin rename a closed sprint.
  */
 async function requireSprintAdmin(): Promise<CurrentUser> {
   const user = await requireUser();
@@ -370,15 +371,16 @@ export async function createSprint(projectId: string, name: string, startDate: s
 
 /**
  * Normal PM write access — same as the rest of an open sprint's content
- * (tasks, allocations). A closed sprint is locked from this too: rename/
- * re-date it after freezing PV/EV/AV and the numbers on the report no
- * longer describe the dates/name shown, so it needs an Admin to explicitly
- * reopenSprint() first rather than being editable (by anyone) in place.
+ * (tasks, allocations). A closed sprint is locked from this too: re-date it
+ * after freezing PV/EV/AV and the numbers on the report no longer describe
+ * the dates shown, so it needs an Admin to explicitly reopenSprint() first
+ * rather than being editable (by anyone) in place. Names go through
+ * renameSprint() below.
  */
 export async function updateSprint(
   id: string,
   _projectId: string,
-  data: Partial<{ name: string; startDate: string; endDate: string }>
+  data: Partial<{ startDate: string; endDate: string }>
 ) {
   const existing = await prisma.sprint.findUniqueOrThrow({ where: { id } });
   const user = await requireModuleWrite(existing.projectId, "DELIVERY");
@@ -387,11 +389,7 @@ export async function updateSprint(
     throw new Error("This sprint is closed — ask an Admin to reopen it before editing.");
   }
 
-  const updateData: { name?: string; startDate?: Date; endDate?: Date } = {};
-  if (data.name !== undefined) {
-    if (!data.name.trim()) throw new Error("A sprint name is required.");
-    updateData.name = data.name.trim();
-  }
+  const updateData: { startDate?: Date; endDate?: Date } = {};
   if (data.startDate !== undefined) {
     const parsed = parseDateInput(data.startDate);
     if (!parsed) throw new Error("A valid start date is required.");
@@ -413,6 +411,44 @@ export async function updateSprint(
     entityId: id,
     summary: "Updated a sprint",
     diff: { before: existing, changes: data },
+  });
+
+  revalidateDelivery(existing.projectId);
+}
+
+/**
+ * Renaming is the one sprint edit that stays open after close: the name is
+ * a label, not part of the frozen PV/EV/AV record, so correcting it doesn't
+ * change what the closed numbers describe. A PM renames only a draft/running
+ * sprint (normal Delivery WRITE, same rule as updateSprint); Super Admin
+ * (ADMIN) and Admin (TPM) can rename any sprint, closed included. A TPM has
+ * no normal write path, so their rename is tagged isOverride in the audit
+ * log like every other TPM edit.
+ */
+export async function renameSprint(id: string, _projectId: string, name: string) {
+  const existing = await prisma.sprint.findUniqueOrThrow({ where: { id } });
+  const current = await requireUser();
+  const canRenameAny = current.role === "ADMIN" || current.role === "TPM";
+  const user = canRenameAny ? await requireProjectAccess(existing.projectId) : await requireModuleWrite(existing.projectId, "DELIVERY");
+
+  if (existing.closedAt && !canRenameAny) {
+    throw new Error("This sprint is closed — only an Admin or Super Admin can rename it.");
+  }
+  const trimmed = name.trim();
+  if (!trimmed) throw new Error("A sprint name is required.");
+  if (trimmed === existing.name) return;
+
+  await prisma.sprint.update({ where: { id }, data: { name: trimmed } });
+
+  await writeAudit({
+    actor: user,
+    projectId: existing.projectId,
+    action: "update",
+    entityType: "Sprint",
+    entityId: id,
+    summary: `Renamed sprint "${existing.name}" to "${trimmed}"${existing.closedAt ? " (closed sprint)" : ""}`,
+    diff: { before: { name: existing.name }, changes: { name: trimmed } },
+    isOverride: user.role === "TPM",
   });
 
   revalidateDelivery(existing.projectId);

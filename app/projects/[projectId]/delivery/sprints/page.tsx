@@ -17,10 +17,11 @@ export default async function DeliverySprintsPage({ params }: { params: { projec
     requireUser(),
   ]);
   const canWrite = access === "WRITE";
-  // Renaming/re-dating or deleting a sprint is an Admin-only emergency/
-  // reorganize tool (see requireSprintAdmin in delivery-actions.ts) — a
-  // stricter gate than the normal Delivery WRITE access PMs have.
+  // Reopening a closed sprint is Super-Admin-only (requireSprintAdmin in
+  // delivery-actions.ts). Renaming any sprint — running or closed — is open
+  // to Super Admin and Admin (TPM); PMs rename only while it's open.
   const isAdmin = user.role === "ADMIN";
+  const canRenameAny = user.role === "ADMIN" || user.role === "TPM";
 
   const [sprints, engagements, backlog] = await Promise.all([
     prisma.sprint.findMany({
@@ -211,6 +212,7 @@ export default async function DeliverySprintsPage({ params }: { params: { projec
               otherOpenSprints={openSprints.filter((o) => o.id !== s.id)}
               canWrite={canWrite}
               isAdmin={isAdmin}
+              canRenameAny={canRenameAny}
             />
           ))
         ) : (

@@ -86,7 +86,7 @@ system role (in code font) is what the code checks.
 | Display name | System role | Opens projects | Can write | Notes |
 |---|---|---|---|---|
 | **Super Admin** | `ADMIN` | Every project | Everything | Only role that creates/archives/deletes projects, edits Users/People/Checklist Template, sees the global Audit Log and Budget Tracker, reopens closed sprints, and sees rate/competency figures. |
-| **Admin** | `TPM` | Every project (read) | Escalations, and the audited **Override** on checklist items | Read-only on Users/People (rates hidden). Can't quietly edit a PM's data — every write is an Escalation or a logged override. |
+| **Admin** | `TPM` | Every project (read) | Escalations, the audited **Override** on checklist items, and sprint names | Read-only on Users/People (rates hidden). Can't quietly edit a PM's data — every write is an Escalation or a logged override. |
 | **Management** | `PROGRAM_MANAGER` | Every project (read) | Nothing | Read-only drill-down into every project except Decisions, Action Items, Escalations, Activity, Budget Tracker. Sees Portfolio and Presales (read-only) and People (read-only). No Users, Reminders, or My Engagement. |
 | **PM** | `PM` | Projects they're a member of | Everything on their projects (except Budget Tracker) | Can also create/edit Presales opportunities. Read-only Users/People. |
 | **Client** | `CLIENT` | Projects they're added to | Per module, as configured | Starts locked down (see below). |
@@ -283,6 +283,12 @@ them to another sprint or accept them as spillover. A task that leaves an
 open sprint keeps its contribution to that sprint. Each sprint shows PV, EV,
 AV, **SPI** and **Effort Index**; per-person allocation and Jira hours are
 reference only. Sprint Playbook and Excel export are on this tab.
+
+**Renaming:** a PM renames a sprint while it's Draft or Open (Sprint
+settings). Admin and Super Admin can rename any sprint, including a closed
+one, from the **Admin — rename sprint** box. Only the name changes; a closed
+sprint's dates and frozen numbers stay as recorded. An Admin (TPM) rename is
+logged as an override in the Activity tab.
 
 ### Dev Checklist
 The Development checklist (§7) — a quality/governance checklist, not a task

@@ -17,6 +17,7 @@ import {
   closeSprint,
   closeSprintWithMoves,
   reopenSprint,
+  renameSprint,
   updateSprint,
   deleteSprint,
   updateWbsTask,
@@ -374,6 +375,7 @@ export function SprintSummaryRow({
   otherOpenSprints,
   canWrite,
   isAdmin,
+  canRenameAny,
 }: {
   projectId: string;
   sprint: SprintSummaryData;
@@ -383,6 +385,8 @@ export function SprintSummaryRow({
   otherOpenSprints: { id: string; name: string }[];
   canWrite: boolean;
   isAdmin: boolean;
+  /** Super Admin or Admin (TPM): may rename this sprint even when closed or read-only otherwise. */
+  canRenameAny: boolean;
 }) {
   const [open, setOpen] = useState(false);
   // Same duplicate-title detection as the Tasks tab, against every task in
@@ -905,7 +909,7 @@ export function SprintSummaryRow({
                 <div className="flex flex-wrap items-end gap-3">
                   <div>
                     <label className="block text-[11px] text-slate-500 mb-0.5">Name</label>
-                    <InlineText value={sprint.name} onSave={(v) => updateSprint(sprint.id, projectId, { name: v })} />
+                    <InlineText value={sprint.name} onSave={(v) => renameSprint(sprint.id, projectId, v)} />
                   </div>
                   <div>
                     <label className="block text-[11px] text-slate-500 mb-0.5">Start</label>
@@ -1027,6 +1031,21 @@ export function SprintSummaryRow({
                     {startError && <span className="text-xs text-red-600">{startError}</span>}
                   </div>
                 )}
+              </div>
+            )}
+
+            {canRenameAny && !editable && (
+              <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+                <h4 className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1">Admin — rename sprint</h4>
+                <p className="text-xs text-slate-500 mb-3">
+                  {closed
+                    ? "Only the name can change — dates and the frozen PV/EV/AV stay as recorded."
+                    : "Admins can rename any sprint; the rest of it is edited by the project's PM."}
+                </p>
+                <label className="block text-[11px] text-slate-500 mb-0.5">Name</label>
+                <div className="max-w-xs">
+                  <InlineText value={sprint.name} onSave={(v) => renameSprint(sprint.id, projectId, v)} />
+                </div>
               </div>
             )}
 

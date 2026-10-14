@@ -37,6 +37,7 @@ describe("Delivery isolation boundary", () => {
   let pmAUserId: string;
   let clientBUserId: string;
   let adminUserId: string;
+  let tpmUserId: string;
   let seniorCompetency: { id: string; multiplier: number };
   let engagedPerson: { id: string };
 
@@ -53,6 +54,8 @@ describe("Delivery isolation boundary", () => {
     pmAUserId = pmA.id;
     clientBUserId = clientB.id;
     adminUserId = admin.id;
+    const tpm = await prisma.user.create({ data: { email: `test-delivery-tpm-${Date.now()}@example.test`, name: "Test TPM", passwordHash, role: "TPM" } });
+    tpmUserId = tpm.id;
 
     await prisma.projectMembership.create({ data: { userId: pmAUserId, projectId: projectA.id, role: "PM" } });
     await prisma.projectMembership.create({ data: { userId: clientBUserId, projectId: projectB.id, role: "CLIENT" } });
@@ -70,7 +73,7 @@ describe("Delivery isolation boundary", () => {
     await prisma.person.delete({ where: { id: engagedPerson.id } });
     await prisma.competency.delete({ where: { id: seniorCompetency.id } });
     await prisma.project.deleteMany({ where: { id: { in: [projectA.id, projectB.id] } } });
-    await prisma.user.deleteMany({ where: { id: { in: [pmAUserId, clientBUserId, adminUserId] } } });
+    await prisma.user.deleteMany({ where: { id: { in: [pmAUserId, clientBUserId, adminUserId, tpmUserId] } } });
   });
 
   it("createWbsTask + assignTaskToSprint + updateTaskProgress: assigning an engaged person snapshots their Competency multiplier", async () => {
@@ -300,21 +303,22 @@ describe("Delivery isolation boundary", () => {
   });
 
   it("updateSprint/deleteSprint: a PM with normal Delivery WRITE access can rename, re-date, and delete an open sprint", async () => {
-    const { createSprint, updateSprint, deleteSprint } = await import("@/app/projects/[projectId]/delivery/delivery-actions");
+    const { createSprint, renameSprint, updateSprint, deleteSprint } = await import("@/app/projects/[projectId]/delivery/delivery-actions");
 
     actAs(pmAUserId);
     await createSprint(projectA.id, "[TEST] Sprint 2", "2026-02-01", "2026-02-14");
     const sprint = await prisma.sprint.findFirstOrThrow({ where: { projectId: projectA.id }, orderBy: { createdAt: "desc" } });
 
-    await updateSprint(sprint.id, projectA.id, { name: "[TEST] Sprint 2 renamed" });
+    await renameSprint(sprint.id, projectA.id, "[TEST] Sprint 2 renamed");
     expect((await prisma.sprint.findUniqueOrThrow({ where: { id: sprint.id } })).name).toBe("[TEST] Sprint 2 renamed");
+    await updateSprint(sprint.id, projectA.id, { endDate: "2026-02-15" });
 
     await deleteSprint(sprint.id, projectA.id);
     expect(await prisma.sprint.findUnique({ where: { id: sprint.id } })).toBeNull();
   });
 
-  it("updateSprint/deleteSprint: a closed sprint is locked for everyone, even Admin, until an Admin explicitly reopens it", async () => {
-    const { createSprint, startSprint, updateSprint, closeSprint, deleteSprint, reopenSprint } = await import(
+  it("updateSprint/deleteSprint: a closed sprint is locked for everyone, even Admin, until an Admin explicitly reopens it — except renaming by Admin/Super Admin", async () => {
+    const { createSprint, startSprint, renameSprint, updateSprint, closeSprint, deleteSprint, reopenSprint } = await import(
       "@/app/projects/[projectId]/delivery/delivery-actions"
     );
 
@@ -324,20 +328,33 @@ describe("Delivery isolation boundary", () => {
     await startSprint(sprint.id, projectA.id);
     await closeSprint(sprint.id, projectA.id);
 
-    await expect(updateSprint(sprint.id, projectA.id, { name: "should fail" })).rejects.toThrow(/closed/);
+    await expect(renameSprint(sprint.id, projectA.id, "should fail")).rejects.toThrow(/closed/);
+    await expect(updateSprint(sprint.id, projectA.id, { endDate: "2026-02-20" })).rejects.toThrow(/closed/);
     await expect(deleteSprint(sprint.id, projectA.id)).rejects.toThrow(/closed/);
     await expect(reopenSprint(sprint.id, projectA.id)).rejects.toThrow(/Admin/);
 
-    // Even an Admin can't edit it directly — reopening is the only door.
+    // Even an Admin can't re-date it directly — reopening is the only door.
+    // The name is the exception: Super Admin and Admin (TPM) can rename a closed sprint.
     actAs(adminUserId);
-    await expect(updateSprint(sprint.id, projectA.id, { name: "should also fail" })).rejects.toThrow(/closed/);
+    await expect(updateSprint(sprint.id, projectA.id, { endDate: "2026-02-20" })).rejects.toThrow(/closed/);
+    await renameSprint(sprint.id, projectA.id, "[TEST] Sprint 2b by admin");
+    actAs(tpmUserId);
+    await renameSprint(sprint.id, projectA.id, "[TEST] Sprint 2b by tpm");
+    const renamed = await prisma.sprint.findUniqueOrThrow({ where: { id: sprint.id } });
+    expect(renamed.name).toBe("[TEST] Sprint 2b by tpm");
+    expect(renamed.closedAt).not.toBeNull();
+    const tpmAudit = await prisma.auditLog.findFirstOrThrow({ where: { entityId: sprint.id, actorId: tpmUserId } });
+    expect(tpmAudit.isOverride).toBe(true);
+    // TPM still can't do anything else to it.
+    await expect(reopenSprint(sprint.id, projectA.id)).rejects.toThrow(/Admin/);
+    actAs(adminUserId);
     await reopenSprint(sprint.id, projectA.id);
     expect((await prisma.sprint.findUniqueOrThrow({ where: { id: sprint.id } })).closedAt).toBeNull();
     await expect(reopenSprint(sprint.id, projectA.id)).rejects.toThrow(/isn't closed/);
 
     // Reopened — normal PM write access applies again.
     actAs(pmAUserId);
-    await updateSprint(sprint.id, projectA.id, { name: "[TEST] Sprint 2b renamed" });
+    await renameSprint(sprint.id, projectA.id, "[TEST] Sprint 2b renamed");
     expect((await prisma.sprint.findUniqueOrThrow({ where: { id: sprint.id } })).name).toBe("[TEST] Sprint 2b renamed");
     await deleteSprint(sprint.id, projectA.id);
     expect(await prisma.sprint.findUnique({ where: { id: sprint.id } })).toBeNull();
@@ -550,7 +567,7 @@ describe("Delivery isolation boundary", () => {
   });
 
   it("guessed-ID: PM-A cannot create a Sprint on Project B, or touch a Sprint belonging to Project B", async () => {
-    const { createSprint, updateSprint, closeSprint, deleteSprint } = await import("@/app/projects/[projectId]/delivery/delivery-actions");
+    const { createSprint, renameSprint, updateSprint, closeSprint, deleteSprint } = await import("@/app/projects/[projectId]/delivery/delivery-actions");
     actAs(pmAUserId);
     await expect(createSprint(projectB.id, "[TEST] Sneaky Sprint", "2026-05-01", "2026-05-14")).rejects.toThrow();
 
@@ -558,7 +575,8 @@ describe("Delivery isolation boundary", () => {
       data: { projectId: projectB.id, name: "[TEST] B Sprint 2", startDate: new Date("2026-06-01"), endDate: new Date("2026-06-14") },
     });
     try {
-      await expect(updateSprint(sprintB.id, projectA.id, { name: "hacked" })).rejects.toThrow();
+      await expect(renameSprint(sprintB.id, projectA.id, "hacked")).rejects.toThrow();
+      await expect(updateSprint(sprintB.id, projectA.id, { endDate: "2026-06-20" })).rejects.toThrow();
       await expect(closeSprint(sprintB.id, projectA.id)).rejects.toThrow();
       await expect(deleteSprint(sprintB.id, projectA.id)).rejects.toThrow();
       const stillThere = await prisma.sprint.findUniqueOrThrow({ where: { id: sprintB.id } });
