@@ -3,14 +3,23 @@ import { parseDateInput } from "@/lib/format";
 import { ITEM_STATUSES, type ItemStatus } from "@/lib/constants";
 import { CHECKLIST_TYPES, CHECKLIST_TYPE_BY_KEY, type ChecklistType } from "@/lib/checklist-types";
 import { computeProjectHealth, deliveryIndices, deliveryPct, governancePct, wbsBaselinePoints } from "@/lib/project-health";
-import { summarizeMilestones, milestoneDueDate } from "@/lib/milestones";
+import { summarizeMilestones, milestoneDueDate, isMilestoneDone } from "@/lib/milestones";
+import { PM_STAGES } from "@/lib/seed-data";
 import {
+  COMPLETED_STAGE_LABEL,
   computeEvm,
+  currentStage,
   isTrackedChecklistItem,
   reminderBand,
   budgetEntriesFromSprints,
+  sprintTotalsFor,
   toSprintsForBudget,
 } from "@/lib/calculations";
+
+const DAY_MS = 86_400_000;
+
+/** A data-quality problem the PM can fix — shown in the Dashboard's attention panel. */
+export type DashboardWarning = { tone: "red" | "amber"; text: string; route: string };
 
 export async function getDashboardData(projectId: string) {
   const [project, allItems, risks, crs, sprints, milestones, actionItems, recentDecisionsRaw, pmPlan, wbsTasks] = await Promise.all([
@@ -137,10 +146,8 @@ export async function getDashboardData(projectId: string) {
     a.band !== b.band ? (a.band === "OVERDUE" ? -1 : 1) : a.plannedDate.getTime() - b.plannedDate.getTime()
   );
 
-  const timelineStrip = stageSummaryByType.flatMap((c) => c.stages.map((s) => ({ ...s, source: c.label })));
-
   // PM Plan's Timeline section (project phases, distinct from the
-  // checklist-stage-level timelineStrip above) — reused here so the
+  // checklist-stage table) — reused here so the
   // dashboard has a project-level Gantt, not just the PM/DevOps checklist
   // planned-vs-actual strip.
   const projectGanttRows = (pmPlan?.timelineRows ?? [])
@@ -164,9 +171,49 @@ export async function getDashboardData(projectId: string) {
   );
 
   const sprintsForBudget = toSprintsForBudget(sprints);
-  // Budget Burn chart only (Detailed Reporting) — dollar PV/EV/AC against
-  // the WBS story-point baseline. Health below never reads dollar CPI.
-  const evm = computeEvm(budgetEntriesFromSprints(sprintsForBudget, wbsBaselinePoints(wbsTasks)), project.contractValue);
+  // Budget Burn chart only (Detailed Reporting, Super Admin) — dollar
+  // PV/EV/AC against the WBS story-point baseline. Health never reads dollar
+  // CPI. Points dated after today (running/draft sprints' end dates) are
+  // dropped so the chart never plots the future.
+  const now = new Date();
+  const evm = computeEvm(budgetEntriesFromSprints(sprintsForBudget, wbsBaselinePoints(wbsTasks)), project.contractValue).filter(
+    (e) => e.weekEnding.getTime() <= now.getTime()
+  );
+
+  // Where the project is in the PM checklist's stage sequence — the same
+  // "first stage with unfinished tracked work" rule the Projects list and
+  // Portfolio use. Stages with no items on this project (e.g. Presales on a
+  // project not won from a deal) aren't counted as steps.
+  const pmItems = allItems.filter((i) => i.type === "PM");
+  const stageSteps = PM_STAGES.filter((st) => pmItems.some((i) => i.stage === st && isTrackedChecklistItem(i)));
+  const stageLabel = currentStage(pmItems, PM_STAGES) ?? COMPLETED_STAGE_LABEL;
+  const stage = { label: stageLabel, step: stageSteps.indexOf(stageLabel as (typeof stageSteps)[number]) + 1, of: stageSteps.length };
+
+  // The sprint the team is in now (started, not closed), else the next
+  // draft — Delivery's live heartbeat, which SPI only reflects at close.
+  const running = sprints.find((sp) => sp.startedAt && !sp.closedAt);
+  const nextDraft = sprints.find((sp) => !sp.startedAt && !sp.closedAt);
+  const currentSprint = running
+    ? (() => {
+        const t = sprintTotalsFor(sprintsForBudget[sprints.indexOf(running)]);
+        return {
+          state: "RUNNING" as const,
+          name: running.name,
+          startDate: running.startDate,
+          endDate: running.endDate,
+          plannedPoints: t.plannedValue,
+          earnedPoints: t.earnedValue,
+          tasks: running.tasks.length,
+          doneTasks: running.tasks.filter((tk) => tk.pctComplete >= 1).length,
+          daysLeft: Math.ceil((running.endDate.getTime() - now.getTime()) / DAY_MS),
+        };
+      })()
+    : nextDraft
+      ? { state: "NEXT" as const, name: nextDraft.name, startDate: nextDraft.startDate, endDate: nextDraft.endDate, tasks: nextDraft.tasks.length }
+      : null;
+
+  const totalPoints = wbsBaselinePoints(wbsTasks);
+  const donePoints = wbsTasks.reduce((sum, t) => sum + t.storyPoints * Math.min(t.pctComplete, 1), 0);
 
   // Same health definition as Delivery/Projects/Portfolio (lib/project-health.ts).
   const health = computeProjectHealth({
@@ -185,12 +232,58 @@ export async function getDashboardData(projectId: string) {
   const { nextMilestone, overdue: overdueMilestones, plannedEnd, nextPayment, paidAmount, invoicedAmount, totalAllocatedPct } =
     milestoneSummary;
 
+  // Contract value split for the money bar: collected · invoiced awaiting
+  // payment · on a milestone but not invoiced · not on any milestone.
+  const allocatedValue = project.contractValue * Math.min(1, totalAllocatedPct);
+  const money = {
+    contractValue: project.contractValue,
+    collected: paidAmount,
+    awaiting: invoicedAmount,
+    scheduled: Math.max(0, allocatedValue - paidAmount - invoicedAmount),
+    unallocated: Math.max(0, project.contractValue - allocatedValue),
+  };
+
+  // Data-quality problems that make other figures on this page wrong or
+  // blank — each links to where it's fixed.
+  const warnings: DashboardWarning[] = [];
+  if (milestones.length === 0) {
+    warnings.push({ tone: "amber", text: "No client milestones yet — Planned End, Next Milestone and payments stay blank until they're added.", route: "milestones" });
+  }
+  for (const m of milestones) {
+    const billed = m.payment && m.payment.invoiceStatus !== "Not Invoiced";
+    if (billed && !isMilestoneDone(m)) {
+      warnings.push({ tone: "red", text: `"${m.name}" is ${m.payment!.invoiceStatus.toLowerCase()} but still marked ${m.status === "NOT_STARTED" ? "Not Started" : "not completed"} — update its status.`, route: "milestones" });
+    }
+  }
+  const undated = milestones.filter((m) => !isMilestoneDone(m) && !milestoneDueDate(m));
+  if (undated.length) {
+    warnings.push({ tone: "amber", text: `${undated.length} milestone${undated.length > 1 ? "s have" : " has"} no date (${undated.map((m) => `"${m.name}"`).slice(0, 3).join(", ")}).`, route: "milestones" });
+  }
+  if (project.contractValue > 0 && totalAllocatedPct < 0.9999 && milestones.length > 0) {
+    warnings.push({
+      tone: "amber",
+      text: `${Math.round((1 - totalAllocatedPct) * 100)}% of the contract isn't assigned to any milestone payment.`,
+      route: "milestones",
+    });
+  } else if (totalAllocatedPct > 1.0001) {
+    warnings.push({ tone: "red", text: `Milestone payments add up to ${Math.round(totalAllocatedPct * 100)}% of the contract — more than 100%.`, route: "milestones" });
+  }
+  if (openHighRisks > 0) {
+    warnings.push({ tone: "red", text: `${openHighRisks} open high-severity risk${openHighRisks > 1 ? "s" : ""} — mitigate or close ${openHighRisks > 1 ? "them" : "it"} to clear Critical health.`, route: "risks" });
+  }
+
   return {
     project,
     totalItems,
     completedItems,
     overallPct,
     deliveryPct: deliveryPctValue,
+    totalPoints,
+    donePoints,
+    stage,
+    currentSprint,
+    money,
+    warnings,
     plannedEnd,
     overdueMilestones,
     rag,
@@ -201,7 +294,6 @@ export async function getDashboardData(projectId: string) {
     statusBreakdown,
     perChecklistSummary,
     stageSummaryByType,
-    timelineStrip,
     projectGanttRows,
     milestonesList,
     evmChartData: evm.map((e) => ({ weekEnding: e.weekEnding.toISOString(), pv: e.pv, ev: e.ev, ac: e.actualCost })),

@@ -157,29 +157,38 @@ Winning a presales opportunity uses the same creation path.
 
 ## 6. Inside a project — Dashboard
 
-The first tab. A read-limited viewer (Client default) sees the progress
-hero and the "where are we" row only.
+The first tab, ordered by question: where are we → what needs me → how far
+along → money → detail. A read-limited viewer (Client default) sees the
+status strip (health without reasons), Governance and Delivery % only.
 
-- **Governance gauge** — Governance % with per-checklist breakdown and item
-  counts (total, completed, in progress, not started, overdue, at risk).
-- **Health** — Red / Amber / Green with the **reasons** listed under it
-  (e.g. "3 open high risks · 1 overdue milestone"). Reasons are only shown
-  to viewers who can see the financial/risk tiles. See §24 for the rule.
-- **Delivery** — Delivery % (story points).
-- **Planned End** — the latest milestone date.
-- **Next Milestone** — the next milestone due **today or later**; overdue
-  milestones are counted separately underneath ("1 overdue"), never shown
-  as "next".
-- **Overdue & Due Soon** — this project's checklist and action items past
-  or within 7 days of their date (recurring items excluded).
-- **Recent Decisions** — last 5 Decision Log entries.
-- **Financial tiles** (read-full and above): **SPI**, **Effort Index**, Open
-  High Risks, Active CR Value (man-days), **Next Payment Due** (the
-  earliest-due milestone with an un-invoiced tranche above 0%), Total
-  Contract Value, Paid to Date, Invoiced (awaiting payment).
-- **Detailed Reporting** (expand): status breakdown, completion by
-  checklist, budget burn chart, per-stage breakdown and timeline, project
-  Gantt (from PM Plan Timeline), and the **Key Milestones** table.
+- **Status strip:**
+  - **Health** — Critical / At Risk / Healthy / No data yet, with its
+    **reasons** (e.g. "3 open high risks"). Reasons only for viewers who
+    can see risks and money. See §24 for the rule.
+  - **Stage** — the current PM checklist stage, e.g. "Planning · Stage 2
+    of 5".
+  - **Current sprint** — the running sprint's points earned of committed
+    and days left (or the next draft sprint and its planned dates).
+  - **Next milestone** — the next milestone due **today or later**, any
+    overdue ones counted underneath, and the planned end (latest milestone
+    date).
+- **Needs attention** — data problems that make other figures wrong, each
+  with a **Fix →** link: a milestone that's invoiced or paid but not
+  completed, milestones with no date, contract value not assigned to any
+  milestone payment (or payments over 100%), no client milestones yet, and
+  open high-severity risks. Below them, overdue and due-soon checklist and
+  action items (recurring items excluded). Green line when there's nothing.
+- **Recent decisions** — last 5 Decision Log entries.
+- **Governance** — the gauge with per-checklist bars and item counts.
+- **Delivery** — Delivery % as story points done of total, plus **SPI**
+  and **Effort Index** (closed sprints).
+- **Contract & payments** — one bar: collected · invoiced, awaiting payment
+  · on milestones, not invoiced · not on any milestone; plus the next
+  payment and any active change-request man-days.
+- **Detailed reporting** (expand): checklist stages table (done, first
+  planned, last actual), the project Gantt from PM Plan → Timeline (flags
+  phases still on their default names), the client milestones table, and
+  — Super Admin only — the Budget Tracker's budget burn chart.
 
 ## 7. Checklists
 
