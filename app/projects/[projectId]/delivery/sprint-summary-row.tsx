@@ -561,8 +561,8 @@ export function SprintSummaryRow({
           <span className="flex items-center gap-1">
             SPI <IndexValue value={spi} />
           </span>
-          <span className="flex items-center gap-1">
-            CPI <IndexValue value={cpi} />
+          <span className="flex items-center gap-1" title="Effort Index: earned points ÷ competency-adjusted man-days (estimate accuracy)">
+            Effort <IndexValue value={cpi} />
           </span>
           <span className="text-slate-400">›</span>
         </div>
@@ -610,7 +610,7 @@ export function SprintSummaryRow({
               <StatTile
                 icon={<IconChart />}
                 iconWrapClass="bg-indigo-50 text-indigo-600"
-                label="CPI"
+                label="Effort Index"
                 value={cpi == null ? "—" : cpi.toFixed(2)}
                 valueColor={cpi == null ? undefined : INDEX_BAND_COLORS[indexBand(cpi)].text}
               />

@@ -101,7 +101,7 @@ export default async function PortfolioPage() {
           title={
             <span className="inline-flex items-center gap-1.5">
               Portfolio Health
-              <InfoTooltip text="Schedule/Budget Health average each active project's latest SPI/CPI (capped at 100%, and only shown once at least 2 projects have sprint data). Delivery Health is the share of remaining checklist work that isn't overdue. Risk Health is the share of active projects with zero open high-severity risks." />
+              <InfoTooltip text="Schedule Health averages each active project's SPI; Effort Health averages each project's Effort Index (estimate accuracy) — both capped at 100% and shown once at least 2 projects have sprint data. Checklist Health is the share of remaining checklist work that isn't overdue. Risk Health is the share of active projects with zero open high-severity risks." />
             </span>
           }
         />
@@ -118,8 +118,8 @@ export default async function PortfolioPage() {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
             <HealthIndexBar label="Schedule Health" index={summary.scheduleHealth} unit="SPI" />
-            <HealthIndexBar label="Budget Health" index={summary.budgetHealth} unit="CPI" />
-            <HealthIndexBar label="Delivery Health" index={summary.deliveryHealth} unit="checklist" />
+            <HealthIndexBar label="Effort Health" index={summary.effortHealth} unit="effort" />
+            <HealthIndexBar label="Checklist Health" index={summary.checklistHealth} unit="checklist" />
             <HealthIndexBar label="Risk Health" index={summary.riskHealth} unit="risk" />
           </div>
         </div>
@@ -303,8 +303,8 @@ export default async function PortfolioPage() {
             <SectionHeader icon={<IconLayers />} iconWrapClass="bg-violet-50 text-violet-600" title="Portfolio Trends & Insights" />
             <div className="space-y-4">
               <div>
-                <p className="text-xs font-medium text-slate-500 mb-1.5">Delivery &amp; Financial Trend (portfolio avg. SPI / CPI by week)</p>
-                <SpiCpiChart data={trendPoints} />
+                <p className="text-xs font-medium text-slate-500 mb-1.5">Delivery Trend (portfolio avg. SPI / Effort Index by sprint end)</p>
+                <SpiCpiChart data={trendPoints} secondLabel="Effort Index" />
               </div>
               <div>
                 <p className="text-xs font-medium text-slate-500 mb-1.5">Projects by Stage (current)</p>
@@ -352,7 +352,7 @@ function LegendDot({ color, bg, label }: { color: string; bg: string; label: str
 
 const HEALTH_EXPLANATION: Record<string, string> = {
   SPI: "schedule",
-  CPI: "cost",
+  effort: "effort",
   checklist: "checklist",
   risk: "risk",
 };

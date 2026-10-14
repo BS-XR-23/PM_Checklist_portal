@@ -48,7 +48,7 @@ const FINANCIAL_STATUS_LABEL: Record<FinancialStatus, string> = {
 
 type RiskFilter = "ALL" | "HAS_RISKS" | "NO_RISKS";
 type DateRange = "ALL" | "7" | "30" | "90";
-type SortKey = "health" | "progress" | "contractValue" | "spi" | "cpi" | "risks" | "nextMilestone" | "updatedAt";
+type SortKey = "health" | "progress" | "contractValue" | "spi" | "effort" | "risks" | "nextMilestone" | "updatedAt";
 type SortDir = "asc" | "desc";
 
 const HEALTH_RANK: Record<PortfolioRow["rag"], number> = { RED: 3, AMBER: 2, GREEN: 1 };
@@ -63,8 +63,8 @@ function compareRows(a: PortfolioRow, b: PortfolioRow, key: SortKey): number {
       return a.contractValue - b.contractValue;
     case "spi":
       return (a.latestSpi ?? -1) - (b.latestSpi ?? -1);
-    case "cpi":
-      return (a.latestCpi ?? -1) - (b.latestCpi ?? -1);
+    case "effort":
+      return (a.effortIndex ?? -1) - (b.effortIndex ?? -1);
     case "risks":
       return a.openRisks - b.openRisks;
     case "nextMilestone":
@@ -299,7 +299,7 @@ export function PortfolioClient({
                   <SortableHeader label="Progress" sortKey="progress" sort={sort} setSort={setSort} />
                   <SortableHeader label="Contract Value" sortKey="contractValue" sort={sort} setSort={setSort} />
                   <SortableHeader label="SPI" sortKey="spi" sort={sort} setSort={setSort} />
-                  <SortableHeader label="CPI" sortKey="cpi" sort={sort} setSort={setSort} />
+                  <SortableHeader label="Effort" sortKey="effort" sort={sort} setSort={setSort} />
                   <SortableHeader label="Risks" sortKey="risks" sort={sort} setSort={setSort} />
                   <SortableHeader label="Next Milestone" sortKey="nextMilestone" sort={sort} setSort={setSort} />
                   <SortableHeader label="Last Updated" sortKey="updatedAt" sort={sort} setSort={setSort} />
@@ -366,7 +366,7 @@ function SortableHeader({
 function ProjectRow({ row: r }: { row: PortfolioRow }) {
   const ragColor = RAG_COLORS[r.rag];
   const spiColor = r.latestSpi != null ? INDEX_BAND_COLORS[indexBand(r.latestSpi)] : null;
-  const cpiColor = r.latestCpi != null ? INDEX_BAND_COLORS[indexBand(r.latestCpi)] : null;
+  const effortColor = r.effortIndex != null ? INDEX_BAND_COLORS[indexBand(r.effortIndex)] : null;
 
   return (
     <tr className="border-b border-slate-50 last:border-0 hover:bg-slate-50/60">
@@ -402,25 +402,36 @@ function ProjectRow({ row: r }: { row: PortfolioRow }) {
           <span
             className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium"
             style={{ backgroundColor: ragColor.bg, color: ragColor.text }}
+            title={r.healthReasons.join(" · ") || "No issues found"}
           >
             {r.rag === "GREEN" ? "Healthy" : r.rag === "AMBER" ? "At Risk" : "Critical"}
           </span>
         )}
       </td>
       <td className="px-3 py-2.5 whitespace-nowrap">
-        <div className="flex items-center gap-2 w-28">
+        {/* Governance (checklist) bar + Delivery (story points) figure — the
+            two named progress numbers every page uses (lib/project-health.ts). */}
+        <div className="flex items-center gap-2 w-32" title="Governance: checklist items completed">
+          <span className="text-[10px] text-slate-400 w-6 shrink-0">Gov</span>
           <div className="flex-1 h-1.5 rounded-full bg-slate-100 overflow-hidden">
             <div className="h-full bg-slate-800" style={{ width: `${r.progress * 100}%` }} />
           </div>
-          <span className="text-xs text-slate-500 shrink-0">{Math.round(r.progress * 100)}%</span>
+          <span className="text-xs text-slate-500 shrink-0 w-8 text-right">{Math.round(r.progress * 100)}%</span>
+        </div>
+        <div className="flex items-center gap-2 w-32 mt-1" title="Delivery: story points done of total WBS points">
+          <span className="text-[10px] text-slate-400 w-6 shrink-0">Del</span>
+          <div className="flex-1 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+            <div className="h-full bg-blue-600" style={{ width: `${(r.deliveryPct ?? 0) * 100}%` }} />
+          </div>
+          <span className="text-xs text-slate-500 shrink-0 w-8 text-right">{r.deliveryPct != null ? `${Math.round(r.deliveryPct * 100)}%` : "—"}</span>
         </div>
       </td>
       <td className="px-3 py-2.5 text-slate-700 whitespace-nowrap">{formatMoney(r.contractValue)}</td>
       <td className="px-3 py-2.5 whitespace-nowrap font-medium" style={{ color: spiColor?.text }}>
         {r.latestSpi != null ? r.latestSpi.toFixed(2) : "—"}
       </td>
-      <td className="px-3 py-2.5 whitespace-nowrap font-medium" style={{ color: cpiColor?.text }}>
-        {r.latestCpi != null ? r.latestCpi.toFixed(2) : "—"}
+      <td className="px-3 py-2.5 whitespace-nowrap font-medium" style={{ color: effortColor?.text }}>
+        {r.effortIndex != null ? r.effortIndex.toFixed(2) : "—"}
       </td>
       <td className="px-3 py-2.5 whitespace-nowrap">
         <span

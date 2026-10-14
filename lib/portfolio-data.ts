@@ -1,15 +1,8 @@
 import type { Prisma } from "@prisma/client";
 import { PM_STAGES } from "@/lib/seed-data";
-import {
-  budgetEntriesFromSprints,
-  toSprintsForBudget,
-  currentStage,
-  checklistCompletionPct,
-  trancheAmount,
-  computeEvm,
-  COMPLETED_STAGE_LABEL,
-} from "@/lib/calculations";
-import { computeProjectRag, type Rag } from "@/lib/rag";
+import { toSprintsForBudget, currentStage, trancheAmount, COMPLETED_STAGE_LABEL } from "@/lib/calculations";
+import { computeProjectHealth, deliveryIndices, deliveryPct, governancePct } from "@/lib/project-health";
+import type { Rag } from "@/lib/rag";
 
 // A portfolio index needs at least this many active projects with real data
 // before it's shown as a percentage — a single project's SPI/CPI (especially
@@ -29,6 +22,7 @@ export const PORTFOLIO_PROJECT_INCLUDE = {
   checklistItems: { include: { milestonePayment: true } },
   memberships: { where: { role: "PM" as const }, include: { user: { select: { name: true } } }, take: 1 },
   dependencies: { where: { status: "Blocked" as const }, select: { id: true } },
+  wbsTasks: { select: { storyPoints: true, pctComplete: true } },
 } satisfies Prisma.ProjectInclude;
 
 type ProjectWithPortfolioData = Prisma.ProjectGetPayload<{ include: typeof PORTFOLIO_PROJECT_INCLUDE }>;
@@ -52,11 +46,13 @@ export type PortfolioRow = {
   status: "ACTIVE" | "ARCHIVED";
   pmName: string | null;
   stage: string;
-  progress: number;
+  progress: number; // Governance % (checklist) — see lib/project-health.ts
+  deliveryPct: number | null; // story points done / total WBS points
   contractValue: number;
   rag: Rag;
+  healthReasons: string[];
   latestSpi: number | null;
-  latestCpi: number | null;
+  effortIndex: number | null;
   openHighRisks: number;
   openRisks: number;
   blockedDependencies: number;
@@ -81,7 +77,6 @@ export type MilestoneEvent = {
 function buildAttentionIssues(input: {
   openHighRisks: number;
   latestSpi: number | null;
-  latestCpi: number | null;
   nextMilestone: { name: string; date: Date } | null;
   blockedDependencies: number;
   hasMissingData: boolean;
@@ -95,10 +90,6 @@ function buildAttentionIssues(input: {
   }
   if (input.nextMilestone && input.nextMilestone.date < today) {
     issues.push({ severity: "High", label: `"${input.nextMilestone.name}" overdue` });
-  }
-  if (input.latestCpi != null) {
-    if (input.latestCpi < 0.9) issues.push({ severity: "High", label: `CPI ${input.latestCpi.toFixed(2)}` });
-    else if (input.latestCpi < 1) issues.push({ severity: "Medium", label: `CPI ${input.latestCpi.toFixed(2)}` });
   }
   if (input.latestSpi != null) {
     if (input.latestSpi < 0.9) issues.push({ severity: "High", label: `SPI ${input.latestSpi.toFixed(2)}` });
@@ -122,23 +113,25 @@ function buildPortfolioRow(
   p: ProjectWithPortfolioData,
   today: Date
 ): { row: PortfolioRow; milestoneEvents: MilestoneEvent[]; incompleteCount: number; overdueCount: number } {
-  const budgetEntries = budgetEntriesFromSprints(toSprintsForBudget(p.sprints), p.plannedStoryPoints);
-  const { rag, latestSpi, latestCpi, openHighRisks } = computeProjectRag({
-    contractValue: p.contractValue,
-    budgetEntries,
+  const milestoneItems = p.checklistItems.filter((i) => i.milestonePayment != null);
+  // Same health definition as Dashboard/Delivery (lib/project-health.ts).
+  const health = computeProjectHealth({
+    sprints: toSprintsForBudget(p.sprints),
     risks: p.risks,
+    milestones: milestoneItems.map((i) => ({ status: i.status, plannedDate: i.plannedDate })),
+    today,
   });
+  const { rag, spi: latestSpi, effortIndex, openHighRisks } = health;
 
   const pmItems = p.checklistItems.filter((i) => i.type === "PM");
   // Same "first stage with incomplete work" definition as the single-project
   // Dashboard (lib/dashboard-data.ts) — null (every stage done) reads as
   // "Completed" here, since the Portfolio table needs a stage *label*.
   const stage = currentStage(pmItems, PM_STAGES) ?? COMPLETED_STAGE_LABEL;
-  const progress = checklistCompletionPct(p.checklistItems);
+  const progress = governancePct(p.checklistItems);
 
   const openRisks = p.risks.filter((r) => r.type === "Risk" && r.status !== "Closed" && r.status !== "Mitigated").length;
 
-  const milestoneItems = p.checklistItems.filter((i) => i.milestonePayment != null);
   const paidAmount = milestoneItems
     .filter((i) => i.milestonePayment!.invoiceStatus === "Paid")
     .reduce((sum, i) => sum + trancheAmount(p.contractValue, i.milestonePayment!.paymentPct), 0);
@@ -174,7 +167,6 @@ function buildPortfolioRow(
   const issues = buildAttentionIssues({
     openHighRisks,
     latestSpi,
-    latestCpi,
     nextMilestone,
     blockedDependencies: p.dependencies.length,
     hasMissingData,
@@ -189,10 +181,12 @@ function buildPortfolioRow(
     pmName: p.memberships[0]?.user.name ?? null,
     stage,
     progress,
+    deliveryPct: deliveryPct(p.wbsTasks),
     contractValue: p.contractValue,
     rag,
+    healthReasons: health.reasons,
     latestSpi,
-    latestCpi,
+    effortIndex,
     openHighRisks,
     openRisks,
     blockedDependencies: p.dependencies.length,
@@ -215,6 +209,8 @@ export type HealthIndex = {
   eligible: number; // how many active projects *could* have contributed
 };
 
+// `cpi` carries the portfolio-average Effort Index (SpiCpiChart's second
+// series, labelled accordingly on the Portfolio page) — not dollar CPI.
 export type TrendPoint = { weekEnding: string; spi: number | null; cpi: number | null };
 
 export type PortfolioSummary = {
@@ -232,8 +228,8 @@ export type PortfolioSummary = {
   // The four index bars in "Portfolio Health" — each carries its own sample
   // size so the UI can explain *why* it's N/A rather than just saying so.
   scheduleHealth: HealthIndex; // avg of min(latest SPI, 1) — capped so ahead-of-schedule can't mask a late sibling project
-  budgetHealth: HealthIndex; // avg of min(latest CPI, 1)
-  deliveryHealth: HealthIndex; // avg of (1 - overdue checklist items / incomplete checklist items)
+  effortHealth: HealthIndex; // avg of min(Effort Index, 1)
+  checklistHealth: HealthIndex; // avg of (1 - overdue checklist items / incomplete checklist items)
   riskHealth: HealthIndex; // share of active projects with zero open high-severity risks
 };
 
@@ -267,14 +263,14 @@ export function buildPortfolioData(projects: ProjectWithPortfolioData[]): Portfo
     sampleSize: spiRows.length,
     eligible: active.length,
   };
-  const cpiRows = active.filter((b) => b.row.latestCpi != null);
-  const budgetHealth: HealthIndex = {
-    value: cpiRows.length >= MIN_HEALTH_SAMPLE ? cpiRows.reduce((sum, b) => sum + Math.min(b.row.latestCpi as number, 1), 0) / cpiRows.length : null,
-    sampleSize: cpiRows.length,
+  const effortRows = active.filter((b) => b.row.effortIndex != null);
+  const effortHealth: HealthIndex = {
+    value: effortRows.length >= MIN_HEALTH_SAMPLE ? effortRows.reduce((sum, b) => sum + Math.min(b.row.effortIndex as number, 1), 0) / effortRows.length : null,
+    sampleSize: effortRows.length,
     eligible: active.length,
   };
   const deliveryRows = active.filter((b) => b.incompleteCount > 0);
-  const deliveryHealth: HealthIndex = {
+  const checklistHealth: HealthIndex = {
     value: deliveryRows.length ? deliveryRows.reduce((sum, b) => sum + (1 - b.overdueCount / b.incompleteCount), 0) / deliveryRows.length : null,
     sampleSize: deliveryRows.length,
     eligible: active.length,
@@ -289,22 +285,22 @@ export function buildPortfolioData(projects: ProjectWithPortfolioData[]): Portfo
   // "upcoming" and shouldn't read as overdue work needing attention.
   const upcomingMilestones = active.flatMap((b) => b.milestoneEvents).sort((a, b) => a.date.getTime() - b.date.getTime());
 
-  // Portfolio-wide weekly average SPI/CPI — real history from each project's
-  // own sprint-derived EVM series (lib/calculations.ts#computeEvm), grouped
-  // by week-ending date. Not a stored snapshot, so a week where only one
-  // project has data still shows — it's just that week's average of
-  // whichever projects reported one.
+  // Portfolio-wide average SPI / Effort Index by sprint end date — each
+  // project's cumulative series from lib/project-health.ts#deliveryIndices,
+  // grouped by date. Not a stored snapshot, so a date where only one project
+  // has data still shows — it's just that date's average of whichever
+  // projects reported one.
   const weekMap = new Map<string, { spi: number[]; cpi: number[] }>();
+  const bucketFor = (d: Date) => {
+    const key = d.toISOString().slice(0, 10);
+    const bucket = weekMap.get(key) ?? { spi: [], cpi: [] };
+    weekMap.set(key, bucket);
+    return bucket;
+  };
   for (const p of projects.filter((p) => p.status === "ACTIVE")) {
-    const budgetEntries = budgetEntriesFromSprints(toSprintsForBudget(p.sprints), p.plannedStoryPoints);
-    const evm = computeEvm(budgetEntries, p.contractValue);
-    for (const e of evm) {
-      const key = e.weekEnding.toISOString().slice(0, 10);
-      const bucket = weekMap.get(key) ?? { spi: [], cpi: [] };
-      if (e.spi != null) bucket.spi.push(e.spi);
-      if (e.cpi != null) bucket.cpi.push(e.cpi);
-      weekMap.set(key, bucket);
-    }
+    const { spiHistory, effortHistory } = deliveryIndices(toSprintsForBudget(p.sprints));
+    for (const h of spiHistory) bucketFor(h.endDate).spi.push(h.spi);
+    for (const h of effortHistory) bucketFor(h.endDate).cpi.push(h.effortIndex);
   }
   const trendPoints: TrendPoint[] = Array.from(weekMap.entries())
     .sort(([a], [b]) => (a < b ? -1 : 1))
@@ -329,8 +325,8 @@ export function buildPortfolioData(projects: ProjectWithPortfolioData[]): Portfo
       upcomingInvoice,
       invoicedTotal: collected + outstanding,
       scheduleHealth,
-      budgetHealth,
-      deliveryHealth,
+      effortHealth,
+      checklistHealth,
       riskHealth,
     },
     upcomingMilestones,

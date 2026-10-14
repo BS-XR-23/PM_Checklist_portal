@@ -2,19 +2,17 @@ import { prisma } from "@/lib/prisma";
 import { parseDateInput } from "@/lib/format";
 import { ITEM_STATUSES, type ItemStatus } from "@/lib/constants";
 import { CHECKLIST_TYPES, CHECKLIST_TYPE_BY_KEY, type ChecklistType } from "@/lib/checklist-types";
-import { computeProjectRag } from "@/lib/rag";
+import { computeProjectHealth, deliveryIndices, deliveryPct, governancePct, wbsBaselinePoints } from "@/lib/project-health";
 import {
-  riskScore,
   computeEvm,
   trancheAmount,
   reminderBand,
-  checklistCompletionPct,
   budgetEntriesFromSprints,
   toSprintsForBudget,
 } from "@/lib/calculations";
 
 export async function getDashboardData(projectId: string) {
-  const [project, allItems, risks, crs, sprints, milestones, actionItems, recentDecisionsRaw, pmPlan] = await Promise.all([
+  const [project, allItems, risks, crs, sprints, milestones, actionItems, recentDecisionsRaw, pmPlan, wbsTasks] = await Promise.all([
     prisma.project.findUniqueOrThrow({ where: { id: projectId } }),
     // One query for both checklists (differ only by `type`) instead of two —
     // filtering below preserves the orderBy order within each subset.
@@ -31,6 +29,7 @@ export async function getDashboardData(projectId: string) {
     prisma.actionItem.findMany({ where: { projectId, dueDate: { not: null } }, include: { ownerPerson: { select: { name: true } } } }),
     prisma.decisionLogItem.findMany({ where: { projectId }, orderBy: { order: "desc" }, take: 5, include: { decidedByPerson: { select: { name: true } } } }),
     prisma.pMPlan.findUnique({ where: { projectId }, select: { timelineRows: { orderBy: { order: "asc" } } } }),
+    prisma.wbsTask.findMany({ where: { projectId }, select: { storyPoints: true, pctComplete: true } }),
   ]);
 
   const recentDecisions = recentDecisionsRaw.map((d) => ({
@@ -46,7 +45,8 @@ export async function getDashboardData(projectId: string) {
   const applicableItems = allItems.filter((i) => i.status !== "NOT_APPLICABLE");
   const totalItems = applicableItems.length;
   const completedItems = applicableItems.filter((i) => i.status === "COMPLETED").length;
-  const overallPct = checklistCompletionPct(allItems);
+  const overallPct = governancePct(allItems);
+  const deliveryPctValue = deliveryPct(wbsTasks);
 
   // Status breakdown stays over ALL items — seeing "N marked Not Applicable"
   // as its own slice is useful; it's only the percentage-complete math above
@@ -163,20 +163,19 @@ export async function getDashboardData(projectId: string) {
     }))
     .sort((a, b) => (a.type === b.type ? a.order - b.order : checklistTypeOrder[a.type] - checklistTypeOrder[b.type]));
 
-  const evm = computeEvm(budgetEntriesFromSprints(toSprintsForBudget(sprints), project.plannedStoryPoints), project.contractValue);
-  const latestEvm = [...evm].reverse().find((e) => e.spi != null || e.cpi != null) ?? null;
+  const sprintsForBudget = toSprintsForBudget(sprints);
+  // Budget Burn chart only (Detailed Reporting) — dollar PV/EV/AC against
+  // the WBS story-point baseline. Health below never reads dollar CPI.
+  const evm = computeEvm(budgetEntriesFromSprints(sprintsForBudget, wbsBaselinePoints(wbsTasks)), project.contractValue);
 
-  const openHighRisks = risks.filter(
-    (r) => r.type === "Risk" && r.status !== "Closed" && r.status !== "Mitigated" && riskScore(r.probability, r.impact) >= 6
-  ).length;
-
-  // Same health definition Portfolio/Projects already use — this page never
-  // surfaced it before, despite it being exactly a "where are we" signal.
-  const { rag } = computeProjectRag({
-    contractValue: project.contractValue,
-    budgetEntries: budgetEntriesFromSprints(toSprintsForBudget(sprints), project.plannedStoryPoints),
+  // Same health definition as Delivery/Projects/Portfolio (lib/project-health.ts).
+  const health = computeProjectHealth({
+    sprints: sprintsForBudget,
     risks,
+    milestones: milestones.map((m) => ({ status: m.checklistItem.status, plannedDate: m.checklistItem.plannedDate })),
   });
+  const { spiHistory } = deliveryIndices(sprintsForBudget);
+  const { rag, openHighRisks } = health;
 
   // Next not-yet-done milestone by Planned Date — same definition as
   // lib/portfolio-data.ts's nextMilestone, kept local rather than shared.
@@ -218,8 +217,10 @@ export async function getDashboardData(projectId: string) {
     totalItems,
     completedItems,
     overallPct,
+    deliveryPct: deliveryPctValue,
     endDate,
     rag,
+    healthReasons: health.reasons,
     nextMilestone,
     reminders,
     recentDecisions,
@@ -231,11 +232,10 @@ export async function getDashboardData(projectId: string) {
     milestonesList,
     evmChartData: evm.map((e) => ({ weekEnding: e.weekEnding.toISOString(), pv: e.pv, ev: e.ev, ac: e.actualCost })),
     financial: {
-      latestSpi: latestEvm?.spi ?? null,
-      latestCpi: latestEvm?.cpi ?? null,
-      // Chronological, nulls dropped — feeds the Latest SPI tile's sparkline.
-      // A gap week (no PV yet) just isn't a point, rather than a break in the line.
-      spiHistory: evm.map((e) => e.spi).filter((v): v is number => v != null),
+      latestSpi: health.spi,
+      effortIndex: health.effortIndex,
+      // Chronological cumulative SPI after each sprint — feeds the SPI tile's sparkline.
+      spiHistory: spiHistory.map((h) => h.spi),
       openHighRisks,
       activeCRValue,
       nextPaymentDue,

@@ -6,12 +6,12 @@ import { updateProjectFinancials } from "../project-actions";
 export function ContractInputsForm({
   projectId,
   contractValue,
-  plannedStoryPoints,
+  baselinePoints,
   plannedManDays,
 }: {
   projectId: string;
   contractValue: number;
-  plannedStoryPoints: number;
+  baselinePoints: number;
   plannedManDays: number;
 }) {
   return (
@@ -24,13 +24,13 @@ export function ContractInputsForm({
           onSave={(v) => updateProjectFinancials(projectId, { contractValue: v ?? 0 })}
         />
       </div>
+      {/* Derived, not typed in — the sum of every WBS task's story points
+          (Delivery → Tasks). The old hand-entered field sat at 0 on every
+          project, which zeroed PV/EV. */}
       <div>
-        <label className="block text-xs font-medium text-slate-600 mb-1">Total Planned Story Points</label>
-        <InlineNumber
-          value={plannedStoryPoints}
-          step={1}
-          onSave={(v) => updateProjectFinancials(projectId, { plannedStoryPoints: v ?? 0 })}
-        />
+        <p className="block text-xs font-medium text-slate-600 mb-1">Baseline Story Points</p>
+        <p className="text-sm text-slate-800 py-1">{baselinePoints}</p>
+        <p className="text-[11px] text-slate-400">Sum of WBS task points</p>
       </div>
       <div className="sm:col-span-2">
         <label className="block text-xs font-medium text-slate-600 mb-1">

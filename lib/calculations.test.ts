@@ -8,6 +8,7 @@ import {
   wbsActualValue,
   competencyCpi,
   budgetEntriesFromSprints,
+  computeEvm,
   sprintEarnedValue,
   manDaysFromHours,
   sprintOwnHours,
@@ -346,14 +347,26 @@ describe("budgetEntriesFromSprints", () => {
     expect(result[1].pctActualComplete).toBeCloseTo(1);
   });
 
-  it("actualCost is that sprint's own spend only, not cumulative", () => {
+  it("actualCost is cumulative (like PV/EV) so CV and CPI compare like with like; sprintActualCost is the sprint's own spend", () => {
     const sprints = [
       sprintForBudget({ liveEntries: [contribution({ storyPoints: 10, pctComplete: 1, sprintOwnHours: 40, manDayRate: 100 })] }), // 5 md x 100
       sprintForBudget({ endDate: new Date("2026-01-28"), liveEntries: [contribution({ storyPoints: 5, pctComplete: 1, sprintOwnHours: 16, manDayRate: 100 })] }), // 2 md x 100
     ];
     const result = budgetEntriesFromSprints(sprints, 15);
     expect(result[0].actualCost).toBe(500);
-    expect(result[1].actualCost).toBe(200); // not 700 — sprint 2 only spent 200 of its own
+    expect(result[1].actualCost).toBe(700); // 500 + 200, cumulative
+    expect(result[1].sprintActualCost).toBe(200); // sprint 2's own spend, for the role breakdown
+  });
+
+  it("CPI stays flat when spend tracks earned value — cumulative EV over cumulative AC, not over one sprint's AC", () => {
+    // Two identical sprints: each earns 5 of 10 points for $500. Contract $1,000 -> EV $500 per sprint.
+    const sprints = [
+      sprintForBudget({ liveEntries: [contribution({ storyPoints: 5, pctComplete: 1, sprintOwnHours: 40, manDayRate: 100 })] }),
+      sprintForBudget({ endDate: new Date("2026-01-28"), liveEntries: [contribution({ storyPoints: 5, pctComplete: 1, sprintOwnHours: 40, manDayRate: 100 })] }),
+    ];
+    const evm = computeEvm(budgetEntriesFromSprints(sprints, 10), 1000);
+    expect(evm[0].cpi).toBeCloseTo(1); // $500 / $500
+    expect(evm[1].cpi).toBeCloseTo(1); // $1,000 / $1,000 — the old per-sprint AC gave $1,000 / $500 = 2.0
   });
 
   it("a closed sprint's actualCost comes from the frozen snapshot, not the live (possibly rate-changed) tasks", () => {
@@ -384,7 +397,7 @@ describe("budgetEntriesFromSprints", () => {
     expect(result[0].actualCost).toBe(600); // (8+40)/8 md x 100
   });
 
-  it("plannedStoryPoints = 0 doesn't divide by zero", () => {
+  it("a zero baseline doesn't divide by zero", () => {
     const sprints = [sprintForBudget({ liveEntries: [contribution({ storyPoints: 10, pctComplete: 1 })] })];
     const result = budgetEntriesFromSprints(sprints, 0);
     expect(result[0].pctPlannedComplete).toBe(0);

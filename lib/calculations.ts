@@ -43,7 +43,8 @@ export type EvmPoint = {
   weekEnding: Date;
   pctPlannedComplete: number;
   pctActualComplete: number;
-  actualCost: number;
+  actualCost: number; // cumulative to this point
+  sprintActualCost: number; // this period's own spend (= actualCost when not supplied)
   pv: number;
   ev: number;
   cv: number;
@@ -56,7 +57,7 @@ export type EvmPoint = {
  * CV = EV-AC, SPI = EV/PV, CPI = EV/AC. >=1.0 favorable, <1.0 unfavorable.
  */
 export function computeEvm(
-  entries: { weekEnding: Date; pctPlannedComplete: number; pctActualComplete: number; actualCost: number }[],
+  entries: { weekEnding: Date; pctPlannedComplete: number; pctActualComplete: number; actualCost: number; sprintActualCost?: number }[],
   contractValue: number
 ): EvmPoint[] {
   return entries.map((e) => {
@@ -65,7 +66,18 @@ export function computeEvm(
     const cv = ev - e.actualCost;
     const spi = pv ? ev / pv : null;
     const cpi = e.actualCost ? ev / e.actualCost : null;
-    return { weekEnding: e.weekEnding, pctPlannedComplete: e.pctPlannedComplete, pctActualComplete: e.pctActualComplete, actualCost: e.actualCost, pv, ev, cv, spi, cpi };
+    return {
+      weekEnding: e.weekEnding,
+      pctPlannedComplete: e.pctPlannedComplete,
+      pctActualComplete: e.pctActualComplete,
+      actualCost: e.actualCost,
+      sprintActualCost: e.sprintActualCost ?? e.actualCost,
+      pv,
+      ev,
+      cv,
+      spi,
+      cpi,
+    };
   });
 }
 
@@ -314,43 +326,73 @@ export function toSprintsForBudget(
 }
 
 /**
+ * One sprint's own PV/EV/AV/cost, resolved by lifecycle state — the single
+ * place that decides which numbers a sprint reports. Closed sprints read
+ * their permanent frozen* snapshot (PV/EV/AV) and frozenEntries (cost); a
+ * Draft sprint (never started) reports all zeros, since nothing has been
+ * planned-value committed yet; an open sprint computes live from its
+ * liveEntries + departedEntries (a task detached from it while open still
+ * counts — see Sprint.departedTaskSnapshot), the same union closeSprint()
+ * itself freezes. Shared by budgetEntriesFromSprints (Budget Tracker) and
+ * lib/project-health.ts (Dashboard/Delivery/Projects/Portfolio), so every
+ * page agrees on what a sprint contributed.
+ */
+export function sprintTotalsFor(s: SprintForBudget): {
+  plannedValue: number;
+  earnedValue: number;
+  actualValue: number;
+  actualCost: number;
+} {
+  if (s.closedAt) {
+    const { actualCost } = sprintTotalsFromContributions(s.frozenEntries);
+    return {
+      plannedValue: s.frozenPlannedPoints ?? 0,
+      earnedValue: s.frozenEarnedPoints ?? 0,
+      actualValue: s.frozenActualValue ?? 0,
+      actualCost,
+    };
+  }
+  if (!s.startedAt) return { plannedValue: 0, earnedValue: 0, actualValue: 0, actualCost: 0 };
+  return sprintTotalsFromContributions([...s.liveEntries, ...s.departedEntries]);
+}
+
+/**
  * Budget Tracker: derives the exact shape computeEvm() already expects, live
  * from Delivery's Sprint tracking — no separate BudgetEntry data entry.
- * `sprints` must be pre-sorted ascending by startDate (this walks a running
- * cumulative total, so order matters). One data point per sprint — closed
- * sprints read their permanent frozen* snapshot/frozenEntries directly; an
- * open sprint computes live from its liveEntries + departedEntries (a task
- * detached from it while open still counts — see Sprint.departedTaskSnapshot),
- * the same union closeSprint() itself freezes. No dedup step is needed here
- * (unlike the old weekly version): a task belongs to at most one sprint at
- * a time, so it's never double-counted across sprints the way it could be
- * double-counted across weeks. actualCost is that sprint's own spend only
- * (not cumulative), matching the original semantics — and, like pv/ev, is
- * frozen for a closed sprint rather than recomputed from live rates.
+ * `sprints` must be pre-sorted ascending by startDate (this walks running
+ * cumulative totals, so order matters). One data point per sprint.
+ *
+ * `baselinePoints` is the project's total WBS story points (see
+ * wbsBaselinePoints in lib/project-health.ts) — the denominator that turns
+ * cumulative earned/planned points into the % of the whole job done.
+ *
+ * Every series here is cumulative — PV, EV, and actualCost alike — so
+ * computeEvm's CV (EV - AC) and CPI (EV / AC) compare like with like. AC
+ * used to be the sprint's own spend only, which divided cumulative EV by a
+ * single sprint's cost and inflated CPI more every sprint. The sprint's own
+ * spend is still returned as sprintActualCost for the per-sprint role
+ * breakdown on Budget Tracker.
  */
 export function budgetEntriesFromSprints(
   sprints: SprintForBudget[],
-  plannedStoryPoints: number
-): { weekEnding: Date; pctPlannedComplete: number; pctActualComplete: number; actualCost: number }[] {
+  baselinePoints: number
+): { weekEnding: Date; pctPlannedComplete: number; pctActualComplete: number; actualCost: number; sprintActualCost: number }[] {
   let cumulativePlanned = 0;
   let cumulativeEarned = 0;
+  let cumulativeCost = 0;
 
   return sprints.map((s) => {
-    const entries = s.closedAt ? s.frozenEntries : !s.startedAt ? [] : [...s.liveEntries, ...s.departedEntries];
-    const totals = sprintTotalsFromContributions(entries);
-
-    const pv = s.closedAt ? s.frozenPlannedPoints ?? 0 : totals.plannedValue;
-    const ev = s.closedAt ? s.frozenEarnedPoints ?? 0 : totals.earnedValue;
-    const actualCost = totals.actualCost;
-
-    cumulativePlanned += pv;
-    cumulativeEarned += ev;
+    const totals = sprintTotalsFor(s);
+    cumulativePlanned += totals.plannedValue;
+    cumulativeEarned += totals.earnedValue;
+    cumulativeCost += totals.actualCost;
 
     return {
       weekEnding: s.endDate,
-      pctPlannedComplete: plannedStoryPoints ? cumulativePlanned / plannedStoryPoints : 0,
-      pctActualComplete: plannedStoryPoints ? cumulativeEarned / plannedStoryPoints : 0,
-      actualCost,
+      pctPlannedComplete: baselinePoints ? cumulativePlanned / baselinePoints : 0,
+      pctActualComplete: baselinePoints ? cumulativeEarned / baselinePoints : 0,
+      actualCost: cumulativeCost,
+      sprintActualCost: totals.actualCost,
     };
   });
 }

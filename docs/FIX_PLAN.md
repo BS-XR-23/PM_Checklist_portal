@@ -44,15 +44,22 @@ Done when: smoke crawler shows zero 500s / zero overflow; a PM can save Contract
 
 ## Phase 2 — One health and progress definition (2-3 days)
 
-- [ ] New `lib/project-health.ts`, used by Dashboard, Delivery Overview, Projects cards, Portfolio; delete local `deliveryHealth()`
-- [ ] Baseline = Σ WBS story points (computed) instead of `project.plannedStoryPoints` (0 on every project today → CPI 0.00 → false RED)
-- [ ] Cumulative Actual Cost in `budgetEntriesFromSprints`; no data → `null` → grey "No data", never 0.00 / RED
-- [ ] Health = schedule (sprint SPI) + open high risks + overdue milestones; currency CPI removed from Health
-- [ ] Delivery's competency CPI renamed "Effort Index"
-- [ ] Two named progress numbers everywhere: **Governance %** (checklist) and **Delivery %** (story points); remove the unweighted "Overall Delivery" average
-- [ ] Unit tests: zero baseline, cumulative AC, no-data health, same numbers on all four pages
+- [x] New `lib/project-health.ts`, used by Dashboard, Delivery Overview, Projects cards, Portfolio; delete local `deliveryHealth()`
+- [x] Baseline = Σ WBS story points (computed) instead of `project.plannedStoryPoints` (0 on every project today → CPI 0.00 → false RED)
+- [x] Cumulative Actual Cost in `budgetEntriesFromSprints`; no data → `null` → grey "No data", never 0.00 / RED
+- [x] Health = schedule (sprint SPI) + open high risks + overdue milestones; currency CPI removed from Health
+- [x] Delivery's competency CPI renamed "Effort Index"
+- [x] Two named progress numbers everywhere: **Governance %** (checklist) and **Delivery %** (story points); remove the unweighted "Overall Delivery" average
+- [x] Unit tests: zero baseline, cumulative AC, no-data health, same numbers on all four pages
 
 Done when: one project shows identical health and percentages on every page.
+
+**Status (2026-10-14): done on branch `fix/phase-1-audit`, uncommitted.** Verified in the browser: DED reads SPI 1.00 / Effort 1.29 and Omnizia SPI 0.45 / Effort 0.60 identically on Dashboard, Delivery, Projects, and Portfolio; health tiles state their reasons. Typecheck + lint clean; 133 unit tests pass (15 new). Integration tests not run (they write `[TEST]` rows to the shared DB).
+
+Notes carried forward:
+- Health's milestone input still reads the checklist-tagged payment milestones — Phase 3 re-points it to the Milestone model.
+- Budget Tracker's dollar CPI (now 5.47 on DED) divides contract-value EV by internal cost, so it reads as a margin ratio, not classic EVM CPI. It no longer affects Health; revisit only if Budget Tracker becomes a real feature.
+- `Project.plannedStoryPoints` column is now unused (kept to avoid a migration; drop in a later cleanup).
 
 ## Phase 3 — Milestone restructure (3-5 days)
 

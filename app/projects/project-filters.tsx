@@ -20,28 +20,24 @@ export type ProjectCardData = {
   status: ProjectStatus;
   pmName: string | null;
   stage: string;
-  progress: number;
+  progress: number; // Governance % — checklist items completed (lib/project-health.ts)
+  deliveryPct: number | null; // Delivery % — story points done / total WBS points
   contractValue: number;
   rag: Rag;
+  healthReasons: string[];
   latestSpi: number | null;
-  latestCpi: number | null;
+  effortIndex: number | null;
   createdAt: Date;
   endDate: Date | null; // derived — latest Actual Date across the checklist
   deletedAt: Date | null;
   overdueCount: number; // items past their Planned Date, empty for viewers who can't see Reminders
-  // Governance = pooled completion across every checklist type except Dev;
-  // Development = completion of just the Dev Checklist; Overall Delivery is
-  // the straight average of the two (see app/projects/page.tsx).
-  governancePct: number;
-  developmentPct: number;
-  overallDeliveryPct: number;
 };
 
 export type ProjectStats = {
   totalProjects: number;
   activeCount: number;
   totalContractValue: number;
-  avgOverallDelivery: number;
+  avgDelivery: number | null; // mean Delivery % across projects that have WBS points
   newIn30Days: number;
 };
 
@@ -213,8 +209,8 @@ export function ProjectFilters({
           iconWrapClass="bg-emerald-100 text-emerald-700"
           bgClass="bg-emerald-50/60"
           accentColor="#10b981"
-          label="Overall Delivery"
-          value={formatPct(stats.avgOverallDelivery)}
+          label="Avg. Delivery"
+          value={stats.avgDelivery != null ? formatPct(stats.avgDelivery) : "—"}
         />
       </div>
 
@@ -388,23 +384,23 @@ function ProjectCard({ p, isAdmin }: { p: ProjectCardData; isAdmin: boolean }) {
           "color = health," not decoration, treatment used everywhere else
           in this app (progress bars, RAG pills). */}
       <div className="mt-3 rounded-lg bg-slate-50 p-2.5">
-        <div className="flex items-center justify-between text-xs">
-          <span className="font-medium uppercase tracking-wide text-slate-400">Overall Delivery</span>
-          <span className="font-semibold text-slate-700">{formatPct(p.overallDeliveryPct)}</span>
+        <div className="flex items-center justify-between text-xs" title="Story points done of total WBS points (Delivery → Tasks)">
+          <span className="font-medium uppercase tracking-wide text-slate-400">Delivery</span>
+          <span className="font-semibold text-slate-700">{p.deliveryPct != null ? formatPct(p.deliveryPct) : "No WBS yet"}</span>
         </div>
         <div className="mt-1.5 h-1.5 rounded-full bg-slate-200 overflow-hidden">
-          <div className="h-full" style={{ width: `${p.overallDeliveryPct * 100}%`, backgroundColor: RAG_COLORS[p.rag].text }} />
+          <div className="h-full" style={{ width: `${(p.deliveryPct ?? 0) * 100}%`, backgroundColor: RAG_COLORS[p.rag].text }} />
         </div>
       </div>
 
       <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-        <div>
+        <div title="Checklist items completed, across every checklist">
           <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Governance</p>
-          <p className="text-slate-700 font-medium mt-0.5">{formatPct(p.governancePct)}</p>
+          <p className="text-slate-700 font-medium mt-0.5">{formatPct(p.progress)}</p>
         </div>
-        <div>
-          <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">Development</p>
-          <p className="text-slate-700 font-medium mt-0.5">{formatPct(p.developmentPct)}</p>
+        <div title="Story points earned ÷ committed across started sprints">
+          <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">SPI</p>
+          <p className="text-slate-700 font-medium mt-0.5">{p.latestSpi != null ? p.latestSpi.toFixed(2) : "—"}</p>
         </div>
       </div>
 
@@ -470,13 +466,13 @@ function ProjectListRow({ p, isAdmin }: { p: ProjectCardData; isAdmin: boolean }
       </div>
       <p className="w-20 shrink-0 truncate text-xs text-slate-500">{p.pmName ?? "Unassigned"}</p>
       <p className="w-64 shrink-0 truncate text-xs text-slate-500">
-        Governance {formatPct(p.governancePct)} · Development {formatPct(p.developmentPct)}
+        Governance {formatPct(p.progress)} · SPI {p.latestSpi != null ? p.latestSpi.toFixed(2) : "—"}
       </p>
-      <div className="flex-1 min-w-[70px] flex items-center gap-1.5">
+      <div className="flex-1 min-w-[70px] flex items-center gap-1.5" title="Delivery: story points done of total WBS points">
         <div className="h-1.5 flex-1 rounded-full bg-slate-100 overflow-hidden">
-          <div className="h-full" style={{ width: `${p.overallDeliveryPct * 100}%`, backgroundColor: RAG_COLORS[p.rag].text }} />
+          <div className="h-full" style={{ width: `${(p.deliveryPct ?? 0) * 100}%`, backgroundColor: RAG_COLORS[p.rag].text }} />
         </div>
-        <span className="text-xs font-medium text-slate-500 shrink-0 w-8 text-right">{formatPct(p.overallDeliveryPct)}</span>
+        <span className="text-xs font-medium text-slate-500 shrink-0 w-8 text-right">{p.deliveryPct != null ? formatPct(p.deliveryPct) : "—"}</span>
       </div>
       <p className="w-20 shrink-0 text-right text-xs font-medium text-slate-700">{p.contractValue > 0 ? formatMoney(p.contractValue) : "—"}</p>
       <div className="w-14 shrink-0 flex justify-end">

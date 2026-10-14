@@ -60,7 +60,7 @@ export default async function DashboardPage({ params }: { params: { projectId: s
               "Overall % Complete" number+bar was pure duplication once the
               gauge existed. */}
           <div className="flex flex-col items-center gap-1 shrink-0">
-            <DeliveryProgressGauge value={data.overallPct} label="Complete" size={140} />
+            <DeliveryProgressGauge value={data.overallPct} label="Governance" size={140} />
             <p className="text-center text-xs text-slate-500">
               {data.completedItems} / {data.totalItems} checklist items complete
             </p>
@@ -99,7 +99,7 @@ export default async function DashboardPage({ params }: { params: { projectId: s
       {/* Not financial data — visible to every role with dashboard access, same as the completion hero above.
           The "where are we" strip: health, stage, end date, next milestone — none of this existed as a single
           glanceable row before (Health/Next Milestone weren't shown anywhere on this page at all). */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatTile
           icon={<IconShield />}
           iconWrapClass="bg-slate-100"
@@ -108,6 +108,21 @@ export default async function DashboardPage({ params }: { params: { projectId: s
           label="Health"
           value={RAG_COLORS[data.rag].label}
           valueColor={RAG_COLORS[data.rag].text}
+          // Reasons can name risks/schedule figures — only for viewers who can
+          // already see the financial/risk tiles below, never a READ_LIMITED Client.
+          subtitle={financialsVisible ? data.healthReasons.join(" · ") || "No issues found" : undefined}
+        />
+        <StatTile
+          icon={<IconTarget />}
+          iconWrapClass="bg-blue-50 text-blue-600"
+          label={
+            <span className="inline-flex items-center gap-1">
+              Delivery
+              <InfoTooltip text="Story points done out of the project's total WBS story points (Delivery → Tasks). The gauge on the left is Governance — checklist items completed." />
+            </span>
+          }
+          value={data.deliveryPct != null ? formatPct(data.deliveryPct) : "—"}
+          subtitle={data.deliveryPct == null ? "No WBS tasks yet" : undefined}
         />
         <StatTile icon={<IconClock />} iconWrapClass="bg-emerald-50 text-emerald-600" label="End Date" value={data.endDate ? formatDate(data.endDate) : "—"} />
         <StatTile
@@ -218,8 +233,8 @@ export default async function DashboardPage({ params }: { params: { projectId: s
             iconWrapClass="bg-blue-50 text-blue-600"
             label={
               <span className="inline-flex items-center gap-1">
-                Latest SPI
-                <InfoTooltip text="This is the Budget Tracker's SPI/CPI — dollar-cost based (EV÷PV, EV÷AC). It's not the same figure as Delivery's Sprints/Overview SPI/CPI, which is effort based (EV÷PV, EV÷AV). Both are legitimate; they just answer different questions." />
+                SPI
+                <InfoTooltip text="Schedule Performance Index: story points earned ÷ story points committed, across every started sprint (0/100 rule). Below 1.0 means behind plan; below 0.9 turns Health red. Same figure as Delivery → Overview." />
               </span>
             }
             value={financial.latestSpi != null ? financial.latestSpi.toFixed(2) : "—"}
@@ -234,10 +249,15 @@ export default async function DashboardPage({ params }: { params: { projectId: s
           <StatTile
             icon={<IconChart />}
             iconWrapClass="bg-violet-50 text-violet-600"
-            label="Latest CPI"
-            value={financial.latestCpi != null ? financial.latestCpi.toFixed(2) : "—"}
-            valueColor={financial.latestCpi != null ? INDEX_BAND_COLORS[indexBand(financial.latestCpi)].text : undefined}
-            subtitle={financial.latestCpi == null ? "No data" : undefined}
+            label={
+              <span className="inline-flex items-center gap-1">
+                Effort Index
+                <InfoTooltip text="Story points earned ÷ competency-adjusted man-days actually spent. Above 1.0: work took less effort than estimated; below 1.0: more. An estimate-accuracy signal — it doesn't affect Health." />
+              </span>
+            }
+            value={financial.effortIndex != null ? financial.effortIndex.toFixed(2) : "—"}
+            valueColor={financial.effortIndex != null ? INDEX_BAND_COLORS[indexBand(financial.effortIndex)].text : undefined}
+            subtitle={financial.effortIndex == null ? "No hours logged yet" : undefined}
           />
           <StatTile
             icon={<IconShield />}

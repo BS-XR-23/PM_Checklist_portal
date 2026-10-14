@@ -39,6 +39,7 @@ export function BudgetRow({
       {!costHidden && (
         <td className="px-4 py-2.5 whitespace-nowrap">
           <div className="text-slate-600">{formatMoney(evm.actualCost)}</div>
+          <div className="text-[11px] text-slate-500 mt-0.5">This sprint: {formatMoney(evm.sprintActualCost)}</div>
           {roleBreakdown.length > 0 && (
             <div className="mt-1 space-y-0.5">
               {roleBreakdown.map((r) => (

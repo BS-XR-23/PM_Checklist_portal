@@ -49,7 +49,7 @@ export async function GET(_req: NextRequest, { params }: { params: { projectId: 
       EV: Number(ev.toFixed(2)),
       AV: Number(av.toFixed(2)),
       SPI: spi == null ? "" : Number(spi.toFixed(2)),
-      CPI: cpi == null ? "" : Number(cpi.toFixed(2)),
+      "Effort Index": cpi == null ? "" : Number(cpi.toFixed(2)),
     });
 
     // Closed sprints read their permanent frozen snapshot, which folds a

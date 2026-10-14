@@ -9,6 +9,7 @@ import {
   roleBreakdownFromContributions,
 } from "@/lib/calculations";
 import { formatMoney } from "@/lib/format";
+import { wbsBaselinePoints } from "@/lib/project-health";
 import { requireModuleAccess } from "@/lib/rbac";
 import { EvmLineChart } from "@/components/charts/evm-line-chart";
 import { SpiCpiChart } from "@/components/charts/spi-cpi-chart";
@@ -22,7 +23,7 @@ export default async function BudgetTrackerPage({ params }: { params: { projectI
   const access = await requireModuleAccess(params.projectId, "BUDGET_TRACKER", "READ_LIMITED");
   const costHidden = access === "READ_LIMITED"; // strips AC / CV / SPI / CPI — cost-side detail
 
-  const [project, sprints] = await Promise.all([
+  const [project, sprints, wbsTasks] = await Promise.all([
     prisma.project.findUniqueOrThrow({ where: { id: params.projectId } }),
     prisma.sprint.findMany({
       where: { projectId: params.projectId },
@@ -32,9 +33,11 @@ export default async function BudgetTrackerPage({ params }: { params: { projectI
       },
       relationLoadStrategy: "join",
     }),
+    prisma.wbsTask.findMany({ where: { projectId: params.projectId }, select: { storyPoints: true } }),
   ]);
 
-  const evmSource = budgetEntriesFromSprints(toSprintsForBudget(sprints), project.plannedStoryPoints);
+  const baselinePoints = wbsBaselinePoints(wbsTasks);
+  const evmSource = budgetEntriesFromSprints(toSprintsForBudget(sprints), baselinePoints);
   const evm = computeEvm(evmSource, project.contractValue);
   const rate = manDayRate(project.contractValue, project.plannedManDays);
 
@@ -68,10 +71,10 @@ export default async function BudgetTrackerPage({ params }: { params: { projectI
       <div>
         <h2 className="text-base font-semibold text-slate-900">Budget / CPI-SPI Tracker</h2>
         <p className="text-sm text-slate-500">
-          PV/EV = cumulative % of Total Planned Story Points tracked/earned across Delivery&apos;s sprints (0/100
-          rule), × Contract Value. AC = that sprint&apos;s actual hours ÷ 8 × each assignee&apos;s Rate Role (Admin →
-          People). SPI = EV/PV. CPI = EV/AC. &ge;1.0 favorable, &lt;1.0 unfavorable. One data point per sprint
-          (closed sprints use their frozen numbers; the current sprint is live).
+          PV/EV = cumulative story points committed/earned across Delivery&apos;s sprints (0/100 rule) ÷ Baseline
+          Story Points (the WBS total), × Contract Value. AC = cumulative actual hours ÷ 8 × each assignee&apos;s Rate
+          Role (Admin → People). SPI = EV/PV. CPI = EV/AC. &ge;1.0 favorable, &lt;1.0 unfavorable. One data point
+          per sprint (closed sprints use their frozen numbers; the current sprint is live).
         </p>
       </div>
 
@@ -79,8 +82,8 @@ export default async function BudgetTrackerPage({ params }: { params: { projectI
         id="budget-tracker"
         title="Before you compare this to Delivery's numbers"
         points={[
-          <>This page&apos;s <strong>CPI is not the same figure</strong> as Delivery&apos;s Sprints/Overview CPI. Here, CPI = EV ÷ Actual Cost (a dollar ratio). On Delivery, CPI = EV ÷ Actual Value (a competency-adjusted effort ratio). Both are legitimate, they just answer different questions — don&apos;t expect them to match.</>,
-          <>Contract Value, Planned Story Points, and Planned Man-Days are the only things entered directly, via the form below — every other figure is derived live from Delivery&apos;s sprint tracking, nothing else is typed in here.</>,
+          <>This page&apos;s <strong>CPI is a dollar ratio</strong> (EV ÷ Actual Cost) and is shown only here — it doesn&apos;t feed project Health. Delivery&apos;s <strong>Effort Index</strong> is a different, effort-based figure. SPI matches Delivery&apos;s SPI.</>,
+          <>Contract Value and Planned Man-Days are the only things entered directly. Baseline Story Points is the sum of the WBS task estimates — change it on Delivery → Tasks.</>,
           <>A read-limited viewer sees Actual Cost, Cost Variance, SPI, and CPI stripped out — that&apos;s deliberate cost-side hiding, not missing data.</>,
         ]}
       />
@@ -91,7 +94,7 @@ export default async function BudgetTrackerPage({ params }: { params: { projectI
             <ContractInputsForm
               projectId={project.id}
               contractValue={project.contractValue}
-              plannedStoryPoints={project.plannedStoryPoints}
+              baselinePoints={baselinePoints}
               plannedManDays={project.plannedManDays}
             />
             <p className="mt-2 text-xs text-slate-500">Man-Day Rate (auto): {formatMoney(rate)}</p>
@@ -103,8 +106,8 @@ export default async function BudgetTrackerPage({ params }: { params: { projectI
               <p className="text-slate-800">{formatMoney(project.contractValue)}</p>
             </div>
             <div>
-              <p className="text-xs font-medium text-slate-600">Total Planned Story Points</p>
-              <p className="text-slate-800">{project.plannedStoryPoints}</p>
+              <p className="text-xs font-medium text-slate-600">Baseline Story Points (WBS total)</p>
+              <p className="text-slate-800">{baselinePoints}</p>
             </div>
           </div>
         )}
@@ -135,7 +138,7 @@ export default async function BudgetTrackerPage({ params }: { params: { projectI
                 <th className="px-4 py-3 font-medium w-40">% Actual Complete (Cum.)</th>
                 <th className="px-4 py-3 font-medium w-28">PV</th>
                 <th className="px-4 py-3 font-medium w-28">EV</th>
-                {!costHidden && <th className="px-4 py-3 font-medium w-48">AC (by role)</th>}
+                {!costHidden && <th className="px-4 py-3 font-medium w-48">AC (Cum.)</th>}
                 {!costHidden && <th className="px-4 py-3 font-medium w-28">CV (EV-AC)</th>}
                 {!costHidden && <th className="px-4 py-3 font-medium w-24">SPI</th>}
                 {!costHidden && <th className="px-4 py-3 font-medium w-24">CPI</th>}

@@ -1,18 +1,14 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { requireModuleAccess } from "@/lib/rbac";
-import {
-  liveSprintContribution,
-  parseSprintContributions,
-  sprintTotalsFromContributions,
-  competencyCpi,
-} from "@/lib/calculations";
+import { requireModuleAccess, getModuleAccess } from "@/lib/rbac";
+import { toSprintsForBudget, sprintTotalsFor } from "@/lib/calculations";
+import { computeProjectHealth, deliveryIndices, deliveryPct } from "@/lib/project-health";
 import { StatTile } from "@/components/ui/stat-tile";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { SectionHeader } from "@/components/ui/section-header";
 import { PageGuide } from "@/components/ui/page-guide";
 import { formatDate, formatPct } from "@/lib/format";
-import { RAG_COLORS, type Rag } from "@/lib/rag";
+import { RAG_COLORS } from "@/lib/rag";
 import { MILESTONE_TYPE_LABELS } from "@/lib/constants";
 import type { ItemStatus } from "@/lib/constants";
 import {
@@ -30,21 +26,14 @@ import {
 
 export const dynamic = "force-dynamic";
 
-// Threshold reuse from lib/rag.ts (RED <0.9, AMBER <1.0, GREEN otherwise) —
-// this consumes the Delivery/Sprint SPI+CPI already computed below, it does
-// not recompute them; there is deliberately no second CPI/SPI engine here.
-function deliveryHealth(spi: number | null, cpi: number | null): Rag {
-  const worst = Math.min(spi ?? 1, cpi ?? 1);
-  if (worst < 0.9) return "RED";
-  if (worst < 1.0) return "AMBER";
-  return "GREEN";
-}
-
 export default async function DeliveryOverviewPage({ params }: { params: { projectId: string } }) {
-  await requireModuleAccess(params.projectId, "DELIVERY", "READ_LIMITED");
+  const [, riskAccess] = await Promise.all([
+    requireModuleAccess(params.projectId, "DELIVERY", "READ_LIMITED"),
+    getModuleAccess(params.projectId, "RISK_REGISTER"),
+  ]);
   const projectId = params.projectId;
 
-  const [wbsTasks, sprints, milestones, releases, uatCases, uatDefects] = await Promise.all([
+  const [wbsTasks, sprints, milestones, releases, uatCases, uatDefects, risks, paymentMilestoneItems] = await Promise.all([
     prisma.wbsTask.findMany({ where: { projectId } }),
     prisma.sprint.findMany({
       where: { projectId },
@@ -59,6 +48,12 @@ export default async function DeliveryOverviewPage({ params }: { params: { proje
     prisma.release.findMany({ where: { projectId }, orderBy: { createdAt: "desc" } }),
     prisma.uatCase.findMany({ where: { projectId } }),
     prisma.uatDefect.findMany({ where: { projectId } }),
+    // Health inputs — same sources Dashboard/Portfolio feed computeProjectHealth.
+    prisma.riskItem.findMany({ where: { projectId }, select: { type: true, status: true, probability: true, impact: true } }),
+    prisma.checklistItem.findMany({
+      where: { projectId, milestonePayment: { isNot: null } },
+      select: { status: true, plannedDate: true },
+    }),
   ]);
 
   // --- Execution KPIs: task counts (same derivation as the Tasks tab) ---
@@ -66,32 +61,16 @@ export default async function DeliveryOverviewPage({ params }: { params: { proje
   const completedTasks = wbsTasks.filter((t) => t.pctComplete >= 1).length;
   const inProgressTasks = wbsTasks.filter((t) => t.pctComplete < 1 && t.sprintId).length;
   const notStartedTasks = totalTasks - completedTasks - inProgressTasks;
-  const overallPctComplete = totalTasks
-    ? wbsTasks.reduce((sum, t) => sum + t.pctComplete, 0) / totalTasks
-    : 0;
+  // Story-point weighted (same as the Tasks tab's Done Points %), not a
+  // per-task average — a 0.25-point task no longer counts as much as an
+  // 8-point one.
+  const deliveryPctValue = deliveryPct(wbsTasks);
 
-  // --- SPI/CPI/PV/EV/AV: exactly the Sprints tab's math, summed across every
-  // sprint — reusing lib/calculations.ts, never a second engine. Open
-  // sprints computed live; closed sprints read their frozen snapshot. ---
-  let totalPv = 0;
-  let totalEv = 0;
-  let totalAv = 0;
-  for (const s of sprints) {
-    const departed = parseSprintContributions(s.departedTaskSnapshot);
-    const live = s.tasks.map(liveSprintContribution);
-    const { plannedValue, earnedValue, actualValue } = s.closedAt
-      ? { plannedValue: s.frozenPlannedPoints ?? 0, earnedValue: s.frozenEarnedPoints ?? 0, actualValue: s.frozenActualValue ?? 0 }
-      : !s.startedAt
-        ? { plannedValue: 0, earnedValue: 0, actualValue: 0 }
-        : sprintTotalsFromContributions([...live, ...departed]);
-    totalPv += plannedValue;
-    totalEv += earnedValue;
-    totalAv += actualValue;
-  }
-  const spi = totalPv ? totalEv / totalPv : null;
-  const cpi = competencyCpi(totalEv, totalAv);
-  const scheduleVariancePts = totalEv - totalPv;
-  const health = deliveryHealth(spi, cpi);
+  // SPI / Effort Index / health — the shared definitions in
+  // lib/project-health.ts, identical to Dashboard, Projects, and Portfolio.
+  const sprintsForBudget = toSprintsForBudget(sprints);
+  const { spi, effortIndex, scheduleVariancePts } = deliveryIndices(sprintsForBudget);
+  const health = computeProjectHealth({ sprints: sprintsForBudget, risks, milestones: paymentMilestoneItems });
 
   const currentSprint =
     sprints.find((s) => s.startedAt && !s.closedAt) ??
@@ -100,13 +79,7 @@ export default async function DeliveryOverviewPage({ params }: { params: { proje
     null;
   let currentSprintProgress: number | null = null;
   if (currentSprint) {
-    const departed = parseSprintContributions(currentSprint.departedTaskSnapshot);
-    const live = currentSprint.tasks.map(liveSprintContribution);
-    const { plannedValue, earnedValue } = currentSprint.closedAt
-      ? { plannedValue: currentSprint.frozenPlannedPoints ?? 0, earnedValue: currentSprint.frozenEarnedPoints ?? 0 }
-      : !currentSprint.startedAt
-        ? { plannedValue: 0, earnedValue: 0 }
-        : sprintTotalsFromContributions([...live, ...departed]);
+    const { plannedValue, earnedValue } = sprintTotalsFor(sprintsForBudget[sprints.indexOf(currentSprint)]);
     currentSprintProgress = plannedValue ? earnedValue / plannedValue : null;
   }
 
@@ -160,7 +133,8 @@ export default async function DeliveryOverviewPage({ params }: { params: { proje
         title="How to read this page"
         points={[
           <>Nothing is entered here — every figure is aggregated live from the Tasks, Sprints, Milestones, Releases, and UAT tabs. To change a number, go edit it at its source.</>,
-          <><strong>Delivery Health</strong> takes the worse of SPI and CPI: red under 0.9, amber under 1.0, green at or above.</>,
+          <><strong>Health</strong> is the same rating shown on the Dashboard and Portfolio: red for any open high risk or SPI under 0.9, amber for SPI under 1.0 or an overdue milestone, green otherwise.</>,
+          <><strong>Effort Index</strong> is story points earned ÷ competency-adjusted man-days spent — above 1.0 means work took less effort than estimated. It measures estimate accuracy and doesn&apos;t affect Health.</>,
           <><strong>Schedule Variance</strong> is EV − PV in story points — negative means the project is behind its plan.</>,
           <>Each summary card (&quot;View all →&quot;) jumps straight to the tab that owns that data.</>,
         ]}
@@ -173,8 +147,9 @@ export default async function DeliveryOverviewPage({ params }: { params: { proje
           <StatTile
             icon={<IconTarget />}
             iconWrapClass="bg-indigo-50 text-indigo-600"
-            label="Overall % Complete"
-            value={formatPct(overallPctComplete)}
+            label="Delivery %"
+            value={deliveryPctValue != null ? formatPct(deliveryPctValue) : "—"}
+            subtitle="Story points done of total WBS"
           />
           <StatTile icon={<IconCalendar />} iconWrapClass="bg-slate-100 text-slate-500" label="Planned Start" value={formatDate(plannedStart)} />
           <StatTile icon={<IconCalendar />} iconWrapClass="bg-slate-100 text-slate-500" label="Planned End" value={formatDate(plannedEnd)} />
@@ -216,10 +191,12 @@ export default async function DeliveryOverviewPage({ params }: { params: { proje
           <StatTile
             icon={<IconGauge />}
             iconWrapClass="bg-slate-100"
-            label="Delivery Health"
-            value={RAG_COLORS[health].label}
-            valueColor={RAG_COLORS[health].text}
-            accentColor={RAG_COLORS[health].bg}
+            label="Health"
+            value={RAG_COLORS[health.rag].label}
+            valueColor={RAG_COLORS[health.rag].text}
+            accentColor={RAG_COLORS[health.rag].bg}
+            // Reasons can cite open-risk counts — only for viewers who can see the Risk Register.
+            subtitle={riskAccess !== "NONE" ? health.reasons.join(" · ") || "No issues found" : undefined}
           />
         </div>
       </div>
@@ -258,9 +235,9 @@ export default async function DeliveryOverviewPage({ params }: { params: { proje
           />
           <StatTile
             icon={<IconGauge />}
-            iconWrapClass={cpi != null && cpi < 0.9 ? "bg-rose-50 text-rose-600" : "bg-blue-50 text-blue-600"}
-            label="CPI"
-            value={cpi != null ? cpi.toFixed(2) : "—"}
+            iconWrapClass={effortIndex != null && effortIndex < 0.9 ? "bg-rose-50 text-rose-600" : "bg-blue-50 text-blue-600"}
+            label="Effort Index"
+            value={effortIndex != null ? effortIndex.toFixed(2) : "—"}
           />
         </div>
       </div>

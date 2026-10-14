@@ -1,18 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/rbac";
-import { checklistCompletionPct } from "@/lib/calculations";
 import { getReminderItems } from "@/lib/notifications";
 import { PORTFOLIO_PROJECT_INCLUDE, buildPortfolioData } from "@/lib/portfolio-data";
 import { AppShell } from "@/components/layout/app-shell";
 import { ProjectFilters, type ProjectCardData, type ProjectStats } from "./project-filters";
-
-// Governance = every checklist type except the Dev Checklist, pooled together;
-// Development = just the Dev Checklist (a technical delivery quality gate,
-// normally only reached from inside Delivery). Overall Delivery is a straight
-// average of the two, not a pooled total — the Dev Checklist typically has far
-// fewer items than the other five combined, so pooling would barely move the
-// needle for it; averaging weighs it equally instead.
-const GOVERNANCE_TYPES = ["PM", "DELIVERY_QA", "DEVOPS", "CREATIVE_XR"];
 
 export const dynamic = "force-dynamic";
 
@@ -60,8 +51,8 @@ export default async function ProjectsPage() {
         if (!i.actualDate) return latest;
         return !latest || i.actualDate > latest ? i.actualDate : latest;
       }, null);
-      const governancePct = checklistCompletionPct(p.checklistItems.filter((i) => GOVERNANCE_TYPES.includes(i.type)));
-      const developmentPct = checklistCompletionPct(p.checklistItems.filter((i) => i.type === "DEV"));
+      // Governance %/Delivery %/health come from the shared portfolio row
+      // (lib/portfolio-data.ts → lib/project-health.ts), not recomputed here.
       return [
         p.id,
         {
@@ -69,9 +60,6 @@ export default async function ProjectsPage() {
           endDate,
           deletedAt: p.deletedAt,
           overdueCount: overdueCounts.get(p.id) ?? 0,
-          governancePct,
-          developmentPct,
-          overallDeliveryPct: (governancePct + developmentPct) / 2,
         },
       ] as const;
     })
@@ -82,16 +70,15 @@ export default async function ProjectsPage() {
   const activeCards = nonDeletedCards.filter((c) => c.status === "ACTIVE");
 
   const totalContractValue = nonDeletedCards.reduce((sum, c) => sum + c.contractValue, 0);
-  const avgOverallDelivery = nonDeletedCards.length
-    ? nonDeletedCards.reduce((sum, c) => sum + c.overallDeliveryPct, 0) / nonDeletedCards.length
-    : 0;
+  const withWbs = nonDeletedCards.filter((c) => c.deliveryPct != null);
+  const avgDelivery = withWbs.length ? withWbs.reduce((sum, c) => sum + (c.deliveryPct as number), 0) / withWbs.length : null;
   const newIn30Days = nonDeletedCards.filter((c) => Date.now() - c.createdAt.getTime() <= THIRTY_DAYS_MS).length;
 
   const stats: ProjectStats = {
     totalProjects: nonDeletedCards.length,
     activeCount: activeCards.length,
     totalContractValue,
-    avgOverallDelivery,
+    avgDelivery,
     newIn30Days,
   };
 
