@@ -16,7 +16,7 @@ export type SpiCpiPoint = {
 export function SpiCpiChart({ data, secondLabel = "CPI (EV/AC)" }: { data: SpiCpiPoint[]; secondLabel?: string }) {
   const hasValues = data.some((d) => d.spi != null || d.cpi != null);
   if (!hasValues) {
-    return <EmptyState message="No started sprints with committed story points yet." />;
+    return <EmptyState message="No closed sprints with committed story points yet." />;
   }
 
   return (

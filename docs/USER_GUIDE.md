@@ -445,24 +445,36 @@ Not shown to Management.
 
 ## 20. Portfolio
 
-Super Admin, Admin, and Management.
+Super Admin, Admin, and Management. **Every figure is for active projects
+only** (archived projects appear only under the table's "All" tab).
 
-- **Stats:** total and active projects; Healthy / At Risk / Critical counts (projects with no data yet appear as their own grey slice in Portfolio Health)
-  (active projects only); contract value, collected, outstanding.
-- **Portfolio Health bars** (need ≥ 2 projects with data): Schedule (avg
-  SPI), Effort (avg Effort Index), Checklist (share of remaining checklist
-  work not overdue), Risk (share of projects with no open high risk).
-- **Needs Management Attention** — every active non-green project with its
-  reasons (high risks, overdue milestone, SPI, blocked dependencies, missing
-  PM/contract value).
+- **Headline:** Active projects (health split: critical · at risk · no data
+  yet · healthy) · **Needs attention** (Critical + At Risk) · Contract value
+  with collected and awaiting payment · **To invoice, next 90 days** · Avg.
+  SPI (closed sprints). Click a tile to filter the table or jump to billing.
+- **Needs Management Attention** — first on the page: every active
+  Critical or At Risk project with its reasons (high risks, overdue
+  milestone, SPI, blocked dependencies, missing PM/contract value). A green
+  line says so when there are none.
 - **Overload & Conflicts** (Super Admin/Admin) — people over 100% or with
   overlapping high-intensity engagements.
-- **Project table** — stage, health (hover for reasons; archived projects
-  show none), Gov/Del progress, contract value, SPI, Effort, risks, next
-  milestone. Export to Excel.
-- **Upcoming Milestones** — not-done milestones across active projects,
-  overdue ones badged.
-- **Trends** — portfolio average SPI and Effort Index by sprint end.
+- **Billing & Cash** — built from each project's Milestones & Payments
+  (tranche = contract value × payment %):
+  - **Contract value bar:** collected · invoiced, awaiting payment ·
+    scheduled on milestones, not invoiced · **not tied to any milestone**.
+  - **Billing forecast:** not-yet-invoiced tranches by due month for the
+    next 6 months, plus **Ready to invoice** (milestone completed, not yet
+    invoiced), **Past due date**, and Later. Click a row to see its tranches.
+  - **Can't be forecast yet:** projects whose milestone payment % doesn't
+    reach 100% of the contract, and tranches with no date.
+- **Project table** — opens on Active; tabs for Needs attention, Critical,
+  At Risk, No data yet, Healthy, Completed, and All (incl. archived). Stage,
+  health (hover for reasons), Gov/Del progress, contract value, SPI, Effort,
+  risks, next milestone. Export to Excel.
+- **Upcoming Milestones** — not-done dated milestones across active
+  projects, overdue ones badged.
+- **Delivery trend** — portfolio average SPI and Effort Index by closed
+  sprint (shown once there are at least two), and active projects by stage.
 
 ## 21. Reminders
 
@@ -502,7 +514,8 @@ message. Role changes and deactivation take effect on the very next request.
 | **Current stage** | First stage (in order) with an unfinished tracked item; "Completed" if none |
 | **Delivery %** | Σ (story points × % complete) ÷ Σ story points of all WBS tasks |
 | **Baseline story points** | Σ story points of all WBS tasks |
-| **SPI** | Story points earned ÷ story points committed, across started and closed sprints (0/100 rule). Draft sprints don't count |
+| **SPI** | Story points earned ÷ story points committed, across **closed** sprints (0/100 rule). A running sprint is shown as live progress and joins SPI when it closes, so SPI doesn't drop at every sprint start. Draft sprints don't count |
+| **Effort Index** (scope) | Same closed-sprints-only rule as SPI |
 | **Effort Index** | Story points earned ÷ competency-adjusted man-days (actual hours ÷ 8 × competency multiplier). > 1 = less effort than estimated |
 | **Health — Red** | Any open high risk, **or** SPI < 0.9 |
 | **Health — Amber** | SPI 0.9–0.99, **or** any overdue milestone |

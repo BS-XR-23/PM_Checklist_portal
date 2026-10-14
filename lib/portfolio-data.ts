@@ -4,13 +4,7 @@ import { toSprintsForBudget, currentStage, isTrackedChecklistItem, COMPLETED_STA
 import { summarizeMilestones, milestoneDueDate, isMilestoneDone } from "@/lib/milestones";
 import { computeProjectHealth, deliveryIndices, deliveryPct, governancePct } from "@/lib/project-health";
 import type { Rag } from "@/lib/rag";
-
-// A portfolio index needs at least this many active projects with real data
-// before it's shown as a percentage — a single project's SPI/CPI (especially
-// a degenerate 0.00 from a just-started sprint) would otherwise swing the
-// whole portfolio number to an extreme and read as "the portfolio is in
-// trouble" when really "we don't have data yet."
-const MIN_HEALTH_SAMPLE = 2;
+import { buildBillingForecast, type BillingForecast } from "@/lib/billing-forecast";
 
 // The exact `include` this module needs from `prisma.project.findMany` — kept
 // next to the code that consumes it so the two can never drift apart.
@@ -204,16 +198,15 @@ function buildPortfolioRow(
   return { row, milestoneEvents, incompleteCount: incomplete.length, overdueCount: overdue.length };
 }
 
-export type HealthIndex = {
-  value: number | null; // 0-1, null when there isn't enough data to be meaningful
-  sampleSize: number;
-  eligible: number; // how many active projects *could* have contributed
-};
-
 // `cpi` carries the portfolio-average Effort Index (SpiCpiChart's second
 // series, labelled accordingly on the Portfolio page) — not dollar CPI.
 export type TrendPoint = { weekEnding: string; spi: number | null; cpi: number | null };
 
+/**
+ * Health counts AND money are over ACTIVE projects only — an archived
+ * project has no live health, and its contract isn't "in flight". (Money
+ * used to include archived projects while health didn't, unlabelled.)
+ */
 export type PortfolioSummary = {
   totalProjects: number;
   activeProjects: number;
@@ -225,14 +218,11 @@ export type PortfolioSummary = {
   totalContractValue: number;
   collected: number;
   outstanding: number;
-  upcomingInvoice: number;
   invoicedTotal: number; // collected + outstanding — everything ever billed
-  // The four index bars in "Portfolio Health" — each carries its own sample
-  // size so the UI can explain *why* it's N/A rather than just saying so.
-  scheduleHealth: HealthIndex; // avg of min(latest SPI, 1) — capped so ahead-of-schedule can't mask a late sibling project
-  effortHealth: HealthIndex; // avg of min(Effort Index, 1)
-  checklistHealth: HealthIndex; // avg of (1 - overdue checklist items / incomplete checklist items)
-  riskHealth: HealthIndex; // share of active projects with zero open high-severity risks
+  /** Mean SPI (closed sprints) across active projects that have one. */
+  avgSpi: number | null;
+  spiProjects: number;
+  billing: BillingForecast;
 };
 
 export type PortfolioData = {
@@ -255,34 +245,18 @@ export function buildPortfolioData(projects: ProjectWithPortfolioData[]): Portfo
   const noData = active.filter((b) => b.row.rag === "NONE").length;
   const completed = rows.filter((r) => r.stage === COMPLETED_STAGE_LABEL).length;
 
-  const totalContractValue = rows.reduce((sum, r) => sum + r.contractValue, 0);
-  const collected = rows.reduce((sum, r) => sum + r.paidAmount, 0);
-  const outstanding = rows.reduce((sum, r) => sum + r.invoicedAmount, 0);
-  const upcomingInvoice = rows.reduce((sum, r) => sum + r.nextPaymentAmount, 0);
+  const activeRows = active.map((b) => b.row);
+  const totalContractValue = activeRows.reduce((sum, r) => sum + r.contractValue, 0);
+  const collected = activeRows.reduce((sum, r) => sum + r.paidAmount, 0);
+  const outstanding = activeRows.reduce((sum, r) => sum + r.invoicedAmount, 0);
 
-  const spiRows = active.filter((b) => b.row.latestSpi != null);
-  const scheduleHealth: HealthIndex = {
-    value: spiRows.length >= MIN_HEALTH_SAMPLE ? spiRows.reduce((sum, b) => sum + Math.min(b.row.latestSpi as number, 1), 0) / spiRows.length : null,
-    sampleSize: spiRows.length,
-    eligible: active.length,
-  };
-  const effortRows = active.filter((b) => b.row.effortIndex != null);
-  const effortHealth: HealthIndex = {
-    value: effortRows.length >= MIN_HEALTH_SAMPLE ? effortRows.reduce((sum, b) => sum + Math.min(b.row.effortIndex as number, 1), 0) / effortRows.length : null,
-    sampleSize: effortRows.length,
-    eligible: active.length,
-  };
-  const deliveryRows = active.filter((b) => b.incompleteCount > 0);
-  const checklistHealth: HealthIndex = {
-    value: deliveryRows.length ? deliveryRows.reduce((sum, b) => sum + (1 - b.overdueCount / b.incompleteCount), 0) / deliveryRows.length : null,
-    sampleSize: deliveryRows.length,
-    eligible: active.length,
-  };
-  const riskHealth: HealthIndex = {
-    value: active.length ? active.filter((b) => b.row.openHighRisks === 0).length / active.length : null,
-    sampleSize: active.length,
-    eligible: active.length,
-  };
+  const spiRows = activeRows.filter((r) => r.latestSpi != null);
+  const avgSpi = spiRows.length ? spiRows.reduce((sum, r) => sum + (r.latestSpi as number), 0) / spiRows.length : null;
+
+  const billing = buildBillingForecast(
+    projects.filter((p) => p.status === "ACTIVE" && p.deletedAt === null),
+    today
+  );
 
   // Archived projects are closed out — their leftover milestones aren't
   // "upcoming" and shouldn't read as overdue work needing attention.
@@ -326,12 +300,10 @@ export function buildPortfolioData(projects: ProjectWithPortfolioData[]): Portfo
       totalContractValue,
       collected,
       outstanding,
-      upcomingInvoice,
       invoicedTotal: collected + outstanding,
-      scheduleHealth,
-      effortHealth,
-      checklistHealth,
-      riskHealth,
+      avgSpi,
+      spiProjects: spiRows.length,
+      billing,
     },
     upcomingMilestones,
     trendPoints,

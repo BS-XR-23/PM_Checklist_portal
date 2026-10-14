@@ -134,7 +134,8 @@ export default async function DeliveryOverviewPage({ params }: { params: { proje
         title="How to read this page"
         points={[
           <>Nothing is entered here — every figure is aggregated live from the Tasks, Sprints, Releases, and UAT tabs plus the project&apos;s Milestones &amp; Payments tab. To change a number, go edit it at its source.</>,
-          <><strong>Health</strong> is the same rating shown on the Dashboard and Portfolio: red for any open high risk or SPI under 0.9, amber for SPI under 1.0 or an overdue milestone, green otherwise.</>,
+          <><strong>Health</strong> is the same rating shown on the Dashboard and Portfolio: red for any open high risk or SPI under 0.9, amber for SPI under 1.0 or an overdue milestone, green otherwise — or grey &quot;No data&quot; when there&apos;s nothing to judge yet.</>,
+          <><strong>SPI</strong> and <strong>Effort Index</strong> use closed sprints only. A running sprint shows in <strong>Current Sprint Progress</strong> and joins SPI when it closes — so SPI doesn&apos;t drop every time a sprint starts.</>,
           <><strong>Effort Index</strong> is story points earned ÷ competency-adjusted man-days spent — above 1.0 means work took less effort than estimated. It measures estimate accuracy and doesn&apos;t affect Health.</>,
           <><strong>Schedule Variance</strong> is EV − PV in story points — negative means the project is behind its plan.</>,
           <>Each summary card (&quot;View all →&quot;) jumps straight to the tab that owns that data.</>,
@@ -239,6 +240,7 @@ export default async function DeliveryOverviewPage({ params }: { params: { proje
             iconWrapClass={spi != null && spi < 0.9 ? "bg-rose-50 text-rose-600" : "bg-blue-50 text-blue-600"}
             label="SPI"
             value={spi != null ? spi.toFixed(2) : "—"}
+            subtitle={spi == null ? "No closed sprint yet" : "closed sprints"}
           />
           <StatTile
             icon={<IconGauge />}

@@ -9,16 +9,18 @@ import { INDEX_BAND_COLORS, indexBand, avatarColorFromString } from "@/lib/color
 import { IconSearch, IconDotsVertical, IconChevronDown, IconX } from "@/components/layout/icons";
 import type { PortfolioRow, PortfolioSummary, FinancialStatus } from "@/lib/portfolio-data";
 import { StatTile } from "@/components/ui/stat-tile";
-import { IconGrid, IconTarget, IconCheckCircle, IconAlertTriangle, IconAlertCircle, IconDollar } from "@/components/layout/icons";
+import { IconTarget, IconCheckCircle, IconAlertTriangle, IconDollar } from "@/components/layout/icons";
 
-type Tab = "ALL" | "ACTIVE" | "HEALTHY" | "AT_RISK" | "CRITICAL" | "COMPLETED";
+type Tab = "ALL" | "ACTIVE" | "ATTENTION" | "CRITICAL" | "AT_RISK" | "NO_DATA" | "HEALTHY" | "COMPLETED";
 const TAB_LABEL: Record<Tab, string> = {
-  ALL: "All Projects",
   ACTIVE: "Active",
-  HEALTHY: "Healthy",
-  AT_RISK: "At Risk",
+  ATTENTION: "Needs attention",
   CRITICAL: "Critical",
+  AT_RISK: "At Risk",
+  NO_DATA: "No data yet",
+  HEALTHY: "Healthy",
   COMPLETED: "Completed",
+  ALL: "All (incl. archived)",
 };
 
 function matchesTab(r: PortfolioRow, tab: Tab): boolean {
@@ -29,6 +31,10 @@ function matchesTab(r: PortfolioRow, tab: Tab): boolean {
       return r.status === "ACTIVE";
     case "HEALTHY":
       return r.status === "ACTIVE" && r.rag === "GREEN";
+    case "ATTENTION":
+      return r.status === "ACTIVE" && (r.rag === "RED" || r.rag === "AMBER");
+    case "NO_DATA":
+      return r.status === "ACTIVE" && r.rag === "NONE";
     // Same ACTIVE-only scope as the summary counts in buildPortfolioData —
     // an archived project has no live health to be at risk/critical with.
     case "AT_RISK":
@@ -83,7 +89,8 @@ export function PortfolioClient({
   summary: PortfolioSummary;
   middleContent: React.ReactNode;
 }) {
-  const [tab, setTab] = useState<Tab>("ALL");
+  // Same default scope as every headline figure: active projects.
+  const [tab, setTab] = useState<Tab>("ACTIVE");
   const [pmFilter, setPmFilter] = useState("ALL");
   const [clientFilter, setClientFilter] = useState("ALL");
   const [stageFilter, setStageFilter] = useState("ALL");
@@ -93,13 +100,10 @@ export function PortfolioClient({
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir } | null>(null);
 
+  const attention = summary.critical + summary.atRisk;
+
   function selectTab(next: Tab) {
     setTab(next);
-    document.getElementById("project-portfolio")?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
-
-  function selectOutstanding() {
-    setFinancialFilter("OUTSTANDING");
     document.getElementById("project-portfolio")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
@@ -126,7 +130,7 @@ export function PortfolioClient({
   const tabCount = (t: Tab) => rows.filter((r) => matchesTab(r, t)).length;
 
   const activeFilters: { label: string; onClear: () => void }[] = [];
-  if (tab !== "ALL") activeFilters.push({ label: TAB_LABEL[tab], onClear: () => setTab("ALL") });
+  if (tab !== "ACTIVE") activeFilters.push({ label: TAB_LABEL[tab], onClear: () => setTab("ACTIVE") });
   if (pmFilter !== "ALL") activeFilters.push({ label: `PM: ${pmFilter}`, onClear: () => setPmFilter("ALL") });
   if (clientFilter !== "ALL") activeFilters.push({ label: `Client: ${clientFilter}`, onClear: () => setClientFilter("ALL") });
   if (stageFilter !== "ALL") activeFilters.push({ label: `Stage: ${stageFilter}`, onClear: () => setStageFilter("ALL") });
@@ -135,7 +139,7 @@ export function PortfolioClient({
   if (dateRange !== "ALL") activeFilters.push({ label: `Updated in last ${dateRange}d`, onClear: () => setDateRange("ALL") });
 
   function clearAll() {
-    setTab("ALL");
+    setTab("ACTIVE");
     setPmFilter("ALL");
     setClientFilter("ALL");
     setStageFilter("ALL");
@@ -147,67 +151,65 @@ export function PortfolioClient({
 
   return (
     <>
-      {/* KPIs */}
-      {/* 2 rows of 4, not 1 row of 8 — 8-across leaves each card too narrow
-          for labels like "Contract Value" to sit on one line at normal
-          desktop widths, which throws off the row's icon/value alignment. */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <KpiCard onClick={() => selectTab("ALL")}>
-          <StatTile icon={<IconGrid />} iconWrapClass="bg-slate-100 text-slate-600" label="Total Projects" value={String(summary.totalProjects)} nowrap accentColor="#94A3B8" />
-        </KpiCard>
+      {/* Headline — active projects only, each figure once */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <KpiCard onClick={() => selectTab("ACTIVE")} active={tab === "ACTIVE"}>
-          <StatTile icon={<IconTarget />} iconWrapClass="bg-blue-50 text-blue-600" label="Active" value={String(summary.activeProjects)} nowrap accentColor="#3B82F6" />
-        </KpiCard>
-        <KpiCard onClick={() => selectTab("HEALTHY")} active={tab === "HEALTHY"}>
           <StatTile
-            icon={<IconCheckCircle />}
-            iconWrapClass="bg-emerald-50 text-emerald-600"
-            label="Healthy"
-            value={String(summary.healthy)}
-            valueColor={RAG_COLORS.GREEN.text}
-            nowrap
-            accentColor={RAG_COLORS.GREEN.text}
+            icon={<IconTarget />}
+            iconWrapClass="bg-blue-50 text-blue-600"
+            label="Active projects"
+            value={String(summary.activeProjects)}
+            accentColor="#3B82F6"
+            subtitle={<HealthSplit summary={summary} />}
           />
         </KpiCard>
-        <KpiCard onClick={() => selectTab("AT_RISK")} active={tab === "AT_RISK"}>
+        <KpiCard onClick={() => selectTab("ATTENTION")} active={tab === "ATTENTION"}>
           <StatTile
             icon={<IconAlertTriangle />}
-            iconWrapClass="bg-amber-50 text-amber-600"
-            label="At Risk"
-            value={String(summary.atRisk)}
-            valueColor={RAG_COLORS.AMBER.text}
-            nowrap
-            accentColor={RAG_COLORS.AMBER.text}
+            iconWrapClass={attention ? "bg-rose-50 text-rose-600" : "bg-emerald-50 text-emerald-600"}
+            label="Needs attention"
+            value={String(attention)}
+            valueColor={attention ? RAG_COLORS.RED.text : undefined}
+            accentColor={attention ? "#DC2626" : "#16A34A"}
+            subtitle={attention ? `${summary.critical} critical · ${summary.atRisk} at risk` : "None critical or at risk"}
           />
         </KpiCard>
-        <KpiCard onClick={() => selectTab("CRITICAL")} active={tab === "CRITICAL"}>
-          <StatTile
-            icon={<IconAlertCircle />}
-            iconWrapClass="bg-rose-50 text-rose-600"
-            label="Critical"
-            value={String(summary.critical)}
-            valueColor={RAG_COLORS.RED.text}
-            nowrap
-            accentColor={RAG_COLORS.RED.text}
-          />
-        </KpiCard>
-        <KpiCard>
-          <StatTile icon={<IconDollar />} iconWrapClass="bg-indigo-50 text-indigo-600" label="Contract Value" value={formatMoney(summary.totalContractValue)} nowrap accentColor="#6366F1" />
-        </KpiCard>
-        <KpiCard>
-          <StatTile icon={<IconDollar />} iconWrapClass="bg-emerald-50 text-emerald-600" label="Collected" value={formatMoney(summary.collected)} nowrap accentColor="#10B981" />
-        </KpiCard>
-        <KpiCard onClick={selectOutstanding} active={financialFilter === "OUTSTANDING"}>
+        <KpiCard onClick={() => document.getElementById("billing")?.scrollIntoView({ behavior: "smooth", block: "start" })}>
           <StatTile
             icon={<IconDollar />}
-            iconWrapClass="bg-amber-50 text-amber-600"
-            label="Outstanding"
-            value={formatMoney(summary.outstanding)}
-            subtitle={summary.outstanding === 0 ? "No invoices outstanding" : `${Math.round((summary.outstanding / (summary.totalContractValue || 1)) * 100)}% of contract value`}
-            accentColor="#F59E0B"
+            iconWrapClass="bg-indigo-50 text-indigo-600"
+            label="Contract value"
+            value={formatMoney(summary.totalContractValue)}
+            accentColor="#6366F1"
+            subtitle={`${formatMoney(summary.collected)} collected${summary.outstanding ? ` · ${formatMoney(summary.outstanding)} awaiting` : ""}`}
             nowrap
           />
         </KpiCard>
+        <KpiCard onClick={() => document.getElementById("billing")?.scrollIntoView({ behavior: "smooth", block: "start" })}>
+          <StatTile
+            icon={<IconDollar />}
+            iconWrapClass="bg-emerald-50 text-emerald-600"
+            label="To invoice, next 90 days"
+            value={summary.billing.dueSoonCount ? formatMoney(summary.billing.dueSoonAmount) : "—"}
+            accentColor="#10B981"
+            subtitle={
+              summary.billing.dueSoonCount
+                ? `${summary.billing.dueSoonCount} tranche${summary.billing.dueSoonCount === 1 ? "" : "s"}${summary.billing.ready.amount ? ` · ${formatMoney(summary.billing.ready.amount)} ready now` : ""}`
+                : "Nothing dated in the window"
+            }
+          />
+        </KpiCard>
+        <div className="col-span-2 lg:col-span-1">
+          <StatTile
+            icon={<IconCheckCircle />}
+            iconWrapClass="bg-slate-100 text-slate-600"
+            label="Avg. SPI"
+            value={summary.avgSpi != null ? summary.avgSpi.toFixed(2) : "—"}
+            valueColor={summary.avgSpi != null ? INDEX_BAND_COLORS[indexBand(summary.avgSpi)].text : undefined}
+            accentColor="#94A3B8"
+            subtitle={summary.spiProjects ? `closed sprints, ${summary.spiProjects} project${summary.spiProjects === 1 ? "" : "s"}` : "No closed sprints yet"}
+          />
+        </div>
       </div>
 
       {middleContent}
@@ -545,5 +547,29 @@ function FilterSelect({
       </select>
       <IconChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400" />
     </div>
+  );
+}
+
+const HEALTH_SPLIT: { key: "critical" | "atRisk" | "noData" | "healthy"; label: string; color: string }[] = [
+  { key: "critical", label: "critical", color: "#DC2626" },
+  { key: "atRisk", label: "at risk", color: "#F59E0B" },
+  { key: "noData", label: "no data yet", color: "#94A3B8" },
+  { key: "healthy", label: "healthy", color: "#16A34A" },
+];
+
+function HealthSplit({ summary }: { summary: PortfolioSummary }) {
+  const total = HEALTH_SPLIT.reduce((sum, h) => sum + summary[h.key], 0);
+  if (!total) return <span>None in progress</span>;
+  return (
+    <span className="block">
+      <span className="mt-1 flex h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+        {HEALTH_SPLIT.map((h) => (summary[h.key] ? <span key={h.key} style={{ width: `${(summary[h.key] / total) * 100}%`, backgroundColor: h.color }} /> : null))}
+      </span>
+      <span className="mt-1 block">
+        {HEALTH_SPLIT.filter((h) => summary[h.key])
+          .map((h) => `${summary[h.key]} ${h.label}`)
+          .join(" · ")}
+      </span>
+    </span>
   );
 }

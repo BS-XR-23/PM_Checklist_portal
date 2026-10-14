@@ -255,16 +255,24 @@ export default async function DashboardPage({ params }: { params: { projectId: s
             label={
               <span className="inline-flex items-center gap-1">
                 SPI
-                <InfoTooltip text="Schedule Performance Index: story points earned ÷ story points committed, across every started sprint (0/100 rule). Below 1.0 means behind plan; below 0.9 turns Health red. Same figure as Delivery → Overview." />
+                <InfoTooltip text="Schedule Performance Index: story points earned ÷ story points committed, across closed sprints (0/100 rule). A running sprint counts once it closes — its live progress is shown underneath. Below 1.0 means behind plan; below 0.9 turns Health red. Same figure as Delivery → Overview." />
               </span>
             }
             value={financial.latestSpi != null ? financial.latestSpi.toFixed(2) : "—"}
             valueColor={financial.latestSpi != null ? INDEX_BAND_COLORS[indexBand(financial.latestSpi)].text : undefined}
             subtitle={
-              <SpiSparkline
-                values={financial.spiHistory}
-                color={financial.latestSpi != null ? INDEX_BAND_COLORS[indexBand(financial.latestSpi)].text : INDEX_BAND_COLORS.unfavorable.text}
-              />
+              <>
+                <SpiSparkline
+                  values={financial.spiHistory}
+                  color={financial.latestSpi != null ? INDEX_BAND_COLORS[indexBand(financial.latestSpi)].text : INDEX_BAND_COLORS.unfavorable.text}
+                />
+                {financial.runningSprint && (
+                  <span className="block">
+                    Running sprint: {financial.runningSprint.earnedPoints.toFixed(1)} of {financial.runningSprint.plannedPoints.toFixed(1)} pts earned
+                  </span>
+                )}
+                {financial.latestSpi == null && !financial.runningSprint && <span className="block">No closed sprint yet</span>}
+              </>
             }
           />
           <StatTile

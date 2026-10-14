@@ -174,7 +174,7 @@ export async function getDashboardData(projectId: string) {
     risks,
     milestones,
   });
-  const { spiHistory } = deliveryIndices(sprintsForBudget);
+  const { spiHistory, running: runningSprint } = deliveryIndices(sprintsForBudget);
   const { rag, openHighRisks } = health;
 
 
@@ -210,6 +210,8 @@ export async function getDashboardData(projectId: string) {
       effortIndex: health.effortIndex,
       // Chronological cumulative SPI after each sprint — feeds the SPI tile's sparkline.
       spiHistory: spiHistory.map((h) => h.spi),
+      // The running sprint isn't in SPI until it closes — shown beside it.
+      runningSprint,
       openHighRisks,
       activeCRValue,
       nextPayment,

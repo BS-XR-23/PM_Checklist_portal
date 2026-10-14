@@ -77,20 +77,36 @@ describe("deliveryIndices", () => {
     expect(idx.spiHistory).toEqual([]);
   });
 
-  it("SPI is cumulative earned ÷ committed points across sprints", () => {
+  it("SPI is cumulative earned ÷ committed points across CLOSED sprints", () => {
+    const idx = deliveryIndices([
+      sprint({ closedAt: new Date("2026-01-14"), frozenPlannedPoints: 10, frozenEarnedPoints: 10, frozenActualValue: 10 }),
+      sprint({ endDate: new Date("2026-01-28"), closedAt: new Date("2026-01-28"), frozenPlannedPoints: 10, frozenEarnedPoints: 5, frozenActualValue: 10 }),
+    ]);
+    expect(idx.spi).toBeCloseTo(15 / 20);
+    expect(idx.scheduleVariancePts).toBe(-5);
+    expect(idx.spiHistory.map((h) => h.spi)).toEqual([1, 0.75]);
+    expect(idx.running).toBeNull();
+  });
+
+  it("regression: a just-started sprint doesn't drag SPI down — it's reported as running progress instead", () => {
+    // Was: 10/10 closed + 0/10 running read as SPI 0.50 (Critical) on day one.
     const idx = deliveryIndices([
       sprint({ closedAt: new Date("2026-01-14"), frozenPlannedPoints: 10, frozenEarnedPoints: 10, frozenActualValue: 10 }),
       sprint({ endDate: new Date("2026-01-28"), liveEntries: [contribution({ storyPoints: 10, pctComplete: 0.5 })] }), // 0/100: earns 0
+      sprint({ endDate: new Date("2026-02-11"), startedAt: null, liveEntries: [contribution({ storyPoints: 8 })] }), // draft
     ]);
-    expect(idx.spi).toBeCloseTo(10 / 20);
-    expect(idx.scheduleVariancePts).toBe(-10);
-    expect(idx.spiHistory.map((h) => h.spi)).toEqual([1, 0.5]);
+    expect(idx.spi).toBe(1);
+    expect(idx.running).toEqual({ plannedPoints: 10, earnedPoints: 0 });
+    // No history points for the running or draft sprint — trends never plot a future date.
+    expect(idx.spiHistory.map((h) => h.endDate.toISOString().slice(0, 10))).toEqual(["2026-01-14"]);
   });
 
-  it("Effort Index is earned points ÷ competency-adjusted man-days", () => {
+  it("Effort Index is earned points ÷ competency-adjusted man-days, from closed sprints", () => {
     // 10 points earned for 40h (5 md) at a 1.0 multiplier -> 10 / 5 = 2
-    const idx = deliveryIndices([sprint({ liveEntries: [contribution({ storyPoints: 10, pctComplete: 1, sprintOwnHours: 40 })] })]);
+    const idx = deliveryIndices([sprint({ closedAt: new Date("2026-01-14"), frozenPlannedPoints: 10, frozenEarnedPoints: 10, frozenActualValue: 5 })]);
     expect(idx.effortIndex).toBeCloseTo(2);
+    const running = deliveryIndices([sprint({ liveEntries: [contribution({ storyPoints: 10, pctComplete: 1, sprintOwnHours: 40 })] })]);
+    expect(running.effortIndex).toBeNull();
   });
 });
 
@@ -142,6 +158,11 @@ describe("computeProjectHealth", () => {
   it("no sprints, risks, or milestones yet is NONE (No data yet) — unknown, not failing and not healthy", () => {
     const health = computeProjectHealth({ sprints: [], risks: [], milestones: [], today: TODAY });
     expect(health).toMatchObject({ rag: "NONE", spi: null, effortIndex: null, reasons: [] });
+  });
+
+  it("a running first sprint (no SPI yet) is enough to rate health — GREEN, not No data", () => {
+    const health = computeProjectHealth({ sprints: [sprint({ liveEntries: [contribution({ storyPoints: 5 })] })], risks: [], milestones: [], today: TODAY });
+    expect(health).toMatchObject({ rag: "GREEN", spi: null });
   });
 
   it("any one signal is enough to rate health — a logged low risk alone makes it GREEN", () => {

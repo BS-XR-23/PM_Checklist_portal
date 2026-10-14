@@ -487,7 +487,7 @@ function ProjectCard({ p, isAdmin, showInternals }: { p: ProjectCardData; isAdmi
       </div>
 
       <div className={clsx("mt-3 grid gap-2 text-xs", showInternals ? "grid-cols-3" : "grid-cols-1")}>
-        <div title="Story points earned ÷ committed across started sprints">
+        <div title="Story points earned ÷ committed across closed sprints">
           <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">SPI</p>
           <p className={clsx("mt-0.5 font-semibold", p.latestSpi == null ? "text-slate-400" : p.latestSpi < 0.9 ? "text-red-600" : p.latestSpi < 1 ? "text-amber-700" : "text-emerald-700")}>
             {p.latestSpi != null ? p.latestSpi.toFixed(2) : "—"}

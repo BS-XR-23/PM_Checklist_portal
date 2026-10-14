@@ -44,10 +44,10 @@ export function wbsBaselinePoints(tasks: { storyPoints: number }[]): number {
 }
 
 export type DeliveryIndices = {
-  plannedPoints: number; // Σ PV across started/closed sprints
+  plannedPoints: number; // Σ PV across closed sprints
   earnedPoints: number; // Σ EV (0/100 rule)
   actualValue: number; // Σ competency-adjusted man-days
-  /** Earned ÷ committed story points. Null until a started sprint has committed points. */
+  /** Earned ÷ committed story points over closed sprints. Null until a sprint with committed points has closed. */
   spi: number | null;
   /**
    * Earned points ÷ competency-adjusted effort (formerly labelled "CPI" on
@@ -56,22 +56,47 @@ export type DeliveryIndices = {
    */
   effortIndex: number | null;
   scheduleVariancePts: number;
-  /** Cumulative SPI after each sprint, chronological, nulls dropped — for sparklines/trends. */
+  /**
+   * Live progress of sprint(s) started but not yet closed — reported on its
+   * own, NOT folded into spi/effortIndex. Under the 0/100 rule a running
+   * sprint has committed all its points but earned almost none until tasks
+   * hit 100%, so counting it made SPI crash at every sprint start (e.g. a
+   * 10/10 closed sprint plus a just-started 0/10 one read as SPI 0.50).
+   */
+  running: { plannedPoints: number; earnedPoints: number } | null;
+  /** Cumulative SPI after each closed sprint, chronological — for sparklines/trends. */
   spiHistory: { endDate: Date; spi: number }[];
   /** Cumulative effort index after each sprint, same shape as spiHistory. */
   effortHistory: { endDate: Date; effortIndex: number }[];
 };
 
-/** `sprints` must be sorted ascending by startDate (cumulative series). */
+/**
+ * `sprints` must be sorted ascending by startDate (cumulative series).
+ * Only CLOSED sprints feed SPI, Effort Index and the history series — their
+ * frozen numbers are final. Draft sprints contribute nothing (and no
+ * history point, so trend charts never plot a future date), and running
+ * sprints are reported separately in `running`.
+ */
 export function deliveryIndices(sprints: SprintForBudget[]): DeliveryIndices {
   let plannedPoints = 0;
   let earnedPoints = 0;
   let actualValue = 0;
   const spiHistory: DeliveryIndices["spiHistory"] = [];
   const effortHistory: DeliveryIndices["effortHistory"] = [];
+  let runningPlanned = 0;
+  let runningEarned = 0;
+  let hasRunning = false;
 
   for (const s of sprints) {
     const t = sprintTotalsFor(s);
+    if (!s.closedAt) {
+      if (s.startedAt) {
+        hasRunning = true;
+        runningPlanned += t.plannedValue;
+        runningEarned += t.earnedValue;
+      }
+      continue;
+    }
     plannedPoints += t.plannedValue;
     earnedPoints += t.earnedValue;
     actualValue += t.actualValue;
@@ -87,6 +112,7 @@ export function deliveryIndices(sprints: SprintForBudget[]): DeliveryIndices {
     spi: plannedPoints ? earnedPoints / plannedPoints : null,
     effortIndex: competencyCpi(earnedPoints, actualValue),
     scheduleVariancePts: earnedPoints - plannedPoints,
+    running: hasRunning ? { plannedPoints: runningPlanned, earnedPoints: runningEarned } : null,
     spiHistory,
     effortHistory,
   };
@@ -143,7 +169,7 @@ export function computeProjectHealth(input: {
   milestones: MilestoneDates[];
   today?: Date;
 }): ProjectHealth {
-  const { spi, effortIndex } = deliveryIndices(input.sprints);
+  const { spi, effortIndex, running } = deliveryIndices(input.sprints);
   const openHighRisks = countOpenHighRisks(input.risks);
   const overdueMilestones = countOverdueMilestones(input.milestones, input.today);
 
@@ -154,7 +180,9 @@ export function computeProjectHealth(input: {
   else if (spi != null && spi < SPI_AMBER_BELOW) amber.push(`SPI ${spi.toFixed(2)}`);
   if (overdueMilestones > 0) amber.push(`${overdueMilestones} overdue milestone${overdueMilestones > 1 ? "s" : ""}`);
 
-  const hasSignal = spi != null || input.milestones.length > 0 || input.risks.length > 0;
+  // A running first sprint has no SPI yet, but the project is clearly under
+  // way — that counts as something to judge, same as a milestone or a risk.
+  const hasSignal = spi != null || running != null || input.milestones.length > 0 || input.risks.length > 0;
   const rag: Rag = red.length ? "RED" : amber.length ? "AMBER" : hasSignal ? "GREEN" : "NONE";
   return { rag, spi, effortIndex, openHighRisks, overdueMilestones, reasons: [...red, ...amber] };
 }
