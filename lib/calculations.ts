@@ -47,14 +47,22 @@ export type EvmPoint = {
   sprintActualCost: number; // this period's own spend (= actualCost when not supplied)
   pv: number;
   ev: number;
+  /** EV - AC: gross margin earned so far, in money. */
   cv: number;
   spi: number | null;
-  cpi: number | null;
+  /** (EV - AC) / EV — share of earned contract value left after cost. Null until something is earned. */
+  margin: number | null;
 };
 
 /**
  * Budget Tracker: PV = %Planned x ContractValue, EV = %Actual x ContractValue,
- * CV = EV-AC, SPI = EV/PV, CPI = EV/AC. >=1.0 favorable, <1.0 unfavorable.
+ * SPI = EV/PV, and margin = (EV - AC) / EV.
+ *
+ * There is deliberately no dollar CPI (EV/AC). EV is in contract PRICE
+ * (contract value per story point) while AC is role-rate COST, so EV/AC
+ * measured margin, not cost efficiency — any profitable project read as
+ * "CPI 6.3". It's reported as what it is: gross margin on earned work.
+ * Effort efficiency is Delivery's Effort Index.
  */
 export function computeEvm(
   entries: { weekEnding: Date; pctPlannedComplete: number; pctActualComplete: number; actualCost: number; sprintActualCost?: number }[],
@@ -65,7 +73,7 @@ export function computeEvm(
     const ev = contractValue * e.pctActualComplete;
     const cv = ev - e.actualCost;
     const spi = pv ? ev / pv : null;
-    const cpi = e.actualCost ? ev / e.actualCost : null;
+    const margin = ev ? cv / ev : null;
     return {
       weekEnding: e.weekEnding,
       pctPlannedComplete: e.pctPlannedComplete,
@@ -76,7 +84,7 @@ export function computeEvm(
       ev,
       cv,
       spi,
-      cpi,
+      margin,
     };
   });
 }
@@ -367,45 +375,90 @@ export function sprintTotalsFor(s: SprintForBudget): {
   return sprintTotalsFromContributions([...s.liveEntries, ...s.departedEntries]);
 }
 
+/** Hours logged by assignees with no Role Rate — they cost $0 in AC, so they're surfaced instead of silently dropped. */
+function uncostedHoursOf(entries: SprintTaskContribution[]): number {
+  return entries.reduce((sum, e) => sum + (e.manDayRate > 0 ? 0 : e.sprintOwnHours), 0);
+}
+
+function sprintCostEntries(s: SprintForBudget): SprintTaskContribution[] {
+  if (s.closedAt) return s.frozenEntries;
+  if (!s.startedAt) return [];
+  return [...s.liveEntries, ...s.departedEntries];
+}
+
 /**
  * Budget Tracker: derives the exact shape computeEvm() already expects, live
  * from Delivery's Sprint tracking — no separate BudgetEntry data entry.
  * `sprints` must be pre-sorted ascending by startDate (this walks running
- * cumulative totals, so order matters). One data point per sprint.
+ * cumulative totals, so order matters).
+ *
+ * One data point per CLOSED sprint — the same closed-sprints-only rule as
+ * Delivery's SPI (lib/project-health.ts#deliveryIndices), so the two pages
+ * can't disagree. A running sprint commits all its points on day one but
+ * earns ~none until tasks hit 100% (0/100 rule), which used to halve SPI at
+ * every sprint start; it's reported separately by runningSprintBudget().
+ * Draft sprints contribute nothing and get no (future-dated) point.
  *
  * `baselinePoints` is the project's total WBS story points (see
  * wbsBaselinePoints in lib/project-health.ts) — the denominator that turns
  * cumulative earned/planned points into the % of the whole job done.
  *
- * Every series here is cumulative — PV, EV, and actualCost alike — so
- * computeEvm's CV (EV - AC) and CPI (EV / AC) compare like with like. AC
- * used to be the sprint's own spend only, which divided cumulative EV by a
- * single sprint's cost and inflated CPI more every sprint. The sprint's own
- * spend is still returned as sprintActualCost for the per-sprint role
- * breakdown on Budget Tracker.
+ * Every series is cumulative — PV, EV, and actualCost alike — so CV and
+ * margin compare like with like. sprintActualCost is the sprint's own spend
+ * for the per-sprint role breakdown.
  */
 export function budgetEntriesFromSprints(
   sprints: SprintForBudget[],
   baselinePoints: number
-): { weekEnding: Date; pctPlannedComplete: number; pctActualComplete: number; actualCost: number; sprintActualCost: number }[] {
+): { weekEnding: Date; pctPlannedComplete: number; pctActualComplete: number; actualCost: number; sprintActualCost: number; uncostedHours: number }[] {
   let cumulativePlanned = 0;
   let cumulativeEarned = 0;
   let cumulativeCost = 0;
 
-  return sprints.map((s) => {
-    const totals = sprintTotalsFor(s);
-    cumulativePlanned += totals.plannedValue;
-    cumulativeEarned += totals.earnedValue;
-    cumulativeCost += totals.actualCost;
+  return sprints
+    .filter((s) => s.closedAt)
+    .map((s) => {
+      const totals = sprintTotalsFor(s);
+      cumulativePlanned += totals.plannedValue;
+      cumulativeEarned += totals.earnedValue;
+      cumulativeCost += totals.actualCost;
 
-    return {
-      weekEnding: s.endDate,
-      pctPlannedComplete: baselinePoints ? cumulativePlanned / baselinePoints : 0,
-      pctActualComplete: baselinePoints ? cumulativeEarned / baselinePoints : 0,
-      actualCost: cumulativeCost,
-      sprintActualCost: totals.actualCost,
-    };
-  });
+      return {
+        weekEnding: s.endDate,
+        pctPlannedComplete: baselinePoints ? cumulativePlanned / baselinePoints : 0,
+        pctActualComplete: baselinePoints ? cumulativeEarned / baselinePoints : 0,
+        actualCost: cumulativeCost,
+        sprintActualCost: totals.actualCost,
+        uncostedHours: uncostedHoursOf(sprintCostEntries(s)),
+      };
+    });
+}
+
+/**
+ * Live totals of the sprint(s) started but not yet closed — shown on
+ * Budget Tracker as "in progress, not in the totals yet". Null when nothing
+ * is running.
+ */
+export function runningSprintBudget(
+  sprints: SprintForBudget[],
+  contractValue: number,
+  baselinePoints: number
+): { plannedValue: number; earnedValue: number; actualCost: number; committedPoints: number; earnedPoints: number; uncostedHours: number } | null {
+  const running = sprints.filter((s) => s.startedAt && !s.closedAt);
+  if (!running.length) return null;
+  let committedPoints = 0;
+  let earnedPoints = 0;
+  let actualCost = 0;
+  let uncostedHours = 0;
+  for (const s of running) {
+    const t = sprintTotalsFor(s);
+    committedPoints += t.plannedValue;
+    earnedPoints += t.earnedValue;
+    actualCost += t.actualCost;
+    uncostedHours += uncostedHoursOf(sprintCostEntries(s));
+  }
+  const perPoint = baselinePoints ? contractValue / baselinePoints : 0;
+  return { plannedValue: committedPoints * perPoint, earnedValue: earnedPoints * perPoint, actualCost, committedPoints, earnedPoints, uncostedHours };
 }
 
 /** Actual Date slipped past Planned Date on an incomplete item (non-blocking flag). */

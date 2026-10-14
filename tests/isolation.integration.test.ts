@@ -1032,7 +1032,7 @@ describe("isolation boundary", () => {
   // toSprintsForBudget()/budgetEntriesFromSprints() expect wouldn't be
   // caught by pure unit tests alone.
   it("Budget Tracker's derived PV/EV/AC resolves correctly from real Sprint/WbsTask/RoleRate rows", async () => {
-    const { budgetEntriesFromSprints, toSprintsForBudget, computeEvm } = await import("@/lib/calculations");
+    const { runningSprintBudget, toSprintsForBudget } = await import("@/lib/calculations");
 
     const seniorRate = await prisma.roleRate.create({ data: { roleName: "[TEST] Senior for budget derivation", manDayRate: 300 } });
     const seniorPerson = await prisma.person.create({ data: { name: "[TEST] Senior for budget derivation", roleRateId: seniorRate.id } });
@@ -1066,12 +1066,14 @@ describe("isolation boundary", () => {
         orderBy: { startDate: "asc" },
         include: { tasks: { include: { person: { include: { roleRate: true } } } } },
       });
-      const evm = computeEvm(budgetEntriesFromSprints(toSprintsForBudget(sprints), 20 /* plannedStoryPoints */), 10000 /* contractValue */);
-      const point = evm.find((e) => e.weekEnding.getTime() === sprint.endDate.getTime())!;
+      // The sprint is running (started, not closed), so it's reported by
+      // runningSprintBudget — closed sprints alone feed the cumulative series.
+      const running = runningSprintBudget(toSprintsForBudget(sprints), 10000 /* contractValue */, 20 /* baseline points */)!;
 
-      expect(point.pctPlannedComplete).toBeCloseTo(10 / 20); // task storyPoints / plannedStoryPoints
-      expect(point.pctActualComplete).toBeCloseTo(10 / 20); // fully done (0/100 rule) storyPoints / plannedStoryPoints
-      expect(point.actualCost).toBe(4 * 300); // (actualHours / 8) x resolved RoleRate
+      expect(running.committedPoints).toBe(10);
+      expect(running.earnedPoints).toBe(10); // fully done (0/100 rule)
+      expect(running.earnedValue).toBeCloseTo(10000 * (10 / 20));
+      expect(running.actualCost).toBe(4 * 300); // (actualHours / 8) x resolved RoleRate
     } finally {
       await prisma.wbsTask.delete({ where: { id: task.id } });
       await prisma.sprint.delete({ where: { id: sprint.id } });

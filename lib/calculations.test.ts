@@ -9,6 +9,7 @@ import {
   wbsActualValue,
   competencyCpi,
   budgetEntriesFromSprints,
+  runningSprintBudget,
   computeEvm,
   sprintEarnedValue,
   manDaysFromHours,
@@ -285,32 +286,24 @@ describe("parseSprintContributions", () => {
   });
 });
 
-describe("budgetEntriesFromSprints", () => {
-  it("an open sprint computes PV/EV live from its tasks (0/100 rule)", () => {
-    const sprints = [
-      sprintForBudget({
-        liveEntries: [
-          contribution({ storyPoints: 10, pctComplete: 1 }),
-          contribution({ storyPoints: 5, pctComplete: 0.5 }),
-        ],
-      }),
-    ];
-    const result = budgetEntriesFromSprints(sprints, 15);
-    expect(result[0].pctPlannedComplete).toBeCloseTo(1); // (10+5) / 15
-    expect(result[0].pctActualComplete).toBeCloseTo(10 / 15); // only the fully-done task earns
-  });
+// A closed sprint whose frozen numbers come from its own contributions.
+function closedSprint(entries: SprintTaskContribution[], overrides: Partial<SprintForBudget> = {}): SprintForBudget {
+  const points = entries.reduce((sum, e) => sum + e.storyPoints, 0);
+  const earned = entries.reduce((sum, e) => sum + (e.pctComplete >= 1 ? e.storyPoints : 0), 0);
+  return sprintForBudget({ closedAt: new Date("2026-01-15"), frozenPlannedPoints: points, frozenEarnedPoints: earned, frozenActualValue: 1, frozenEntries: entries, ...overrides });
+}
 
-  it("a Draft sprint (never started) reads PV/EV/actualCost as zero, even with tasks already committed to it", () => {
+describe("budgetEntriesFromSprints", () => {
+  it("only CLOSED sprints get a data point — running and draft sprints are left out (same rule as Delivery's SPI)", () => {
     const sprints = [
-      sprintForBudget({
-        startedAt: null,
-        liveEntries: [contribution({ storyPoints: 10, pctComplete: 1, sprintOwnHours: 8 })],
-      }),
+      closedSprint([contribution({ storyPoints: 10, pctComplete: 1 })]),
+      sprintForBudget({ endDate: new Date("2026-01-28"), liveEntries: [contribution({ storyPoints: 10, pctComplete: 0.5 })] }), // running
+      sprintForBudget({ endDate: new Date("2026-02-11"), startedAt: null, liveEntries: [contribution({ storyPoints: 8 })] }), // draft
     ];
-    const result = budgetEntriesFromSprints(sprints, 15);
-    expect(result[0].pctPlannedComplete).toBe(0);
-    expect(result[0].pctActualComplete).toBe(0);
-    expect(result[0].actualCost).toBe(0);
+    const result = budgetEntriesFromSprints(sprints, 20);
+    expect(result).toHaveLength(1);
+    expect(result[0].pctPlannedComplete).toBeCloseTo(0.5);
+    expect(result[0].pctActualComplete).toBeCloseTo(0.5);
   });
 
   it("a closed sprint reads its frozen snapshot, ignoring the (possibly since-changed) live tasks", () => {
@@ -329,18 +322,10 @@ describe("budgetEntriesFromSprints", () => {
     expect(result[0].pctActualComplete).toBe(1);
   });
 
-  it("cumulative planned/earned accumulate across sprints — no dedup needed, a task belongs to one sprint at a time", () => {
+  it("cumulative planned/earned accumulate across closed sprints", () => {
     const sprints = [
-      sprintForBudget({
-        closedAt: new Date("2026-01-15"),
-        frozenPlannedPoints: 10,
-        frozenEarnedPoints: 10,
-        frozenActualValue: 8,
-      }),
-      sprintForBudget({
-        endDate: new Date("2026-01-28"),
-        liveEntries: [contribution({ storyPoints: 10, pctComplete: 1 })],
-      }),
+      closedSprint([contribution({ storyPoints: 10, pctComplete: 1 })]),
+      closedSprint([contribution({ storyPoints: 10, pctComplete: 1 })], { endDate: new Date("2026-01-28") }),
     ];
     const result = budgetEntriesFromSprints(sprints, 20);
     expect(result[0].pctPlannedComplete).toBeCloseTo(0.5); // 10 / 20
@@ -348,26 +333,15 @@ describe("budgetEntriesFromSprints", () => {
     expect(result[1].pctActualComplete).toBeCloseTo(1);
   });
 
-  it("actualCost is cumulative (like PV/EV) so CV and CPI compare like with like; sprintActualCost is the sprint's own spend", () => {
+  it("actualCost is cumulative (like PV/EV); sprintActualCost is the sprint's own spend", () => {
     const sprints = [
-      sprintForBudget({ liveEntries: [contribution({ storyPoints: 10, pctComplete: 1, sprintOwnHours: 40, manDayRate: 100 })] }), // 5 md x 100
-      sprintForBudget({ endDate: new Date("2026-01-28"), liveEntries: [contribution({ storyPoints: 5, pctComplete: 1, sprintOwnHours: 16, manDayRate: 100 })] }), // 2 md x 100
+      closedSprint([contribution({ storyPoints: 10, pctComplete: 1, sprintOwnHours: 40, manDayRate: 100 })]), // 5 md x 100
+      closedSprint([contribution({ storyPoints: 5, pctComplete: 1, sprintOwnHours: 16, manDayRate: 100 })], { endDate: new Date("2026-01-28") }), // 2 md x 100
     ];
     const result = budgetEntriesFromSprints(sprints, 15);
     expect(result[0].actualCost).toBe(500);
     expect(result[1].actualCost).toBe(700); // 500 + 200, cumulative
-    expect(result[1].sprintActualCost).toBe(200); // sprint 2's own spend, for the role breakdown
-  });
-
-  it("CPI stays flat when spend tracks earned value — cumulative EV over cumulative AC, not over one sprint's AC", () => {
-    // Two identical sprints: each earns 5 of 10 points for $500. Contract $1,000 -> EV $500 per sprint.
-    const sprints = [
-      sprintForBudget({ liveEntries: [contribution({ storyPoints: 5, pctComplete: 1, sprintOwnHours: 40, manDayRate: 100 })] }),
-      sprintForBudget({ endDate: new Date("2026-01-28"), liveEntries: [contribution({ storyPoints: 5, pctComplete: 1, sprintOwnHours: 40, manDayRate: 100 })] }),
-    ];
-    const evm = computeEvm(budgetEntriesFromSprints(sprints, 10), 1000);
-    expect(evm[0].cpi).toBeCloseTo(1); // $500 / $500
-    expect(evm[1].cpi).toBeCloseTo(1); // $1,000 / $1,000 — the old per-sprint AC gave $1,000 / $500 = 2.0
+    expect(result[1].sprintActualCost).toBe(200);
   });
 
   it("a closed sprint's actualCost comes from the frozen snapshot, not the live (possibly rate-changed) tasks", () => {
@@ -381,32 +355,69 @@ describe("budgetEntriesFromSprints", () => {
         liveEntries: [contribution({ storyPoints: 10, pctComplete: 1, sprintOwnHours: 40, manDayRate: 250 })], // rate since raised — must be ignored
       }),
     ];
-    const result = budgetEntriesFromSprints(sprints, 10);
-    expect(result[0].actualCost).toBe(500);
+    expect(budgetEntriesFromSprints(sprints, 10)[0].actualCost).toBe(500);
   });
 
-  it("an open sprint's totals include a task that departed it mid-flight, not just its still-live tasks", () => {
+  it("counts hours from assignees with no role rate as uncosted instead of silently costing them $0", () => {
     const sprints = [
-      sprintForBudget({
-        liveEntries: [contribution({ taskId: "still-here", storyPoints: 5, pctComplete: 1, sprintOwnHours: 8, manDayRate: 100 })],
-        departedEntries: [contribution({ taskId: "moved-away", storyPoints: 10, pctComplete: 1, sprintOwnHours: 40, manDayRate: 100 })],
-      }),
+      closedSprint([
+        contribution({ storyPoints: 5, pctComplete: 1, sprintOwnHours: 16, manDayRate: 100 }),
+        contribution({ taskId: "t2", storyPoints: 5, pctComplete: 1, sprintOwnHours: 12, manDayRate: 0, roleName: null }),
+      ]),
     ];
-    const result = budgetEntriesFromSprints(sprints, 15);
-    expect(result[0].pctPlannedComplete).toBeCloseTo(1); // (5 + 10) / 15 — the departed task still counts
-    expect(result[0].pctActualComplete).toBeCloseTo(1);
-    expect(result[0].actualCost).toBe(600); // (8+40)/8 md x 100
+    const [entry] = budgetEntriesFromSprints(sprints, 10);
+    expect(entry.actualCost).toBe(200); // only the costed 2 md
+    expect(entry.uncostedHours).toBe(12);
   });
 
   it("a zero baseline doesn't divide by zero", () => {
-    const sprints = [sprintForBudget({ liveEntries: [contribution({ storyPoints: 10, pctComplete: 1 })] })];
-    const result = budgetEntriesFromSprints(sprints, 0);
+    const result = budgetEntriesFromSprints([closedSprint([contribution({ storyPoints: 10, pctComplete: 1 })])], 0);
     expect(result[0].pctPlannedComplete).toBe(0);
     expect(result[0].pctActualComplete).toBe(0);
   });
 
   it("returns an empty array for no sprints", () => {
     expect(budgetEntriesFromSprints([], 10)).toEqual([]);
+  });
+});
+
+describe("runningSprintBudget", () => {
+  it("live totals of the running sprint (0/100 rule), including tasks that departed it mid-flight", () => {
+    const sprints = [
+      closedSprint([contribution({ storyPoints: 10, pctComplete: 1 })]),
+      sprintForBudget({
+        liveEntries: [contribution({ taskId: "still-here", storyPoints: 5, pctComplete: 1, sprintOwnHours: 8, manDayRate: 100 })],
+        departedEntries: [contribution({ taskId: "moved-away", storyPoints: 10, pctComplete: 0.5, sprintOwnHours: 40, manDayRate: 100 })],
+      }),
+    ];
+    const r = runningSprintBudget(sprints, 1_000, 20)!; // $50 per point
+    expect(r.committedPoints).toBe(15);
+    expect(r.earnedPoints).toBe(5); // only the 100% task earns
+    expect(r.plannedValue).toBe(750);
+    expect(r.earnedValue).toBe(250);
+    expect(r.actualCost).toBe(600); // (8 + 40) / 8 md x 100
+  });
+
+  it("is null when nothing is running — a draft sprint doesn't count", () => {
+    expect(runningSprintBudget([sprintForBudget({ startedAt: null, liveEntries: [contribution({ storyPoints: 8 })] })], 1_000, 10)).toBeNull();
+  });
+});
+
+describe("computeEvm", () => {
+  it("reports gross margin on earned work, not a price-vs-cost 'CPI'", () => {
+    // Contract $1,000 for 10 points ($100/point). 5 points earned for 2 md at $100 = $200 cost.
+    const [p] = computeEvm(budgetEntriesFromSprints([closedSprint([contribution({ storyPoints: 5, pctComplete: 1, sprintOwnHours: 16, manDayRate: 100 })])], 10), 1_000);
+    expect(p.ev).toBe(500);
+    expect(p.actualCost).toBe(200);
+    expect(p.cv).toBe(300);
+    expect(p.margin).toBeCloseTo(0.6);
+    expect(p.spi).toBe(1);
+  });
+
+  it("margin is null until something is earned", () => {
+    const [p] = computeEvm([{ weekEnding: new Date(), pctPlannedComplete: 0.5, pctActualComplete: 0, actualCost: 100 }], 1_000);
+    expect(p.margin).toBeNull();
+    expect(p.spi).toBe(0);
   });
 });
 

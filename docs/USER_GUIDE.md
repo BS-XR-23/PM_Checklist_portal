@@ -346,11 +346,21 @@ a separate portal. It never affects project Health.
 - Inputs: Total Contract Value (shared with Milestones & Payments) and
   Planned Man-Days (reference man-day rate only). **Baseline story points**
   are not typed in — they're the WBS total.
-- One row per sprint: % planned / % actual complete (cumulative), PV, EV,
+- Summary: **Earned value**, **Cost to date**, **Gross margin on earned
+  work** ((EV − AC) ÷ EV) and **SPI**.
+- One row per **closed** sprint — the same rule as Delivery's SPI, so the
+  two always agree: % planned / % actual complete (cumulative), PV, EV,
   **cumulative actual cost** (with this sprint's own cost and a per-role
-  breakdown), CV, SPI, CPI.
-- **CPI here is a dollar ratio** (EV ÷ actual cost), where EV is based on
-  contract value — it behaves like a margin indicator, not classic EVM CPI.
+  breakdown), margin, SPI. The running sprint is shown separately as live
+  progress; draft sprints aren't shown.
+- **No dollar CPI.** EV is contract *price* and AC is role-rate *cost*, so
+  EV ÷ AC measured profit margin, not efficiency — it's shown as margin
+  instead. For effort efficiency use Delivery's Effort Index.
+- Hours logged by someone with **no Role Rate** cost nothing here; the page
+  says how many hours that is.
+- If Planned Man-Days is far off what the closed sprints' pace implies for
+  the whole WBS, the page points it out (the auto man-day rate is reference
+  only and isn't used in any figure).
 
 ## 13. PM Plan
 
@@ -555,8 +565,8 @@ message. Role changes and deactivation take effect on the very next request.
 | **Risk score** | Probability × impact, Low=1 · Medium=2 · High=3 |
 | **Open high risk** | Type Risk, status not Closed/Mitigated, score ≥ 6 |
 | **CR amount** | Billable man-days × rate |
-| **Budget Tracker PV / EV** | Cumulative committed / earned story points ÷ baseline × contract value |
-| **Budget Tracker CPI** | EV ÷ cumulative actual cost (dollar ratio; testing only) |
+| **Budget Tracker PV / EV** | Cumulative committed / earned story points across **closed** sprints ÷ baseline × contract value |
+| **Budget Tracker margin** | (EV − cumulative actual cost) ÷ EV — EV is contract price, AC is role-rate cost (testing only; replaces the old dollar CPI) |
 | **Overloaded person** | Current total intensity across projects > 100% |
 | **Overlap conflict** | Two+ engagements ≥ 60% on different projects with overlapping dates |
 

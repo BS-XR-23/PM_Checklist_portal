@@ -11,10 +11,12 @@ export type SpiCpiPoint = {
   cpi: number | null;
 };
 
-// secondLabel: Budget Tracker plots dollar CPI in the second series;
-// Portfolio plots the Effort Index there instead (lib/project-health.ts).
-export function SpiCpiChart({ data, secondLabel = "CPI (EV/AC)" }: { data: SpiCpiPoint[]; secondLabel?: string }) {
+// The second series is optional: Portfolio plots the Effort Index there
+// (lib/project-health.ts); Budget Tracker plots SPI alone (it no longer has
+// a dollar CPI — see computeEvm). It's left out when every value is null.
+export function SpiCpiChart({ data, secondLabel = "Effort Index" }: { data: SpiCpiPoint[]; secondLabel?: string }) {
   const hasValues = data.some((d) => d.spi != null || d.cpi != null);
+  const hasSecond = data.some((d) => d.cpi != null);
   if (!hasValues) {
     return <EmptyState message="No closed sprints with committed story points yet." />;
   }
@@ -45,7 +47,7 @@ export function SpiCpiChart({ data, secondLabel = "CPI (EV/AC)" }: { data: SpiCp
         />
         <Legend wrapperStyle={{ fontSize: 12, color: CHART_CHROME.textSecondary }} />
         <Line type="monotone" dataKey="spi" name="SPI (EV/PV)" stroke={CHART_SERIES.blue} strokeWidth={2} dot={{ r: 3 }} connectNulls />
-        <Line type="monotone" dataKey="cpi" name={secondLabel} stroke={CHART_SERIES.orange} strokeWidth={2} dot={{ r: 3 }} connectNulls />
+        {hasSecond && <Line type="monotone" dataKey="cpi" name={secondLabel} stroke={CHART_SERIES.orange} strokeWidth={2} dot={{ r: 3 }} connectNulls />}
       </LineChart>
     </ResponsiveContainer>
   );
