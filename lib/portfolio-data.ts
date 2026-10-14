@@ -220,6 +220,7 @@ export type PortfolioSummary = {
   healthy: number;
   atRisk: number;
   critical: number;
+  noData: number; // active projects with nothing to rate health on yet (rag NONE)
   completed: number;
   totalContractValue: number;
   collected: number;
@@ -251,6 +252,7 @@ export function buildPortfolioData(projects: ProjectWithPortfolioData[]): Portfo
   const healthy = active.filter((b) => b.row.rag === "GREEN").length;
   const atRisk = active.filter((b) => b.row.rag === "AMBER").length;
   const critical = active.filter((b) => b.row.rag === "RED").length;
+  const noData = active.filter((b) => b.row.rag === "NONE").length;
   const completed = rows.filter((r) => r.stage === COMPLETED_STAGE_LABEL).length;
 
   const totalContractValue = rows.reduce((sum, r) => sum + r.contractValue, 0);
@@ -319,6 +321,7 @@ export function buildPortfolioData(projects: ProjectWithPortfolioData[]): Portfo
       healthy,
       atRisk,
       critical,
+      noData,
       completed,
       totalContractValue,
       collected,

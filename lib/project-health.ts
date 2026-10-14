@@ -120,7 +120,7 @@ export type ProjectHealth = {
   effortIndex: number | null;
   openHighRisks: number;
   overdueMilestones: number;
-  /** Human-readable reasons for a non-GREEN rating, most severe first. Empty when GREEN. */
+  /** Human-readable reasons for a RED/AMBER rating, most severe first. Empty when GREEN or NONE. */
   reasons: string[];
 };
 
@@ -128,6 +128,9 @@ export type ProjectHealth = {
  * RED: any open high-severity risk, or SPI below SPI_RED_BELOW.
  * AMBER: SPI below SPI_AMBER_BELOW, or any overdue milestone.
  * GREEN: none of the above.
+ * NONE ("No data yet"): none of the above AND nothing to judge — no started
+ * sprint (no SPI), no client milestone, no risk logged. A project that hasn't
+ * been set up yet is unknown, not healthy.
  *
  * Missing data never counts against a project — no sprints yet means no SPI,
  * which is simply not a reason, rather than a 0.00 that reads as failure.
@@ -151,6 +154,7 @@ export function computeProjectHealth(input: {
   else if (spi != null && spi < SPI_AMBER_BELOW) amber.push(`SPI ${spi.toFixed(2)}`);
   if (overdueMilestones > 0) amber.push(`${overdueMilestones} overdue milestone${overdueMilestones > 1 ? "s" : ""}`);
 
-  const rag: Rag = red.length ? "RED" : amber.length ? "AMBER" : "GREEN";
+  const hasSignal = spi != null || input.milestones.length > 0 || input.risks.length > 0;
+  const rag: Rag = red.length ? "RED" : amber.length ? "AMBER" : hasSignal ? "GREEN" : "NONE";
   return { rag, spi, effortIndex, openHighRisks, overdueMilestones, reasons: [...red, ...amber] };
 }

@@ -197,7 +197,13 @@ export default async function DeliveryOverviewPage({ params }: { params: { proje
             valueColor={RAG_COLORS[health.rag].text}
             accentColor={RAG_COLORS[health.rag].bg}
             // Reasons can cite open-risk counts — only for viewers who can see the Risk Register.
-            subtitle={riskAccess !== "NONE" ? health.reasons.join(" · ") || "No issues found" : undefined}
+            subtitle={
+              health.rag === "NONE"
+                ? "Nothing to rate yet — no sprint, milestone, or risk"
+                : riskAccess !== "NONE"
+                  ? health.reasons.join(" · ") || "No issues found"
+                  : undefined
+            }
           />
         </div>
       </div>

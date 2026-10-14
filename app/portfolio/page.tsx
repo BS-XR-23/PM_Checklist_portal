@@ -81,7 +81,7 @@ export default async function PortfolioPage() {
   }
 
   const attentionRows = rows
-    .filter((r) => r.status === "ACTIVE" && r.rag !== "GREEN")
+    .filter((r) => r.status === "ACTIVE" && (r.rag === "RED" || r.rag === "AMBER"))
     .sort((a, b) => (a.rag === b.rag ? b.openHighRisks - a.openHighRisks : a.rag === "RED" ? -1 : 1));
 
   const stageBreakdown = Array.from(
@@ -108,11 +108,12 @@ export default async function PortfolioPage() {
         <div className="grid grid-cols-1 lg:grid-cols-[1.1fr_1.4fr] gap-6">
           <div>
             <p className="text-xs font-medium text-slate-500 mb-2">Active projects by health</p>
-            <HealthDistributionBar healthy={summary.healthy} atRisk={summary.atRisk} critical={summary.critical} />
+            <HealthDistributionBar healthy={summary.healthy} atRisk={summary.atRisk} critical={summary.critical} noData={summary.noData} />
             <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1.5 text-xs text-slate-500">
               <LegendDot color={RAG_COLORS.GREEN.text} bg={RAG_COLORS.GREEN.bg} label={`Healthy (${summary.healthy})`} />
               <LegendDot color={RAG_COLORS.AMBER.text} bg={RAG_COLORS.AMBER.bg} label={`At Risk (${summary.atRisk})`} />
               <LegendDot color={RAG_COLORS.RED.text} bg={RAG_COLORS.RED.bg} label={`Critical (${summary.critical})`} />
+              {summary.noData > 0 && <LegendDot color={RAG_COLORS.NONE.text} bg={RAG_COLORS.NONE.bg} label={`No data yet (${summary.noData})`} />}
               <LegendDot color="#475569" bg="#E2E8F0" label={`Completed (${summary.completed})`} />
             </div>
           </div>
@@ -330,13 +331,14 @@ export default async function PortfolioPage() {
   );
 }
 
-function HealthDistributionBar({ healthy, atRisk, critical }: { healthy: number; atRisk: number; critical: number }) {
-  const total = Math.max(1, healthy + atRisk + critical);
+function HealthDistributionBar({ healthy, atRisk, critical, noData }: { healthy: number; atRisk: number; critical: number; noData: number }) {
+  const total = Math.max(1, healthy + atRisk + critical + noData);
   return (
     <div className="flex h-3 w-full rounded-full overflow-hidden bg-slate-100">
       {healthy > 0 && <div style={{ width: `${(healthy / total) * 100}%`, backgroundColor: RAG_COLORS.GREEN.bg }} />}
       {atRisk > 0 && <div style={{ width: `${(atRisk / total) * 100}%`, backgroundColor: RAG_COLORS.AMBER.bg }} />}
       {critical > 0 && <div style={{ width: `${(critical / total) * 100}%`, backgroundColor: RAG_COLORS.RED.bg }} />}
+      {noData > 0 && <div style={{ width: `${(noData / total) * 100}%`, backgroundColor: RAG_COLORS.NONE.bg }} />}
     </div>
   );
 }

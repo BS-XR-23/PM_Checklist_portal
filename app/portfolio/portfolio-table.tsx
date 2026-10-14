@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import clsx from "clsx";
 import { formatMoney, formatShortDate, formatDateTime, initials } from "@/lib/format";
-import { RAG_COLORS } from "@/lib/rag";
+import { RAG_COLORS, RAG_LABELS } from "@/lib/rag";
 import { INDEX_BAND_COLORS, indexBand, avatarColorFromString } from "@/lib/colors";
 import { IconSearch, IconDotsVertical, IconChevronDown, IconX } from "@/components/layout/icons";
 import type { PortfolioRow, PortfolioSummary, FinancialStatus } from "@/lib/portfolio-data";
@@ -51,7 +51,7 @@ type DateRange = "ALL" | "7" | "30" | "90";
 type SortKey = "health" | "progress" | "contractValue" | "spi" | "effort" | "risks" | "nextMilestone" | "updatedAt";
 type SortDir = "asc" | "desc";
 
-const HEALTH_RANK: Record<PortfolioRow["rag"], number> = { RED: 3, AMBER: 2, GREEN: 1 };
+const HEALTH_RANK: Record<PortfolioRow["rag"], number> = { RED: 3, AMBER: 2, NONE: 1, GREEN: 0 };
 
 function compareRows(a: PortfolioRow, b: PortfolioRow, key: SortKey): number {
   switch (key) {
@@ -404,7 +404,7 @@ function ProjectRow({ row: r }: { row: PortfolioRow }) {
             style={{ backgroundColor: ragColor.bg, color: ragColor.text }}
             title={r.healthReasons.join(" · ") || "No issues found"}
           >
-            {r.rag === "GREEN" ? "Healthy" : r.rag === "AMBER" ? "At Risk" : "Critical"}
+            {RAG_LABELS[r.rag]}
           </span>
         )}
       </td>

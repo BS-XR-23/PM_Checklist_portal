@@ -139,9 +139,16 @@ describe("computeProjectHealth", () => {
     expect(health.reasons).toEqual([]);
   });
 
-  it("no sprints, risks, or milestones yet is GREEN with no reasons — missing data never counts against a project", () => {
+  it("no sprints, risks, or milestones yet is NONE (No data yet) — unknown, not failing and not healthy", () => {
     const health = computeProjectHealth({ sprints: [], risks: [], milestones: [], today: TODAY });
-    expect(health).toMatchObject({ rag: "GREEN", spi: null, effortIndex: null, reasons: [] });
+    expect(health).toMatchObject({ rag: "NONE", spi: null, effortIndex: null, reasons: [] });
+  });
+
+  it("any one signal is enough to rate health — a logged low risk alone makes it GREEN", () => {
+    const lowRisk = { ...highRisk, probability: "Low", impact: "Low" };
+    expect(computeProjectHealth({ sprints: [], risks: [lowRisk], milestones: [], today: TODAY }).rag).toBe("GREEN");
+    const future = { status: "NOT_STARTED", plannedDate: new Date("2099-01-01") };
+    expect(computeProjectHealth({ sprints: [], risks: [], milestones: [future], today: TODAY }).rag).toBe("GREEN");
   });
 
   it("an open high-severity risk is RED", () => {

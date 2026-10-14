@@ -52,12 +52,15 @@ export async function getDashboardData(projectId: string) {
   const overallPct = governancePct(allItems);
   const deliveryPctValue = deliveryPct(wbsTasks);
 
-  // Status breakdown stays over ALL items — seeing "N marked Not Applicable"
-  // as its own slice is useful; it's only the percentage-complete math above
-  // that excludes them.
+  // Status breakdown keeps Not Applicable as its own slice — seeing "N
+  // marked N/A" is useful; only the percentage-complete math above excludes
+  // them. Recurring cadence items are left out here too: they have no
+  // one-off status to report and live in their own "Ongoing cadence" block,
+  // so counting them made Not Started exceed Total Items.
+  const oneOffItems = allItems.filter((i) => !i.isRecurring);
   const statusBreakdown = ITEM_STATUSES.map((status) => ({
     status,
-    count: allItems.filter((i) => i.status === status).length,
+    count: oneOffItems.filter((i) => i.status === status).length,
   }));
 
   // Checklist types this project has no items in at all (e.g. a project that

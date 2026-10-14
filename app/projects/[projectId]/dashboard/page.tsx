@@ -110,7 +110,13 @@ export default async function DashboardPage({ params }: { params: { projectId: s
           valueColor={RAG_COLORS[data.rag].text}
           // Reasons can name risks/schedule figures — only for viewers who can
           // already see the financial/risk tiles below, never a READ_LIMITED Client.
-          subtitle={financialsVisible ? data.healthReasons.join(" · ") || "No issues found" : undefined}
+          subtitle={
+            data.rag === "NONE"
+              ? "Add a client milestone, start a sprint, or log risks to rate health"
+              : financialsVisible
+                ? data.healthReasons.join(" · ") || "No issues found"
+                : undefined
+          }
         />
         <StatTile
           icon={<IconTarget />}

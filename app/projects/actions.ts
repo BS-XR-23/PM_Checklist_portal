@@ -20,6 +20,13 @@ export async function createProjectAction(formData: FormData) {
   const contractValue = Number(formData.get("contractValue") ?? 0);
   const plannedManDays = Number(formData.get("plannedManDays") ?? 0);
   const plannedStoryPoints = Number(formData.get("plannedStoryPoints") ?? 0);
+  // Optional: assign the PM up front instead of a separate trip to the Team
+  // tab. Same rule as addProjectMember — the user must hold the global PM role.
+  const pmUserId = String(formData.get("pmUserId") ?? "").trim() || null;
+  const pm = pmUserId ? await prisma.user.findUnique({ where: { id: pmUserId } }) : null;
+  if (pmUserId && (!pm || pm.role !== "PM" || !pm.isActive)) {
+    throw new Error("The selected PM isn't an active user with the PM role.");
+  }
 
   const project = await createProject({ name, client, contractValue, plannedManDays, plannedStoryPoints });
 
@@ -31,6 +38,18 @@ export async function createProjectAction(formData: FormData) {
     entityId: project.id,
     summary: `Created project "${project.name}"`,
   });
+
+  if (pm) {
+    const membership = await prisma.projectMembership.create({ data: { userId: pm.id, projectId: project.id, role: "PM" } });
+    await writeAudit({
+      actor: user,
+      projectId: project.id,
+      action: "create",
+      entityType: "ProjectMembership",
+      entityId: membership.id,
+      summary: `Added ${pm.email} to the project as PM`,
+    });
+  }
 
   revalidatePath("/projects");
   redirect(`/projects/${project.id}/dashboard`);

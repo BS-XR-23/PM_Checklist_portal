@@ -58,15 +58,13 @@ export default async function ProjectLayout({
   }
   if (moduleAccess.DEPENDENCIES !== "NONE") visibleTabs.push({ href: "/dependencies", label: "Dependencies" });
   if (moduleAccess.BUDGET_TRACKER !== "NONE") visibleTabs.push({ href: "/budget", label: "Budget Tracker" });
-  // Delivery is the merge of DELIVERY (Overview/Tasks/Sprints/Milestones)
-  // plus the new DEV_CHECKLIST/RELEASE/UAT modules — visible if any one of
-  // them is, same "the page itself only shows the sub-tab(s) you can reach"
-  // pattern as Checklist/Risk & CR/Team above. Deliberately does NOT include
-  // MILESTONES: "Milestones & Payments" above is a separate, unrelated
-  // feature (payment tranches tied to checklist sign-off) from Delivery's
-  // own Milestone data (development checkpoints, now edited from PM Plan
-  // rather than a dedicated Delivery sub-page) — different goals, not to be
-  // conflated in nav or gating.
+  // Delivery is the merge of DELIVERY (Overview/Tasks/Sprints) plus the
+  // DEV_CHECKLIST/RELEASE/UAT modules — visible if any one of them is, same
+  // "the page itself only shows the sub-tab(s) you can reach" pattern as
+  // Checklist/Risk & CR/Team above. MILESTONES stays its own tab: client
+  // milestones and their payments live only on "Milestones & Payments";
+  // Delivery, PM Plan, and the Dashboard just read them (docs/FIX_PLAN.md,
+  // Phase 3).
   if ((["DELIVERY", "DEV_CHECKLIST", "RELEASE", "UAT"] as const).some((m) => moduleAccess[m] !== "NONE")) {
     visibleTabs.push({
       href: "/delivery",

@@ -31,7 +31,8 @@ Checklist Template. Three concepts are kept deliberately separate (see
 Health and progress have one definition each, in `lib/project-health.ts` and
 `lib/milestones.ts`: **Governance %** (checklist), **Delivery %** (story
 points), **SPI** (earned ÷ committed story points), and a Red/Amber/Green
-rating from open high risks, SPI, and overdue milestones. Recurring cadence
+rating from open high risks, SPI, and overdue milestones — or a grey **No
+data yet** when there's no started sprint, milestone, or risk to judge. Recurring cadence
 checklist items are excluded from progress. Full formulas:
 `docs/USER_GUIDE.md` §24. Audit fixes and their status: `docs/FIX_PLAN.md`.
 

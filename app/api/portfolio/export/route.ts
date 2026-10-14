@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/rbac";
-import { RAG_COLORS } from "@/lib/rag";
+import { RAG_LABELS } from "@/lib/rag";
 import { formatShortDate } from "@/lib/format";
 import { buildXlsxBuffer } from "@/lib/xlsx-export";
 import { PORTFOLIO_PROJECT_INCLUDE, buildPortfolioData } from "@/lib/portfolio-data";
@@ -28,7 +28,7 @@ export async function GET(_req: NextRequest) {
     Client: r.client ?? "",
     PM: r.pmName ?? "",
     Stage: r.stage,
-    Health: RAG_COLORS[r.rag].label === "Green" ? "Healthy" : RAG_COLORS[r.rag].label === "Amber" ? "At Risk" : "Critical",
+    Health: RAG_LABELS[r.rag],
     "Governance %": Math.round(r.progress * 100),
     "Delivery %": r.deliveryPct != null ? Math.round(r.deliveryPct * 100) : "",
     "Contract Value": r.contractValue,

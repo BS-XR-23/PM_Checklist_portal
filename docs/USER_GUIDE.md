@@ -118,26 +118,42 @@ Decisions, Action Items, Delivery, Dependencies hidden.
 Landing page for Super Admin, Admin, Management, and PM (PMs see only their
 own projects).
 
-**Top stats:** Total Projects, Active, Total Contract Value, **Avg. Delivery**
-(mean Delivery % across projects that have WBS story points).
+Opens on **Active** projects, sorted **worst health first** (Critical → At
+Risk → No data yet → Healthy), so what needs you is at the top. Archived
+projects always sort below live ones.
 
-**Filters:** All / Active / At Risk / Critical / Completed / Archived /
-Deleted (Deleted is Super Admin only), a search box (project, client, or
-PM), and a **Filters** panel (client, stage, health).
+**Top stats (active projects only):** **Active projects** with a health
+split bar · **Needs attention** (Critical + At Risk, plus overdue items;
+click it to filter) · **Contract value in flight** with paid to date ·
+**Avg. Delivery** (mean Delivery % across projects with WBS story points).
 
-**Each card:** name, client, PM, a health dot, a red **"⚠ N overdue"** badge
-(overdue checklist + action items), a **Delivery** bar (story points),
-**Governance %**, **SPI**, contract value, and start → **planned end** (the
-latest milestone date; "Project Timeline" runs from the project's creation date).
+**Filters:** Active / Needs attention / Completed (every tracked checklist
+item done) / Archived / All / Deleted (Super Admin only), a search box
+(project, client, or PM), a **Filters** panel (PM, client, stage, health),
+and **Sort** (health, name, delivery %, next milestone, contract value).
+**Cards** or **Table** view; your choice is remembered in this browser. In
+the table, click a column header to sort, click again to reverse.
 
-**Super Admin actions:** Archive/Unarchive, Delete (soft — goes to the
-Deleted tab), Restore, and Permanent Delete (only from the Deleted tab).
+**Each card:** a coloured left edge for health, name, client, PM, a
+**health label** with its reasons (e.g. "3 open high risks · SPI 0.50"),
+the current **stage**, a red **"⚠ N overdue"** badge (overdue checklist +
+action items), **Governance** and **Delivery** bars, **SPI**, the **next
+milestone** (red when overdue), and contract value with % paid.
+Client and Guest viewers see health, stage and progress only — no health
+reasons, money, or milestones.
 
-**Create Project** (Super Admin): name, client, contract value, planned
-man-days. Seeds every checklist from the Checklist Template and a PM Plan
-with default stakeholder/comms/RACI rows. **No milestones are created** —
-the PM adds the real client milestones on Milestones & Payments. Winning a
-presales opportunity uses the same creation path.
+**Super Admin actions** (card "…" menu): Archive/Unarchive, Delete (soft —
+goes to the Deleted tab), Restore, and Permanent Delete (only from the
+Deleted tab).
+
+**New Project** (Super Admin) opens a dialog: name, client, contract value,
+and optionally the **PM** (must be an active user with the PM role; others
+are added on the Team tab). Seeds every checklist from the Checklist
+Template (the dialog shows the live item counts) and a PM Plan with default
+stakeholder/comms/RACI rows. **No milestones are created** — the PM adds
+the real client milestones on Milestones & Payments. Planned man-days (only
+used by the testing Budget Tracker) is set on the Budget Tracker page.
+Winning a presales opportunity uses the same creation path.
 
 ## 6. Inside a project — Dashboard
 
@@ -431,7 +447,7 @@ Not shown to Management.
 
 Super Admin, Admin, and Management.
 
-- **Stats:** total and active projects; Healthy / At Risk / Critical counts
+- **Stats:** total and active projects; Healthy / At Risk / Critical counts (projects with no data yet appear as their own grey slice in Portfolio Health)
   (active projects only); contract value, collected, outstanding.
 - **Portfolio Health bars** (need ≥ 2 projects with data): Schedule (avg
   SPI), Effort (avg Effort Index), Checklist (share of remaining checklist
@@ -490,7 +506,8 @@ message. Role changes and deactivation take effect on the very next request.
 | **Effort Index** | Story points earned ÷ competency-adjusted man-days (actual hours ÷ 8 × competency multiplier). > 1 = less effort than estimated |
 | **Health — Red** | Any open high risk, **or** SPI < 0.9 |
 | **Health — Amber** | SPI 0.9–0.99, **or** any overdue milestone |
-| **Health — Green** | None of the above (missing data never counts against a project) |
+| **Health — Green** | None of the above, and there is something to judge (a started sprint, a client milestone, or a logged risk) |
+| **Health — No data yet** | None of the above **and** nothing to judge yet — no started sprint, no client milestone, no risk. Shown grey; missing data never counts against a project, but it isn't "Healthy" either |
 | **Milestone due date** | Forecast date if set, otherwise planned date |
 | **Overdue milestone** | Not completed/N/A and due date before today |
 | **Next milestone** | Earliest not-done milestone due today or later |
