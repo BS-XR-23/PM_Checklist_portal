@@ -3,10 +3,11 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import clsx from "clsx";
-import { formatShortDate, formatDate, initials } from "@/lib/format";
+import { formatShortDate, formatDate, formatPct } from "@/lib/format";
 import { RAG_COLORS } from "@/lib/rag";
-import { PRESALES_STAGE_COLORS, avatarColorFromString } from "@/lib/colors";
+import { PRESALES_STAGE_COLORS } from "@/lib/colors";
 import { STAGE_ORDER, STAGE_INFO, formatByCurrency } from "@/lib/presales-stage";
+import { closeCountdownLabel, type DealFlags } from "@/lib/presales-pipeline";
 import { InlineSelect } from "@/components/ui/inline-edit";
 import { PersonPicker } from "@/components/resourcing/person-picker";
 import { InfoTooltip } from "@/components/ui/info-tooltip";
@@ -37,7 +38,12 @@ export type PresalesCardData = {
   createdAt: Date;
   updatedAt: Date;
   wonProject: { id: string; name: string } | null;
+  /** At most one: the next open action item (earliest due). */
   actionItems: { id: string; description: string; dueDate: Date | null }[];
+  openActionCount: number;
+  valueUsd: number;
+  winProbability: number;
+  flags: DealFlags;
 };
 
 const OUTCOME_BADGE: Record<PresalesOutcome, { bg: string; text: string; label: string }> = {
@@ -67,7 +73,8 @@ function matchesSearch(p: PresalesCardData, q: string): boolean {
 function compareRows(a: PresalesCardData, b: PresalesCardData, key: SortKey): number {
   switch (key) {
     case "value":
-      return (b.estimatedValue ?? 0) - (a.estimatedValue ?? 0);
+      // USD-normalized — a BDT figure would otherwise outrank a far larger USD deal.
+      return b.valueUsd - a.valueUsd;
     case "closeDate":
       return (a.expectedCloseDate?.getTime() ?? Infinity) - (b.expectedCloseDate?.getTime() ?? Infinity);
     case "name":
@@ -149,15 +156,15 @@ export function PresalesFilters({
             <FilterPill label="Deleted" count={counts.DELETED} active={filter === "DELETED"} onClick={() => { setFilter("DELETED"); setPage(1); }} />
           )}
         </div>
-        <div className="flex items-center gap-2">
-          <div className="relative">
+        <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
+          <div className="relative w-full sm:w-auto">
             <IconSearch className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
             <input
               type="text"
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1); }}
               placeholder="Search by opportunity, client, or owner…"
-              className="w-72 rounded-md border border-slate-300 pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
+              className="w-full sm:w-72 rounded-md border border-slate-300 pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
             />
           </div>
           <select
@@ -199,11 +206,10 @@ export function PresalesFilters({
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full text-sm min-w-[960px]">
           <thead>
             <tr className="text-left text-[11px] uppercase tracking-wide text-slate-400 border-b border-slate-100 bg-slate-50">
               <th className="px-4 py-2.5 font-medium whitespace-nowrap">Opportunity</th>
-              <th className="px-4 py-2.5 font-medium whitespace-nowrap">Client</th>
               <th className="px-4 py-2.5 font-medium whitespace-nowrap">Deal Owner</th>
               <th className="px-4 py-2.5 font-medium whitespace-nowrap">
                 <span className="inline-flex items-center gap-1">
@@ -213,7 +219,7 @@ export function PresalesFilters({
               </th>
               <th className="px-4 py-2.5 font-medium whitespace-nowrap">Value</th>
               <th className="px-4 py-2.5 font-medium whitespace-nowrap">Close Date</th>
-              <th className="px-4 py-2.5 font-medium whitespace-nowrap">Status</th>
+              <th className="px-4 py-2.5 font-medium whitespace-nowrap">Next Step</th>
               <th className="px-4 py-2.5 font-medium whitespace-nowrap text-right">Actions</th>
             </tr>
           </thead>
@@ -298,7 +304,9 @@ function PresalesRow({
 }) {
   const isDeleted = p.deletedAt !== null;
   const badge = OUTCOME_BADGE[p.outcome];
-  const subtitle = [p.industry, p.technology].filter(Boolean).join(" · ");
+  const showClient = p.client && p.client.trim().toLowerCase() !== p.name.trim().toLowerCase();
+  const subtitle = [showClient ? p.client : null, p.industry, p.technology].filter(Boolean).join(" · ");
+  const next = p.actionItems[0] ?? null;
 
   const actions: RowAction[] = isDeleted
     ? [
@@ -311,23 +319,20 @@ function PresalesRow({
 
   return (
     <tr className={clsx("border-b border-slate-50 last:border-0 hover:bg-slate-50/60", isDeleted && "opacity-60")}>
-      <td className="px-4 py-2.5">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <span
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white"
-            style={{ backgroundColor: avatarColorFromString(p.name) }}
-          >
-            {initials(p.name)}
-          </span>
-          <div className="min-w-0">
-            <Link href={`/presales/${p.id}`} prefetch={false} className="block font-medium text-slate-800 hover:text-blue-600 hover:underline truncate" title={p.name}>
-              {p.name}
-            </Link>
-            {subtitle && <p className="text-xs text-slate-400 truncate">{subtitle}</p>}
-          </div>
+      <td className="px-4 py-2.5 max-w-[280px]">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <Link href={`/presales/${p.id}`} prefetch={false} className="font-medium text-slate-800 hover:text-blue-600 hover:underline truncate" title={p.name}>
+            {p.name}
+          </Link>
+          {!isDeleted && p.flags.stale && (
+            <span className="shrink-0 rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800" title="No activity for more than the stale threshold">
+              Idle {p.flags.idleDays}d
+            </span>
+          )}
+          {!isDeleted && p.onHold && <span className="shrink-0 rounded-full bg-slate-200 px-1.5 py-0.5 text-[10px] font-semibold text-slate-700">On hold</span>}
         </div>
+        {subtitle && <p className="text-xs text-slate-400 truncate">{subtitle}</p>}
       </td>
-      <td className="px-4 py-2.5 text-slate-600 whitespace-nowrap">{p.client || "—"}</td>
       <td className="px-4 py-2.5 whitespace-nowrap">
         {p.outcome === "OPEN" && canWrite ? (
           <PersonPicker
@@ -341,7 +346,9 @@ function PresalesRow({
         )}
       </td>
       <td className="px-4 py-2.5 whitespace-nowrap">
-        {p.outcome === "OPEN" ? (
+        {isDeleted ? (
+          <span className="inline-flex items-center rounded-full bg-red-50 text-red-600 px-2.5 py-0.5 text-xs font-medium">Deleted</span>
+        ) : p.outcome === "OPEN" ? (
           canWrite ? (
             <InlineSelect
               value={p.stage}
@@ -367,24 +374,35 @@ function PresalesRow({
           </span>
         )}
       </td>
-      <td className="px-4 py-2.5 text-slate-700 whitespace-nowrap">{p.estimatedValue ? formatByCurrency(p.estimatedValue, p.estimatedValueCurrency) : "—"}</td>
-      <td className="px-4 py-2.5 text-slate-600 whitespace-nowrap">
+      <td className="px-4 py-2.5 whitespace-nowrap">
+        <span className="font-medium text-slate-800">{p.estimatedValue ? formatByCurrency(p.estimatedValue, p.estimatedValueCurrency) : "—"}</span>
+        {p.outcome === "OPEN" && !isDeleted && <span className="block text-[11px] text-slate-400">{formatPct(p.winProbability)} win</span>}
+      </td>
+      <td className="px-4 py-2.5 whitespace-nowrap">
         {p.expectedCloseDate ? (
-          <span className="inline-flex items-center gap-1.5" title={formatDate(p.expectedCloseDate)}>
-            <IconCalendar className="h-3.5 w-3.5 text-slate-400" />
+          <span
+            className={clsx("inline-flex items-center gap-1.5", p.flags.closeOverdue ? "font-medium text-red-600" : "text-slate-600")}
+            title={`${formatDate(p.expectedCloseDate)}${p.outcome === "OPEN" ? ` — ${closeCountdownLabel(p.flags.closeInDays)}` : ""}`}
+          >
+            <IconCalendar className={clsx("h-3.5 w-3.5", p.flags.closeOverdue ? "text-red-500" : "text-slate-400")} />
             {formatShortDate(p.expectedCloseDate)}
           </span>
         ) : (
-          "—"
+          <span className="text-slate-400">—</span>
         )}
       </td>
-      <td className="px-4 py-2.5 whitespace-nowrap">
-        {isDeleted ? (
-          <span className="inline-flex items-center rounded-full bg-red-50 text-red-600 px-2.5 py-0.5 text-xs font-medium">Deleted</span>
+      <td className="px-4 py-2.5 max-w-[240px]">
+        {p.outcome !== "OPEN" || isDeleted ? (
+          <span className="text-slate-300">—</span>
+        ) : next ? (
+          <div className="min-w-0">
+            <p className="truncate text-slate-700" title={next.description}>
+              {next.description}
+            </p>
+            {next.dueDate && <p className="text-[11px] text-slate-400">due {formatShortDate(next.dueDate)}</p>}
+          </div>
         ) : (
-          <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold" style={{ backgroundColor: badge.bg, color: badge.text }}>
-            {p.outcome === "OPEN" ? "Open" : p.outcome === "WON" ? "Won" : "Lost"}
-          </span>
+          <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800">None planned</span>
         )}
       </td>
       <td className="px-4 py-2.5 text-right">{canWrite && <RowActionsMenu actions={actions} />}</td>

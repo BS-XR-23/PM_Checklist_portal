@@ -16,6 +16,7 @@ async function requirePresalesWrite() {
 
 function revalidateChecklist(presalesProjectId: string) {
   revalidatePath(`/presales/${presalesProjectId}`);
+  revalidatePath("/presales"); // last-activity (stale) flags on the pipeline board
 }
 
 // Bumps the parent's updatedAt so it doubles as a "last activity" signal

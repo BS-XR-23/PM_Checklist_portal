@@ -15,6 +15,7 @@ async function requirePresalesWrite() {
 
 function revalidateActionItems(presalesProjectId: string) {
   revalidatePath(`/presales/${presalesProjectId}`);
+  revalidatePath("/presales"); // the pipeline board shows each deal's next step
 }
 
 // Bumps the parent's updatedAt so it doubles as a "last activity" signal —
@@ -23,12 +24,21 @@ function touchPresalesProject(presalesProjectId: string) {
   return prisma.presalesProject.update({ where: { id: presalesProjectId }, data: { updatedAt: new Date() } });
 }
 
-export async function createPresalesActionItem(presalesProjectId: string) {
+export async function createPresalesActionItem(
+  presalesProjectId: string,
+  input?: { description?: string; dueDate?: string | null; ownerPersonId?: string | null }
+) {
   const user = await requirePresalesWrite();
 
   const count = await prisma.presalesActionItem.count({ where: { presalesProjectId } });
   const created = await prisma.presalesActionItem.create({
-    data: { presalesProjectId, description: "New action item", order: count },
+    data: {
+      presalesProjectId,
+      description: input?.description?.trim() || "New action item",
+      dueDate: input?.dueDate ? parseDateInput(input.dueDate) : null,
+      ownerPersonId: input?.ownerPersonId || null,
+      order: count,
+    },
   });
   await touchPresalesProject(presalesProjectId);
 
@@ -37,7 +47,7 @@ export async function createPresalesActionItem(presalesProjectId: string) {
     action: "create",
     entityType: "PresalesActionItem",
     entityId: created.id,
-    summary: "Added a new presales action item",
+    summary: `Added presales action item "${created.description.slice(0, 60)}"`,
   });
 
   revalidateActionItems(presalesProjectId);

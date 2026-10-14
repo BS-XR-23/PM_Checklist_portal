@@ -388,16 +388,33 @@ who, role, action, and summary. TPM overrides are tagged distinctly.
 Deals that aren't projects yet. Visible to Super Admin, PM, Admin,
 Management; only Super Admin and PM edit.
 
-- **List:** open opportunities, open pipeline value, win rate; filters Open /
-  Won / Lost / All / Deleted. Cards flag overdue or due-soon close dates and
-  **stale** deals (no activity for 10 days, unless on hold).
-- **Details:** name, client, deal owner, estimated value (USD or BDT,
-  converted at a fixed 122 BDT/USD), expected close date, **stage** (Lead ·
-  Qualifying · Proposal · Negotiation), forecast category, start date, sales
-  contact, estimated by, lead type, POC done, practice area, industry,
-  technology, source, on hold (+ reason), presale folder link, description.
-- **Presales checklist** (flat, from the template), **Decision Log**,
-  **Action Items**.
+- **Tiles:** Open pipeline, **Weighted forecast** (each deal's value × its
+  stage's win probability), Closing in 30 days, **Needs attention**, Win
+  rate (won ÷ won + lost). Values are converted to USD at a fixed 122 BDT/USD.
+- **Win probability comes from the stage** and is never typed in: Lead 10% ·
+  Qualifying 25% · Proposal 50% · Negotiation 75% (`lib/presales-pipeline.ts`).
+  **Owner's forecast** (Likely to Win / Possible / Long Shot) is the deal
+  owner's own read on top of that.
+- **Needs attention** = an open deal that is past its expected close date,
+  **stale** (no activity for more than 10 days, unless on hold), or has **no
+  next step** (no open action item, unless on hold).
+- **Board view** (default): one column per stage with its count, value and
+  win %. Each card shows value, owner, close date (red when past), the next
+  step, and badges for Past close date, Idle Nd, On hold, forecast and POC.
+  Super Admin and PM drag a card to another column to change its stage.
+  Won and Lost deals are under **Closed deals**. **Table view** has the
+  Open / Won / Lost / All / Deleted filters, stage and owner filters, and
+  sorting. The view you pick is remembered in your browser.
+- **Deal page:** a header with value, win probability, close-date countdown,
+  owner, a clickable **stage bar**, and warnings for anything that needs
+  attention. Below it: **Next steps** (action items as a to-do list with
+  quick-add; the earliest due one appears on the board card), **Decision
+  log** (a dated timeline with quick-add), the **Presales checklist**, and
+  **Deal details** grouped into Basics, Commercial, Timeline, People,
+  Classification and Files.
+- **New opportunity** asks for six things (name, client, owner, value, close
+  date, stage); everything else is under **More details** or can be added
+  on the deal page.
 - **Mark as Won** creates a real project (same seeding as Create Project) and
   copies the deal's decisions and action items into it, and its checklist
   items into the PM checklist's **Presales** stage. The new project links

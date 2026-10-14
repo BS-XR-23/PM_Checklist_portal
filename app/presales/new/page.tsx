@@ -20,8 +20,8 @@ export default async function NewPresalesPage() {
     <AppShell user={user}>
       <header className="border-b border-slate-200 bg-white px-4 sm:px-6 py-4">
         <Link href="/presales" className="text-xs text-slate-400 hover:text-slate-600">← Presales</Link>
-        <h1 className="text-lg font-semibold text-slate-900">Create Opportunity</h1>
-        <p className="text-sm text-slate-500">Capture and track a presales opportunity, follow-up actions, and convert it into a project.</p>
+        <h1 className="text-lg font-semibold text-slate-900">New opportunity</h1>
+        <p className="text-sm text-slate-500">Get the deal on the pipeline board — next steps, decisions, and the rest of the details go on the deal page.</p>
       </header>
 
       <main className="p-4 sm:p-6">

@@ -2,13 +2,12 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
+import clsx from "clsx";
 import { InlineText, InlineTextarea, InlineNumber, InlineDate, InlineSelect } from "@/components/ui/inline-edit";
 import { PersonPicker } from "@/components/resourcing/person-picker";
-import { InfoTooltip } from "@/components/ui/info-tooltip";
-import { IconExternalLink, IconFileText } from "@/components/layout/icons";
-import { formatDate, toDateInputValue } from "@/lib/format";
-import { RAG_COLORS } from "@/lib/rag";
-import { PRESALES_STAGE_COLORS, FORECAST_CATEGORY_COLORS } from "@/lib/colors";
+import { IconExternalLink } from "@/components/layout/icons";
+import { formatDate, formatPct, initials, toDateInputValue } from "@/lib/format";
+import { PRESALES_STAGE_COLORS, FORECAST_CATEGORY_COLORS, avatarColorFromString } from "@/lib/colors";
 import {
   STAGE_ORDER,
   STAGE_INFO,
@@ -19,7 +18,9 @@ import {
   usdEquivalent,
   formatByCurrency,
   USD_TO_BDT_RATE,
+  PRESALES_STALE_DAYS,
 } from "@/lib/presales-stage";
+import { STAGE_WIN_PROBABILITY, closeCountdownLabel, type DealFlags } from "@/lib/presales-pipeline";
 import { updatePresalesProject, winPresalesProject, markPresalesLost, reopenPresalesProject } from "../actions";
 import type { PresalesOutcome, PresalesStage, PresalesForecastCategory, PresalesCurrency, PresalesSource, PresalesLeadType } from "@prisma/client";
 
@@ -52,310 +53,221 @@ export type PresalesOverviewData = {
   wonProject: { id: string; name: string } | null;
 };
 
-const OUTCOME_BADGE: Record<PresalesOutcome, { bg: string; text: string; label: string }> = {
-  OPEN: RAG_COLORS.AMBER,
-  WON: RAG_COLORS.GREEN,
-  LOST: RAG_COLORS.RED,
-};
+const OUTCOME_ACCENT: Record<PresalesOutcome, string> = { OPEN: "", WON: "#10B981", LOST: "#EF4444" };
 
-export function PresalesOverview({
-  data,
-  canWrite,
-  people,
-}: {
-  data: PresalesOverviewData;
-  canWrite: boolean;
-  people: { id: string; name: string }[];
-}) {
-  const badge = OUTCOME_BADGE[data.outcome];
+// ---------------------------------------------------------------------------
+// Hero — the at-a-glance summary: what it's worth, how likely, when, who,
+// where it sits in the pipeline, and what's wrong with it right now.
+// ---------------------------------------------------------------------------
+
+export function PresalesHero({ data, flags, canWrite }: { data: PresalesOverviewData; flags: DealFlags; canWrite: boolean }) {
+  const isOpen = data.outcome === "OPEN";
+  const accent = isOpen ? PRESALES_STAGE_COLORS[data.stage].text : OUTCOME_ACCENT[data.outcome];
+  const subtitle = [data.client && data.client.trim().toLowerCase() !== data.name.trim().toLowerCase() ? data.client : null, data.industry, data.technology]
+    .filter(Boolean)
+    .join(" · ");
+
+  const alerts: { tone: "red" | "amber"; text: string }[] = [];
+  if (flags.closeOverdue) {
+    alerts.push({ tone: "red", text: `Expected close date passed ${-(flags.closeInDays ?? 0)} day${flags.closeInDays === -1 ? "" : "s"} ago — move the date, or mark the deal Won or Lost.` });
+  }
+  if (flags.stale) alerts.push({ tone: "amber", text: `No activity for ${flags.idleDays} days (stale after ${PRESALES_STALE_DAYS}). Log a decision or a next step to keep it warm.` });
+  if (flags.noNextStep) alerts.push({ tone: "amber", text: "No next step planned — add one below so this deal doesn't drift." });
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-5 space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <span className="inline-flex items-center justify-center h-7 w-7 rounded-full bg-blue-50 text-blue-600">
-            <IconFileText className="h-4 w-4" />
-          </span>
-          <h2 className="text-sm font-semibold text-slate-700">Presale Details</h2>
-        </div>
-        <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold shrink-0" style={{ backgroundColor: badge.bg, color: badge.text }}>
-          {data.outcome === "OPEN" ? "In Progress" : data.outcome === "WON" ? "Won" : "Lost"}
-        </span>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div>
-          <p className="text-xs font-medium text-slate-500 mb-1">Project / Opportunity Name</p>
-          {canWrite ? (
-            <InlineText value={data.name} onSave={(v) => updatePresalesProject(data.id, { name: v })} />
-          ) : (
-            <p className="text-sm text-slate-800">{data.name}</p>
-          )}
-        </div>
-        <div>
-          <p className="text-xs font-medium text-slate-500 mb-1">Client</p>
-          {canWrite ? (
-            <InlineText value={data.client ?? ""} onSave={(v) => updatePresalesProject(data.id, { client: v })} placeholder="Client" />
-          ) : (
-            <p className="text-sm text-slate-800">{data.client || "—"}</p>
-          )}
-        </div>
-        <div>
-          <p className="text-xs font-medium text-slate-500 mb-1">Deal Owner</p>
-          {canWrite ? (
-            <div className="rounded border border-slate-200">
-              <PersonPicker
-                personId={data.dealOwnerPersonId}
-                legacyText={null}
-                people={people}
-                onSave={(id) => updatePresalesProject(data.id, { dealOwnerPersonId: id })}
-              />
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="h-1.5" style={{ backgroundColor: accent }} />
+      <div className="space-y-5 p-5 sm:p-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
+            <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
+              <OutcomePill outcome={data.outcome} />
+              {data.onHold && isOpen && <Pill className="bg-slate-200 text-slate-700">On hold</Pill>}
+              {data.forecastCategory && isOpen && (
+                <Pill style={{ backgroundColor: FORECAST_CATEGORY_COLORS[data.forecastCategory].bg, color: FORECAST_CATEGORY_COLORS[data.forecastCategory].text }}>
+                  {FORECAST_CATEGORY_COLORS[data.forecastCategory].label}
+                </Pill>
+              )}
+              {data.pocDone && <Pill className="bg-emerald-50 text-emerald-700">POC done</Pill>}
             </div>
-          ) : (
-            <p className="text-sm text-slate-800">{data.dealOwnerPerson?.name ?? "—"}</p>
-          )}
+            <h1 className="text-2xl font-bold leading-tight text-slate-900">{data.name}</h1>
+            {subtitle && <p className="mt-0.5 text-sm text-slate-500">{subtitle}</p>}
+          </div>
+          {canWrite && <OutcomeActions data={data} />}
         </div>
-      </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div>
-          <p className="text-xs font-medium text-slate-500 mb-1">Estimated Value</p>
-          {canWrite ? (
-            <div className="flex items-center gap-1.5">
-              <InlineNumber value={data.estimatedValue} onSave={(v) => updatePresalesProject(data.id, { estimatedValue: v })} step={0.01} />
-              <InlineSelect
-                value={data.estimatedValueCurrency}
-                options={["USD", "BDT"]}
-                className="rounded-md border border-slate-200 px-1.5 py-1 text-xs"
-                onSave={(v) => updatePresalesProject(data.id, { estimatedValueCurrency: v as PresalesCurrency })}
-              />
-            </div>
-          ) : (
-            <p className="text-sm text-slate-800">{data.estimatedValue ? formatByCurrency(data.estimatedValue, data.estimatedValueCurrency) : "—"}</p>
-          )}
-          {data.estimatedValue != null && (
-            <p className="text-xs text-slate-400 mt-0.5">
-              {/* Derived, never stored — same "don't let two numbers drift apart" principle as win probability. */}
-              ≈{" "}
-              {data.estimatedValueCurrency === "USD"
-                ? formatByCurrency(data.estimatedValue * USD_TO_BDT_RATE, "BDT")
-                : formatByCurrency(usdEquivalent(data.estimatedValue, data.estimatedValueCurrency), "USD")}
-              {" · 1 USD = "}
-              {USD_TO_BDT_RATE} BDT
-            </p>
-          )}
-        </div>
-        <div>
-          <p className="text-xs font-medium text-slate-500 mb-1">Expected Close Date</p>
-          {canWrite ? (
-            <InlineDate value={toDateInputValue(data.expectedCloseDate)} onSave={(v) => updatePresalesProject(data.id, { expectedCloseDate: v })} />
-          ) : (
-            <p className="text-sm text-slate-800">{formatDate(data.expectedCloseDate)}</p>
-          )}
-        </div>
-        {data.outcome === "OPEN" && (
-          <div>
-            <p className="text-xs font-medium text-slate-500 mb-1 flex items-center gap-1">
-              Stage
-              <InfoTooltip text={STAGE_INFO[data.stage]} />
-            </p>
-            {canWrite ? (
-              <InlineSelect
-                value={data.stage}
-                options={STAGE_ORDER}
-                renderOption={(s) => PRESALES_STAGE_COLORS[s as PresalesStage].label}
-                className="rounded-full border-0 px-2.5 py-0.5 text-xs font-semibold"
-                style={{ backgroundColor: PRESALES_STAGE_COLORS[data.stage].bg, color: PRESALES_STAGE_COLORS[data.stage].text }}
-                onSave={(v) => updatePresalesProject(data.id, { stage: v as PresalesStage })}
-              />
-            ) : (
-              <span
-                className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold"
-                style={{ backgroundColor: PRESALES_STAGE_COLORS[data.stage].bg, color: PRESALES_STAGE_COLORS[data.stage].text }}
-              >
-                {PRESALES_STAGE_COLORS[data.stage].label}
-              </span>
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <Metric label="Estimated value">
+            <p className="text-2xl font-bold text-slate-900">{data.estimatedValue ? formatByCurrency(data.estimatedValue, data.estimatedValueCurrency) : "—"}</p>
+            {data.estimatedValue != null && (
+              <p className="text-xs text-slate-400">
+                ≈{" "}
+                {data.estimatedValueCurrency === "USD"
+                  ? formatByCurrency(data.estimatedValue * USD_TO_BDT_RATE, "BDT")
+                  : formatByCurrency(usdEquivalent(data.estimatedValue, data.estimatedValueCurrency), "USD")}
+              </p>
             )}
-          </div>
-        )}
-      </div>
-
-      {data.outcome === "OPEN" && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <div>
-            <p className="text-xs font-medium text-slate-500 mb-1">Start Date</p>
-            {canWrite ? (
-              <InlineDate value={toDateInputValue(data.startDate)} onSave={(v) => updatePresalesProject(data.id, { startDate: v })} />
+          </Metric>
+          <Metric label={isOpen ? "Win probability" : "Outcome"}>
+            {isOpen ? (
+              <>
+                <p className="text-2xl font-bold" style={{ color: PRESALES_STAGE_COLORS[data.stage].text }}>
+                  {formatPct(STAGE_WIN_PROBABILITY[data.stage])}
+                </p>
+                <p className="text-xs text-slate-400">from {PRESALES_STAGE_COLORS[data.stage].label} stage</p>
+              </>
             ) : (
-              <p className="text-sm text-slate-800">{formatDate(data.startDate)}</p>
-            )}
-          </div>
-          <div>
-            <p className="text-xs font-medium text-slate-500 mb-1">Sales Contact</p>
-            {canWrite ? (
-              <InlineText value={data.salesContact ?? ""} onSave={(v) => updatePresalesProject(data.id, { salesContact: v })} placeholder="Who brought in this lead" />
-            ) : (
-              <p className="text-sm text-slate-800">{data.salesContact || "—"}</p>
-            )}
-          </div>
-          <div>
-            <p className="text-xs font-medium text-slate-500 mb-1">Estimated By</p>
-            {canWrite ? (
-              <InlineText value={data.estimatedBy ?? ""} onSave={(v) => updatePresalesProject(data.id, { estimatedBy: v })} placeholder="Who scoped the estimate" />
-            ) : (
-              <p className="text-sm text-slate-800">{data.estimatedBy || "—"}</p>
-            )}
-          </div>
-          <div>
-            <p className="text-xs font-medium text-slate-500 mb-1">Lead Type</p>
-            {canWrite ? (
-              <InlineSelect
-                value={data.leadType ?? ""}
-                options={["", ...LEAD_TYPE_ORDER]}
-                renderOption={(v) => (v ? LEAD_TYPE_LABELS[v as PresalesLeadType] : "—")}
-                onSave={(v) => updatePresalesProject(data.id, { leadType: v ? (v as PresalesLeadType) : null })}
-              />
-            ) : (
-              <p className="text-sm text-slate-800">{data.leadType ? LEAD_TYPE_LABELS[data.leadType] : "—"}</p>
-            )}
-          </div>
-        </div>
-      )}
-
-      {data.outcome === "OPEN" && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-          <div>
-            <p className="text-xs font-medium text-slate-500 mb-1">POC Done?</p>
-            {canWrite ? (
-              <BooleanToggle
-                value={data.pocDone}
-                trueLabel="✓ POC Done"
-                falseLabel="POC Not Done"
-                onSave={(v) => updatePresalesProject(data.id, { pocDone: v })}
-              />
-            ) : (
-              <p className="text-sm text-slate-800">{data.pocDone ? "Yes" : "No"}</p>
-            )}
-          </div>
-          <div>
-            <p className="text-xs font-medium text-slate-500 mb-1">Forecast Category</p>
-            {canWrite ? (
-              <InlineSelect
-                value={data.forecastCategory ?? ""}
-                options={["", "COMMIT", "BEST_CASE", "PIPELINE"]}
-                renderOption={(v) => (v ? FORECAST_CATEGORY_COLORS[v as PresalesForecastCategory].label : "—")}
-                className="rounded-full border-0 px-2.5 py-0.5 text-xs font-semibold"
-                style={
-                  data.forecastCategory
-                    ? { backgroundColor: FORECAST_CATEGORY_COLORS[data.forecastCategory].bg, color: FORECAST_CATEGORY_COLORS[data.forecastCategory].text }
-                    : { backgroundColor: "#F1F5F9", color: "#64748B" }
-                }
-                onSave={(v) => updatePresalesProject(data.id, { forecastCategory: v ? (v as PresalesForecastCategory) : null })}
-              />
-            ) : data.forecastCategory ? (
-              <span
-                className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold"
-                style={{ backgroundColor: FORECAST_CATEGORY_COLORS[data.forecastCategory].bg, color: FORECAST_CATEGORY_COLORS[data.forecastCategory].text }}
-              >
-                {FORECAST_CATEGORY_COLORS[data.forecastCategory].label}
-              </span>
-            ) : (
-              <p className="text-sm text-slate-400">—</p>
-            )}
-          </div>
-          <div>
-            <p className="text-xs font-medium text-slate-500 mb-1">Practice Area</p>
-            {canWrite ? (
-              <InlineText value={data.practiceArea ?? ""} onSave={(v) => updatePresalesProject(data.id, { practiceArea: v })} placeholder="e.g. XR, InsurTech" />
-            ) : (
-              <p className="text-sm text-slate-800">{data.practiceArea || "—"}</p>
-            )}
-          </div>
-          <div>
-            <p className="text-xs font-medium text-slate-500 mb-1">Industry</p>
-            {canWrite ? (
-              <InlineText value={data.industry ?? ""} onSave={(v) => updatePresalesProject(data.id, { industry: v })} placeholder="e.g. Education, Insurance" />
-            ) : (
-              <p className="text-sm text-slate-800">{data.industry || "—"}</p>
-            )}
-          </div>
-          <div>
-            <p className="text-xs font-medium text-slate-500 mb-1">Technology</p>
-            {canWrite ? (
-              <InlineText value={data.technology ?? ""} onSave={(v) => updatePresalesProject(data.id, { technology: v })} placeholder="e.g. AI/RAG, Mobile" />
-            ) : (
-              <p className="text-sm text-slate-800">{data.technology || "—"}</p>
-            )}
-          </div>
-          <div>
-            <p className="text-xs font-medium text-slate-500 mb-1">Source</p>
-            {canWrite ? (
-              <InlineSelect
-                value={data.source ?? ""}
-                options={["", ...SOURCE_ORDER]}
-                renderOption={(v) => (v ? SOURCE_LABELS[v as PresalesSource] : "—")}
-                onSave={(v) => updatePresalesProject(data.id, { source: v ? (v as PresalesSource) : null })}
-              />
-            ) : (
-              <p className="text-sm text-slate-800">{data.source ? SOURCE_LABELS[data.source] : "—"}</p>
-            )}
-          </div>
-        </div>
-      )}
-
-      {data.outcome === "OPEN" && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div>
-            <p className="text-xs font-medium text-slate-500 mb-1">On Hold?</p>
-            {canWrite ? (
-              <BooleanToggle
-                value={data.onHold}
-                trueLabel="On Hold"
-                falseLabel="Active"
-                onSave={(v) => updatePresalesProject(data.id, { onHold: v })}
-              />
-            ) : (
-              <p className="text-sm text-slate-800">{data.onHold ? "On Hold" : "Active"}</p>
-            )}
-            {data.onHold && (
-              <div className="mt-1.5">
-                {canWrite ? (
-                  <InlineText value={data.holdReason ?? ""} onSave={(v) => updatePresalesProject(data.id, { holdReason: v })} placeholder="Why is this on hold?" />
-                ) : (
-                  data.holdReason && <p className="text-xs text-slate-500">{data.holdReason}</p>
+              <>
+                <p className={clsx("text-2xl font-bold", data.outcome === "WON" ? "text-emerald-600" : "text-red-600")}>{data.outcome === "WON" ? "Won" : "Lost"}</p>
+                {data.outcome === "WON" && data.wonProject && (
+                  <Link href={`/projects/${data.wonProject.id}/dashboard`} className="text-xs font-medium text-emerald-700 hover:underline">
+                    → {data.wonProject.name}
+                  </Link>
                 )}
-              </div>
+                {data.outcome === "LOST" && data.lostReason && <p className="text-xs text-slate-500 line-clamp-2">{data.lostReason}</p>}
+              </>
             )}
-          </div>
-          <div className="sm:col-span-2">
-            <p className="text-xs font-medium text-slate-500 mb-1">Presale Folder Link</p>
-            <PresaleFolderLink
-              value={data.presaleFolderLink}
-              canWrite={canWrite}
-              onSave={(v) => updatePresalesProject(data.id, { presaleFolderLink: v })}
-            />
-          </div>
+          </Metric>
+          <Metric label="Expected close">
+            <p className={clsx("text-lg font-semibold", flags.closeOverdue ? "text-red-600" : "text-slate-900")}>{formatDate(data.expectedCloseDate)}</p>
+            {isOpen && flags.closeInDays !== null && (
+              <p className={clsx("text-xs", flags.closeOverdue ? "font-medium text-red-600" : "text-slate-400")}>{closeCountdownLabel(flags.closeInDays)}</p>
+            )}
+          </Metric>
+          <Metric label="Deal owner">
+            {data.dealOwnerPerson ? (
+              <div className="flex items-center gap-2">
+                <span
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white"
+                  style={{ backgroundColor: avatarColorFromString(data.dealOwnerPerson.name) }}
+                >
+                  {initials(data.dealOwnerPerson.name)}
+                </span>
+                <span className="text-sm font-semibold text-slate-900">{data.dealOwnerPerson.name}</span>
+              </div>
+            ) : (
+              <p className="text-sm text-slate-400">Unassigned</p>
+            )}
+          </Metric>
         </div>
-      )}
 
-      <div>
-        <p className="text-xs font-medium text-slate-500 mb-1">Description</p>
-        {canWrite ? (
-          <InlineTextarea value={data.description ?? ""} onSave={(v) => updatePresalesProject(data.id, { description: v })} placeholder="What is this opportunity, and why might it happen?" />
-        ) : (
-          <p className="text-sm text-slate-800 whitespace-pre-wrap">{data.description || "—"}</p>
+        <StageStepper data={data} canWrite={canWrite} />
+
+        {isOpen && alerts.length > 0 && (
+          <ul className="space-y-1.5">
+            {alerts.map((a) => (
+              <li
+                key={a.text}
+                className={clsx(
+                  "flex items-start gap-2 rounded-lg px-3 py-2 text-sm",
+                  a.tone === "red" ? "bg-red-50 text-red-800" : "bg-amber-50 text-amber-900"
+                )}
+              >
+                <span aria-hidden>⚠</span>
+                {a.text}
+              </li>
+            ))}
+          </ul>
         )}
       </div>
+    </section>
+  );
+}
 
-      {canWrite && <OutcomeActions data={data} />}
-      {!canWrite && data.outcome === "LOST" && data.lostReason && (
-        <p className="text-sm text-slate-500">Lost reason: {data.lostReason}</p>
-      )}
-      {data.outcome === "WON" && data.wonProject && (
-        <Link href={`/projects/${data.wonProject.id}/dashboard`} className="inline-block text-sm font-medium text-emerald-700 hover:underline">
-          → View project: {data.wonProject.name}
-        </Link>
-      )}
+function Metric({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="min-w-0 rounded-xl bg-slate-50 px-3.5 py-3">
+      <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-slate-500">{label}</p>
+      {children}
+    </div>
+  );
+}
+
+function Pill({ children, className, style }: { children: React.ReactNode; className?: string; style?: React.CSSProperties }) {
+  return (
+    <span className={clsx("inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold", className)} style={style}>
+      {children}
+    </span>
+  );
+}
+
+function OutcomePill({ outcome }: { outcome: PresalesOutcome }) {
+  if (outcome === "WON") return <Pill className="bg-emerald-100 text-emerald-800">Won</Pill>;
+  if (outcome === "LOST") return <Pill className="bg-red-100 text-red-800">Lost</Pill>;
+  return <Pill className="bg-blue-50 text-blue-700">In progress</Pill>;
+}
+
+/**
+ * The pipeline as a clickable progress bar — the stage is the thing that
+ * changes most often in presales, so it gets one click instead of a
+ * dropdown buried among 18 fields.
+ */
+function StageStepper({ data, canWrite }: { data: PresalesOverviewData; canWrite: boolean }) {
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const isOpen = data.outcome === "OPEN";
+  const currentIdx = STAGE_ORDER.indexOf(data.stage);
+
+  const move = (stage: PresalesStage) => {
+    if (!canWrite || !isOpen || stage === data.stage) return;
+    setError(null);
+    startTransition(async () => {
+      try {
+        await updatePresalesProject(data.id, { stage });
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to change stage.");
+      }
+    });
+  };
+
+  return (
+    <div>
+      <ol className={clsx("grid grid-cols-2 gap-1.5 sm:grid-cols-5", pending && "opacity-60")}>
+        {STAGE_ORDER.map((stage, i) => {
+          const color = PRESALES_STAGE_COLORS[stage];
+          const reached = isOpen ? i <= currentIdx : data.outcome === "WON" || i <= currentIdx;
+          const current = isOpen && i === currentIdx;
+          return (
+            <li key={stage}>
+              <button
+                type="button"
+                disabled={!canWrite || !isOpen || pending}
+                onClick={() => move(stage)}
+                title={STAGE_INFO[stage]}
+                className={clsx(
+                  "flex w-full flex-col items-start rounded-lg border px-3 py-2 text-left transition-colors",
+                  current ? "border-transparent shadow-sm" : reached ? "border-transparent" : "border-slate-200 bg-white",
+                  canWrite && isOpen && !current && "hover:border-slate-400",
+                  (!canWrite || !isOpen) && "cursor-default"
+                )}
+                style={current ? { backgroundColor: color.text, color: "#fff" } : reached ? { backgroundColor: color.bg, color: color.text } : undefined}
+              >
+                <span className={clsx("text-[10px] font-semibold uppercase tracking-wide", !reached && "text-slate-400")}>
+                  {i + 1} · {formatPct(STAGE_WIN_PROBABILITY[stage])}
+                </span>
+                <span className={clsx("text-sm font-semibold", !reached && "text-slate-500")}>{color.label}</span>
+              </button>
+            </li>
+          );
+        })}
+        <li className="col-span-2 sm:col-span-1">
+          <div
+            className={clsx(
+              "flex w-full flex-col items-start rounded-lg border px-3 py-2",
+              data.outcome === "WON"
+                ? "border-transparent bg-emerald-600 text-white"
+                : data.outcome === "LOST"
+                  ? "border-transparent bg-red-600 text-white"
+                  : "border-dashed border-slate-300 text-slate-400"
+            )}
+          >
+            <span className="text-[10px] font-semibold uppercase tracking-wide">Outcome</span>
+            <span className="text-sm font-semibold">{data.outcome === "WON" ? "Won ✓" : data.outcome === "LOST" ? "Lost" : "Won / Lost"}</span>
+          </div>
+        </li>
+      </ol>
+      {isOpen && <p className="mt-1.5 text-xs text-slate-500">{STAGE_INFO[data.stage]}</p>}
+      {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
     </div>
   );
 }
@@ -369,38 +281,37 @@ function OutcomeActions({ data }: { data: PresalesOverviewData }) {
 
   if (data.outcome === "LOST") {
     return (
-      <div className="flex items-center gap-3 pt-1 border-t border-slate-100">
-        <button
-          onClick={() => startTransition(() => reopenPresalesProject(data.id))}
-          disabled={pending}
-          className="text-sm font-medium text-slate-600 hover:text-slate-900 disabled:opacity-50"
-        >
-          {pending ? "..." : "Reopen"}
-        </button>
-      </div>
+      <button
+        onClick={() => startTransition(() => reopenPresalesProject(data.id))}
+        disabled={pending}
+        className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+      >
+        {pending ? "Reopening..." : "Reopen deal"}
+      </button>
     );
   }
 
   if (showLostForm) {
     return (
-      <div className="pt-1 border-t border-slate-100 space-y-2">
-        <label className="block text-xs font-medium text-slate-600">Why was this lost?</label>
+      <div className="w-full max-w-sm space-y-2 rounded-lg border border-red-200 bg-red-50/50 p-3">
+        <label className="block text-xs font-medium text-slate-700">Why was this lost?</label>
         <textarea
           value={lostReason}
           onChange={(e) => setLostReason(e.target.value)}
           rows={2}
-          className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+          autoFocus
+          className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
           placeholder="Budget cut, went with a competitor, timing..."
         />
         <div className="flex gap-2">
           <button
             onClick={() => startTransition(() => markPresalesLost(data.id, lostReason))}
             disabled={pending}
-            className="rounded-md bg-red-600 text-white text-sm font-medium px-3 py-1.5 hover:bg-red-700 disabled:opacity-50"
+            className="rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
           >
-            {pending ? "..." : "Confirm Lost"}
+            {pending ? "..." : "Confirm lost"}
           </button>
-          <button onClick={() => setShowLostForm(false)} className="rounded-md border border-slate-300 text-slate-600 text-sm font-medium px-3 py-1.5 hover:bg-slate-50">
+          <button onClick={() => setShowLostForm(false)} className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50">
             Cancel
           </button>
         </div>
@@ -409,30 +320,209 @@ function OutcomeActions({ data }: { data: PresalesOverviewData }) {
   }
 
   return (
-    <div className="flex items-center gap-3 pt-1 border-t border-slate-100">
+    <div className="flex shrink-0 items-center gap-2">
+      <button
+        onClick={() => setShowLostForm(true)}
+        disabled={pending}
+        className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+      >
+        Mark as lost
+      </button>
       <button
         onClick={() => {
           if (!window.confirm(`Mark "${data.name}" as Won? This creates a new active project with the standard checklist, seeded from this opportunity.`)) return;
           startTransition(() => winPresalesProject(data.id));
         }}
         disabled={pending}
-        className="rounded-md bg-emerald-600 text-white text-sm font-medium px-3 py-1.5 hover:bg-emerald-700 disabled:opacity-50"
+        className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50"
       >
-        {pending ? "..." : "Mark as Won"}
-      </button>
-      <button
-        onClick={() => setShowLostForm(true)}
-        disabled={pending}
-        className="rounded-md border border-slate-300 text-slate-600 text-sm font-medium px-3 py-1.5 hover:bg-slate-50 disabled:opacity-50"
-      >
-        Mark as Lost
+        {pending ? "..." : "🏆 Mark as won"}
       </button>
     </div>
   );
 }
 
-// Same pill-toggle pattern as PresalesActionItemStatusToggle, generalized
-// for any boolean field on the opportunity itself (POC Done, Competitive Bid).
+// ---------------------------------------------------------------------------
+// Details — every field, grouped by what it's for instead of one flat wall.
+// ---------------------------------------------------------------------------
+
+export function PresalesDetails({
+  data,
+  canWrite,
+  people,
+}: {
+  data: PresalesOverviewData;
+  canWrite: boolean;
+  people: { id: string; name: string }[];
+}) {
+  const save = (changes: Parameters<typeof updatePresalesProject>[1]) => updatePresalesProject(data.id, changes);
+  const text = (value: string | null, field: "name" | "client" | "salesContact" | "estimatedBy" | "practiceArea" | "industry" | "technology", placeholder?: string) =>
+    canWrite ? <InlineText value={value ?? ""} onSave={(v) => save({ [field]: v })} placeholder={placeholder} /> : <ReadValue>{value}</ReadValue>;
+
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <header className="border-b border-slate-100 px-5 py-3.5">
+        <h2 className="text-base font-semibold text-slate-900">Deal details</h2>
+      </header>
+      <div className="divide-y divide-slate-100">
+        <Group title="Basics">
+          <Field label="Opportunity name">{text(data.name, "name")}</Field>
+          <Field label="Client">{text(data.client, "client", "Client company")}</Field>
+          <Field label="Deal owner">
+            {canWrite ? (
+              <PersonPicker personId={data.dealOwnerPersonId} legacyText={null} people={people} onSave={(id) => save({ dealOwnerPersonId: id })} />
+            ) : (
+              <ReadValue>{data.dealOwnerPerson?.name}</ReadValue>
+            )}
+          </Field>
+          <Field label="Description" wide>
+            {canWrite ? (
+              <InlineTextarea value={data.description ?? ""} onSave={(v) => save({ description: v })} placeholder="What is this opportunity, and why might it happen?" />
+            ) : (
+              <p className="whitespace-pre-wrap text-sm text-slate-800">{data.description || "—"}</p>
+            )}
+          </Field>
+        </Group>
+
+        <Group title="Commercial">
+          <Field label="Estimated value">
+            {canWrite ? (
+              <div className="flex items-center gap-1.5">
+                <InlineNumber value={data.estimatedValue} onSave={(v) => save({ estimatedValue: v })} step={0.01} />
+                <InlineSelect
+                  value={data.estimatedValueCurrency}
+                  options={["USD", "BDT"]}
+                  className="rounded-md border border-slate-200 px-1.5 py-1 text-xs"
+                  onSave={(v) => save({ estimatedValueCurrency: v as PresalesCurrency })}
+                />
+              </div>
+            ) : (
+              <ReadValue>{data.estimatedValue ? formatByCurrency(data.estimatedValue, data.estimatedValueCurrency) : null}</ReadValue>
+            )}
+            <p className="mt-0.5 text-[11px] text-slate-400">1 USD = {USD_TO_BDT_RATE} BDT</p>
+          </Field>
+          <Field label="Lead type">
+            {canWrite ? (
+              <InlineSelect
+                value={data.leadType ?? ""}
+                options={["", ...LEAD_TYPE_ORDER]}
+                renderOption={(v) => (v ? LEAD_TYPE_LABELS[v as PresalesLeadType] : "—")}
+                onSave={(v) => save({ leadType: v ? (v as PresalesLeadType) : null })}
+              />
+            ) : (
+              <ReadValue>{data.leadType ? LEAD_TYPE_LABELS[data.leadType] : null}</ReadValue>
+            )}
+          </Field>
+          <Field label="Source">
+            {canWrite ? (
+              <InlineSelect
+                value={data.source ?? ""}
+                options={["", ...SOURCE_ORDER]}
+                renderOption={(v) => (v ? SOURCE_LABELS[v as PresalesSource] : "—")}
+                onSave={(v) => save({ source: v ? (v as PresalesSource) : null })}
+              />
+            ) : (
+              <ReadValue>{data.source ? SOURCE_LABELS[data.source] : null}</ReadValue>
+            )}
+          </Field>
+          <Field label="Owner's forecast" hint="The deal owner's honest read, on top of the stage-based win %.">
+            {canWrite ? (
+              <InlineSelect
+                value={data.forecastCategory ?? ""}
+                options={["", "COMMIT", "BEST_CASE", "PIPELINE"]}
+                renderOption={(v) => (v ? FORECAST_CATEGORY_COLORS[v as PresalesForecastCategory].label : "—")}
+                onSave={(v) => save({ forecastCategory: v ? (v as PresalesForecastCategory) : null })}
+              />
+            ) : (
+              <ReadValue>{data.forecastCategory ? FORECAST_CATEGORY_COLORS[data.forecastCategory].label : null}</ReadValue>
+            )}
+          </Field>
+          <Field label="Proof of concept">
+            {canWrite ? (
+              <BooleanToggle value={data.pocDone} trueLabel="✓ POC done" falseLabel="Not done" onSave={(v) => save({ pocDone: v })} />
+            ) : (
+              <ReadValue>{data.pocDone ? "Done" : "Not done"}</ReadValue>
+            )}
+          </Field>
+        </Group>
+
+        <Group title="Timeline">
+          <Field label="Start date">
+            {canWrite ? (
+              <InlineDate value={toDateInputValue(data.startDate)} onSave={(v) => save({ startDate: v })} />
+            ) : (
+              <ReadValue>{data.startDate ? formatDate(data.startDate) : null}</ReadValue>
+            )}
+          </Field>
+          <Field label="Expected close">
+            {canWrite ? (
+              <InlineDate value={toDateInputValue(data.expectedCloseDate)} onSave={(v) => save({ expectedCloseDate: v })} />
+            ) : (
+              <ReadValue>{data.expectedCloseDate ? formatDate(data.expectedCloseDate) : null}</ReadValue>
+            )}
+          </Field>
+          <Field label="Status" wide>
+            {canWrite ? (
+              <BooleanToggle value={data.onHold} trueLabel="⏸ On hold" falseLabel="Active" onSave={(v) => save({ onHold: v })} />
+            ) : (
+              <ReadValue>{data.onHold ? "On hold" : "Active"}</ReadValue>
+            )}
+            {data.onHold &&
+              (canWrite ? (
+                <div className="mt-1.5">
+                  <InlineText value={data.holdReason ?? ""} onSave={(v) => save({ holdReason: v })} placeholder="Why is this on hold?" />
+                </div>
+              ) : (
+                data.holdReason && <p className="mt-1 text-xs text-slate-500">{data.holdReason}</p>
+              ))}
+          </Field>
+        </Group>
+
+        <Group title="People">
+          <Field label="Sales contact">{text(data.salesContact, "salesContact", "Who brought in this lead")}</Field>
+          <Field label="Estimated by">{text(data.estimatedBy, "estimatedBy", "Who scoped the estimate")}</Field>
+        </Group>
+
+        <Group title="Classification">
+          <Field label="Practice area">{text(data.practiceArea, "practiceArea", "e.g. XR, InsurTech")}</Field>
+          <Field label="Industry">{text(data.industry, "industry", "e.g. Education")}</Field>
+          <Field label="Technology">{text(data.technology, "technology", "e.g. AI/RAG, Mobile")}</Field>
+        </Group>
+
+        <Group title="Files">
+          <Field label="Presale folder" wide>
+            <PresaleFolderLink value={data.presaleFolderLink} canWrite={canWrite} onSave={(v) => save({ presaleFolderLink: v })} />
+          </Field>
+        </Group>
+      </div>
+    </section>
+  );
+}
+
+function Group({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="px-5 py-4">
+      <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{title}</h3>
+      <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">{children}</div>
+    </div>
+  );
+}
+
+function Field({ label, hint, wide, children }: { label: string; hint?: string; wide?: boolean; children: React.ReactNode }) {
+  return (
+    <div className={clsx("min-w-0", wide && "sm:col-span-2")}>
+      <p className="mb-1 text-xs font-medium text-slate-500" title={hint}>
+        {label}
+      </p>
+      {children}
+    </div>
+  );
+}
+
+function ReadValue({ children }: { children: React.ReactNode }) {
+  return children ? <p className="text-sm text-slate-800">{children}</p> : <p className="text-sm text-slate-400">—</p>;
+}
+
 function BooleanToggle({
   value,
   trueLabel,
@@ -452,8 +542,8 @@ function BooleanToggle({
       disabled={pending}
       className={
         value
-          ? "inline-flex items-center rounded-full bg-emerald-50 text-emerald-700 px-2.5 py-0.5 text-xs font-medium hover:bg-emerald-100 disabled:opacity-50"
-          : "inline-flex items-center rounded-full bg-slate-100 text-slate-600 px-2.5 py-0.5 text-xs font-medium hover:bg-slate-200 disabled:opacity-50"
+          ? "inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+          : "inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-200 disabled:opacity-50"
       }
     >
       {pending ? "..." : value ? trueLabel : falseLabel}
@@ -461,29 +551,14 @@ function BooleanToggle({
   );
 }
 
-// Same "pill with an inline edit + a separate open-in-new-tab icon" idea as
-// ChecklistLinkCell (components/checklist/checklist-table.tsx), simplified
-// to plain InlineText since this is a single detail-page field, not a dense
-// table cell that needs a floating editor.
-function PresaleFolderLink({
-  value,
-  canWrite,
-  onSave,
-}: {
-  value: string | null;
-  canWrite: boolean;
-  onSave: (v: string) => Promise<void>;
-}) {
+// Same "inline edit + a separate open-in-new-tab icon" idea as
+// ChecklistLinkCell (components/checklist/checklist-table.tsx).
+function PresaleFolderLink({ value, canWrite, onSave }: { value: string | null; canWrite: boolean; onSave: (v: string) => Promise<void> }) {
   if (!canWrite) {
     return value ? (
-      <a
-        href={value}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline break-all"
-      >
+      <a href={value} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 break-all text-sm text-blue-600 hover:underline">
         <IconExternalLink className="h-3.5 w-3.5 shrink-0" />
-        {value}
+        Open folder
       </a>
     ) : (
       <p className="text-sm text-slate-400">—</p>
@@ -496,7 +571,7 @@ function PresaleFolderLink({
         <InlineText value={value ?? ""} onSave={onSave} placeholder="Paste a SharePoint/Drive folder link" />
       </div>
       {value && (
-        <a href={value} target="_blank" rel="noopener noreferrer" title="Open link" className="shrink-0 text-slate-400 hover:text-slate-700">
+        <a href={value} target="_blank" rel="noopener noreferrer" title="Open folder" className="shrink-0 text-slate-400 hover:text-slate-700">
           <IconExternalLink className="h-4 w-4" />
         </a>
       )}

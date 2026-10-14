@@ -3,13 +3,12 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/rbac";
 import { AppShell } from "@/components/layout/app-shell";
-import { PresalesOverview } from "./presales-overview";
+import { dealFlags } from "@/lib/presales-pipeline";
+import { PresalesHero, PresalesDetails } from "./presales-overview";
+import { PresalesNextSteps } from "./presales-next-steps";
+import { PresalesDecisionLog } from "./presales-decision-log";
 import { PresalesChecklistRow } from "./presales-checklist-row";
 import { AddPresalesChecklistItemButton } from "./add-presales-checklist-item-button";
-import { PresalesDecisionRow } from "./presales-decision-row";
-import { AddPresalesDecisionButton } from "./add-presales-decision-button";
-import { PresalesActionItemRow } from "./presales-action-item-row";
-import { AddPresalesActionItemButton } from "./add-presales-action-item-button";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +19,7 @@ export default async function PresalesDetailPage({ params }: { params: { id: str
   if (!VIEW_ROLES.includes(user.role as (typeof VIEW_ROLES)[number])) redirect("/projects");
 
   const canWrite = user.role === "ADMIN" || user.role === "PM";
+  const isAdmin = user.role === "ADMIN";
 
   const [presales, people] = await Promise.all([
     prisma.presalesProject.findUnique({
@@ -40,78 +40,81 @@ export default async function PresalesDetailPage({ params }: { params: { id: str
   const checklistItems = presales.checklistItems.map((c) => ({ ...c, ownerPersonName: c.ownerPerson?.name ?? null }));
   const decisions = presales.decisions.map((d) => ({ ...d, decidedByPersonName: d.decidedByPerson?.name ?? null }));
   const actionItems = presales.actionItems.map((a) => ({ ...a, ownerPersonName: a.ownerPerson?.name ?? null }));
+  const flags = dealFlags({ ...presales, openActionCount: actionItems.filter((a) => a.status !== "Done").length });
+
+  const checklistDone = checklistItems.filter((c) => c.status === "COMPLETED" || c.status === "NOT_APPLICABLE").length;
+  const checklistPct = checklistItems.length ? Math.round((checklistDone / checklistItems.length) * 100) : 0;
 
   return (
     <AppShell user={user}>
-      <header className="border-b border-slate-200 bg-white px-4 sm:px-6 py-4">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <Link href="/presales" className="text-xs text-slate-400 hover:text-slate-600">← Presales</Link>
-            <h1 className="text-lg font-semibold text-slate-900">{presales.name}</h1>
-          </div>
-          <Link
-            href={`/presales/${presales.id}/activity`}
-            prefetch={false}
-            title="Activity log"
-            className="shrink-0 mt-0.5 inline-flex items-center gap-1.5 rounded-md border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-500 hover:text-slate-800 hover:border-slate-300"
-          >
-            Activity
-          </Link>
-        </div>
+      <header className="flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 sm:px-6 py-3">
+        <Link href="/presales" className="text-sm text-slate-500 hover:text-slate-800">
+          ← Presales pipeline
+        </Link>
+        <Link
+          href={`/presales/${presales.id}/activity`}
+          prefetch={false}
+          title="Activity log"
+          className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-500 hover:text-slate-800 hover:border-slate-300"
+        >
+          Activity
+        </Link>
       </header>
 
       <main className="p-4 sm:p-6 space-y-6">
-        <PresalesOverview data={presales} canWrite={canWrite} people={people} />
+        <PresalesHero data={presales} flags={flags} canWrite={canWrite} />
 
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-5">
-          <div className="xl:col-span-3 space-y-3">
-            <div className="flex items-start justify-between">
-              <div>
-                <h2 className="text-base font-semibold text-slate-900">Presales Checklist</h2>
-                <p className="text-sm text-slate-500">The standard playbook for this deal. If Won, these carry into the project&apos;s PM Checklist.</p>
+          <div className="space-y-6 xl:col-span-3">
+            <PresalesNextSteps presalesProjectId={presales.id} items={actionItems} canWrite={canWrite} people={people} />
+            <PresalesDecisionLog presalesProjectId={presales.id} items={decisions} canWrite={canWrite} />
+
+            <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <header className="border-b border-slate-100 px-5 py-3.5">
+                <div className="flex items-center justify-between gap-3">
+                  <h2 className="text-base font-semibold text-slate-900">Presales checklist</h2>
+                  {checklistItems.length > 0 && (
+                    <span className="shrink-0 text-xs font-semibold text-slate-600">
+                      {checklistDone}/{checklistItems.length} done
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-slate-500">The standard playbook for this deal. If won, these carry into the project&apos;s PM Checklist.</p>
+                {checklistItems.length > 0 && (
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                    <div className="h-full rounded-full bg-emerald-500" style={{ width: `${checklistPct}%` }} />
+                  </div>
+                )}
+              </header>
+              <div className="space-y-3 p-4">
+                {checklistItems.map((c) => (
+                  <PresalesChecklistRow key={c.id} presalesProjectId={presales.id} item={c} canWrite={canWrite} isAdmin={isAdmin} people={people} />
+                ))}
+                {checklistItems.length === 0 && (
+                  <p className="text-sm text-slate-400">
+                    No playbook steps on this deal yet.{" "}
+                    {isAdmin ? (
+                      <>
+                        Set the standard steps once in{" "}
+                        <Link href="/admin/checklist-template" className="font-medium text-blue-600 hover:underline">
+                          Admin → Checklist Template
+                        </Link>{" "}
+                        and every new opportunity gets them.
+                      </>
+                    ) : canWrite ? (
+                      "An Admin can define the standard steps; you can add your own below."
+                    ) : (
+                      "An Admin can define the standard steps."
+                    )}
+                  </p>
+                )}
+                {canWrite && <AddPresalesChecklistItemButton presalesProjectId={presales.id} />}
               </div>
-            </div>
-            <div className="space-y-3">
-              {checklistItems.map((c) => (
-                <PresalesChecklistRow key={c.id} presalesProjectId={presales.id} item={c} canWrite={canWrite} isAdmin={user.role === "ADMIN"} people={people} />
-              ))}
-              {checklistItems.length === 0 && <p className="text-sm text-slate-400">No checklist items yet.</p>}
-              {canWrite && <AddPresalesChecklistItemButton presalesProjectId={presales.id} />}
-            </div>
+            </section>
           </div>
 
-          <div className="xl:col-span-2 space-y-6">
-            <div className="space-y-3">
-              <div className="flex items-start justify-between">
-                <div>
-                  <h2 className="text-base font-semibold text-slate-900">Decision Log</h2>
-                  <p className="text-sm text-slate-500">What&apos;s being decided, and why, before this becomes a real project.</p>
-                </div>
-                {canWrite && <AddPresalesDecisionButton presalesProjectId={presales.id} />}
-              </div>
-              <div className="space-y-3">
-                {decisions.map((d) => (
-                  <PresalesDecisionRow key={d.id} presalesProjectId={presales.id} item={d} canWrite={canWrite} compact />
-                ))}
-                {decisions.length === 0 && <p className="text-sm text-slate-400">No decisions logged yet.</p>}
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <div className="flex items-start justify-between">
-                <div>
-                  <h2 className="text-base font-semibold text-slate-900">Action Items</h2>
-                  <p className="text-sm text-slate-500">Follow-ups that fell out of a call — too easy to forget otherwise.</p>
-                </div>
-                {canWrite && <AddPresalesActionItemButton presalesProjectId={presales.id} />}
-              </div>
-              <div className="space-y-3">
-                {actionItems.map((a) => (
-                  <PresalesActionItemRow key={a.id} presalesProjectId={presales.id} item={a} canWrite={canWrite} people={people} compact />
-                ))}
-                {actionItems.length === 0 && <p className="text-sm text-slate-400">No action items yet.</p>}
-              </div>
-            </div>
+          <div className="xl:col-span-2">
+            <PresalesDetails data={presales} canWrite={canWrite} people={people} />
           </div>
         </div>
       </main>

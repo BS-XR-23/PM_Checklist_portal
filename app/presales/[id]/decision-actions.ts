@@ -15,6 +15,7 @@ async function requirePresalesWrite() {
 
 function revalidateDecisions(presalesProjectId: string) {
   revalidatePath(`/presales/${presalesProjectId}`);
+  revalidatePath("/presales"); // last-activity (stale) flags on the pipeline board
 }
 
 // Bumps the parent's updatedAt so it doubles as a "last activity" signal —
@@ -23,12 +24,18 @@ function touchPresalesProject(presalesProjectId: string) {
   return prisma.presalesProject.update({ where: { id: presalesProjectId }, data: { updatedAt: new Date() } });
 }
 
-export async function createPresalesDecision(presalesProjectId: string) {
+export async function createPresalesDecision(presalesProjectId: string, input?: { decision?: string; rationale?: string; date?: string | null }) {
   const user = await requirePresalesWrite();
 
   const count = await prisma.presalesDecisionItem.count({ where: { presalesProjectId } });
   const created = await prisma.presalesDecisionItem.create({
-    data: { presalesProjectId, decision: "New decision", order: count },
+    data: {
+      presalesProjectId,
+      decision: input?.decision?.trim() || "New decision",
+      rationale: input?.rationale?.trim() || null,
+      date: input?.date ? parseDateInput(input.date) : new Date(),
+      order: count,
+    },
   });
   await touchPresalesProject(presalesProjectId);
 
@@ -37,7 +44,7 @@ export async function createPresalesDecision(presalesProjectId: string) {
     action: "create",
     entityType: "PresalesDecisionItem",
     entityId: created.id,
-    summary: "Added a new presales decision",
+    summary: `Added presales decision "${created.decision.slice(0, 60)}"`,
   });
 
   revalidateDecisions(presalesProjectId);
