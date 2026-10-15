@@ -44,8 +44,8 @@ export const CHECKLIST_TYPES: ChecklistTypeConfig[] = [
   },
   {
     key: "DELIVERY_QA",
-    label: "Delivery & QA Checklist",
-    description: "Architecture, development, code review, performance, and QA testing through UAT.",
+    label: "QA & Testing Checklist",
+    description: "Test planning, functional and device testing, regression, and UAT.",
     routeSegment: "delivery-qa",
     moduleName: "DELIVERY_QA_CHECKLIST",
     stageOrder: DELIVERY_QA_STAGES,

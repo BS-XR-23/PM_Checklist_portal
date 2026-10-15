@@ -20,7 +20,7 @@ const MODULE_GROUPS: { tab: string; modules: { module: ModuleName; label: string
     tab: "Checklist",
     modules: [
       { module: "PM_CHECKLIST", label: "PM" },
-      { module: "DELIVERY_QA_CHECKLIST", label: "Delivery & QA" },
+      { module: "DELIVERY_QA_CHECKLIST", label: "QA & Testing" },
       { module: "DEVOPS_CHECKLIST", label: "DevOps" },
       { module: "CREATIVE_XR_CHECKLIST", label: "Creative & XR" },
     ],
