@@ -333,11 +333,28 @@ received), notes.
 Sub-tabs: **Overview · Tasks · Sprints · Dev Checklist · Releases · UAT.**
 
 ### Overview
-Nothing is entered here — everything is aggregated: Delivery %, planned
-start/end (from sprints), forecast end, schedule variance (EV − PV, story
-points), current sprint and milestone, **Health** (same rating as the
-Dashboard, with reasons), task counts, current sprint progress, **SPI**,
-**Effort Index**, and Milestone / Release / UAT summaries.
+Nothing is entered here — everything is read from the other tabs.
+
+- **Health** pill at the top — the same rating and wording as the Dashboard,
+  with its reasons.
+- **Scope:** % of story points done, and a bar splitting all WBS points
+  into **done** · **in the running sprint** · **planned in later sprints**
+  (draft sprints — not counted as in progress) · **not in any upcoming
+  sprint**, with task counts.
+- **When will it finish?** Points left ÷ the pace closed sprints delivered
+  (earned points per calendar day across their dates) → an estimated finish
+  date, e.g. "~Dec 25 — 101 pts left at ~10 pts/week". Compared with the
+  **planned end = the last client milestone date** (same as the Dashboard):
+  "about N weeks after the planned end" or "on track". No closed sprint, no
+  forecast. Also SPI, Effort Index and schedule variance (closed sprints).
+- **Current sprint:** the running one (else the next draft) — dates, days
+  left (or "ended N days ago — close it"), points earned of committed, tasks,
+  what's next.
+- **Client milestones** (next, overdue, delivered), **Releases** (last
+  *deployed* by release date, its build, the soonest planned/in-progress
+  release, a warning if one failed or was rolled back) and **UAT** (cases
+  passed, failed/blocked, open and critical defects, client sign-off of the
+  last deployed release — else the next one).
 
 ### Tasks (WBS)
 The project-wide WBS, defined once: WBS #, title, **story points** (the
