@@ -82,7 +82,7 @@ function buildAttentionIssues(input: {
   const today = new Date();
 
   if (input.openHighRisks > 0) {
-    issues.push({ severity: "High", label: `${input.openHighRisks} High Risk${input.openHighRisks > 1 ? "s" : ""}` });
+    issues.push({ severity: "High", label: `${input.openHighRisks} High Risk${input.openHighRisks > 1 ? "s/Issues" : "/Issue"}` });
   }
   if (input.nextMilestone && input.nextMilestone.date < today) {
     issues.push({ severity: "High", label: `"${input.nextMilestone.name}" overdue` });

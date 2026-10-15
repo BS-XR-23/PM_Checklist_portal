@@ -20,7 +20,7 @@ export async function GET(_req: NextRequest, { params }: { params: { projectId: 
 
   const rows = await prisma.changeRequest.findMany({
     where: { projectId: params.projectId },
-    orderBy: { dateRaised: "asc" },
+    orderBy: { crCode: "asc" },
   });
 
   const sheetRows = rows.map((c) => ({
@@ -43,7 +43,7 @@ export async function GET(_req: NextRequest, { params }: { params: { projectId: 
     "Client Sign-off": c.clientSignoff,
     "WBS Updated": c.wbsUpdated,
     Status: c.status,
-    Notes: c.notes ?? "",
+    ...(financialsHidden ? {} : { Notes: c.notes ?? "" }),
   }));
 
   const buffer = buildXlsxBuffer("CR Log", sheetRows);

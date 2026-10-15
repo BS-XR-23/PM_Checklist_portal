@@ -257,21 +257,47 @@ notes.
 
 ## 9. Risk & CR
 
-### Risk & Issue Register
-Type (Risk · Opportunity · Issue), category, description, **probability** and
-**impact** (Low/Medium/High), owner, mitigation, status (Open · Monitoring ·
-Mitigated · Closed · Realized · Not Pursued), date raised/closed, notes.
-**Risk score** = probability × impact (1–9): 1–2 Low, 3–4 Medium, 6–9 High.
-An **open high risk** (type Risk, not Closed/Mitigated, score ≥ 6) makes the
-project **Red**.
+### Risk Register
+Risks (what could go wrong), issues (what already has) and opportunities
+(what could go better), listed **worst first**: open items by score, closed
+ones folded away. Filter chips by type appear once there's more than one type.
+
+- **Score** = probability × impact, each Low 1 · Medium 2 · High 3 (1–9):
+  1–2 Low, 3–4 Medium, **6–9 High**. Opportunities get a blue badge — a high
+  score is good news.
+- **Open** = Open, Monitoring or Realized (it happened and is still being
+  dealt with). **Closed** = Mitigated, Closed or Not Pursued.
+- **Any open Risk or Issue scoring High makes the project Critical** — on the
+  Dashboard, Projects list and Portfolio. Opportunities never affect health.
+  The "Open — high" tile is exactly that count.
+- Each item shows type, status, category, owner, dates and its mitigation
+  plan; an open Medium/High risk or issue with no plan is flagged.
+- **Add**: type the description in the one-line box, then pick type,
+  probability, impact and owner. It's dated today. **Edit** opens every field;
+  **Delete** is inside Edit and asks first.
+- Changing the status to a closed one fills in **Date closed** (if empty);
+  reopening clears it.
+- **Read Limited** viewers don't see Notes (page and export).
 
 ### Change Request Log
-CR code (auto), title, date raised, description, man-days planned, billable
-man-days, rate (hidden at read-limited), type (Paid · Free · Exchange), client
-sign-off, WBS updated, status (Proposed · Approved · In Progress · Completed ·
-Rejected), notes. **Amount** = billable man-days × rate. KPI tiles: Upcoming
-(planned man-days of Proposed), Work Order (billable man-days of Approved +
-In Progress), Remaining (billable man-days of In Progress).
+Work asked for beyond the signed scope. Open CRs (Proposed, Approved,
+In Progress) first, then Completed; Rejected folded away.
+
+- Each CR shows code (auto), title, type (Paid · Free · Exchange), status,
+  client sign-off, WBS updated, date raised, and the money line: man-days
+  planned · billable man-days × rate = **amount**.
+- Tiles: **Waiting for approval** (Proposed, with estimated man-days) ·
+  **Approved & in progress** (billable man-days) · **Completed** ·
+  **Paid CR value** — the amount of **Paid** CRs the client agreed to
+  (Approved, In Progress or Completed); Proposed, Rejected, Free and Exchange
+  add nothing · **Need attention**.
+- An agreed CR is flagged when it has **no client sign-off**, the **WBS isn't
+  updated**, or (Paid) there's **no billable man-days or rate**.
+- **Add** from the one-line box (title, type, estimated man-days); it starts
+  Proposed and is dated today. **Edit** opens every field; **Delete** asks
+  first — set Rejected instead to keep a record.
+- **Read Limited** viewers don't see rate, amount, Paid CR value or Notes
+  (page and export).
 
 ## 10. Dependencies
 
@@ -558,7 +584,7 @@ message. Role changes and deactivation take effect on the very next request.
 | **SPI** | Story points earned ÷ story points committed, across **closed** sprints (0/100 rule). A running sprint is shown as live progress and joins SPI when it closes, so SPI doesn't drop at every sprint start. Draft sprints don't count |
 | **Effort Index** (scope) | Same closed-sprints-only rule as SPI |
 | **Effort Index** | Story points earned ÷ competency-adjusted man-days (actual hours ÷ 8 × competency multiplier). > 1 = less effort than estimated |
-| **Health — Red** | Any open high risk, **or** SPI < 0.9 |
+| **Health — Red** | Any open high risk or issue, **or** SPI < 0.9 |
 | **Health — Amber** | SPI 0.9–0.99, **or** any overdue milestone |
 | **Health — Green** | None of the above, and there is something to judge (a started sprint, a client milestone, or a logged risk) |
 | **Health — No data yet** | None of the above **and** nothing to judge yet — no started sprint, no client milestone, no risk. Shown grey; missing data never counts against a project, but it isn't "Healthy" either |
@@ -571,8 +597,9 @@ message. Role changes and deactivation take effect on the very next request.
 | **Overdue / Due soon (reminders)** | Not done and date passed / within the next 7 days |
 | **Slipped ⚠** | Actual (checklist) or forecast (milestone) date is later than planned, item not done |
 | **Risk score** | Probability × impact, Low=1 · Medium=2 · High=3 |
-| **Open high risk** | Type Risk, status not Closed/Mitigated, score ≥ 6 |
+| **Open high risk** | Type Risk or Issue (not Opportunity), status Open/Monitoring/Realized, score ≥ 6 |
 | **CR amount** | Billable man-days × rate |
+| **Paid CR value** | Sum of CR amounts where type is Paid and status is Approved, In Progress or Completed |
 | **Budget Tracker PV / EV** | Cumulative committed / earned story points across **closed** sprints ÷ baseline × contract value |
 | **Budget Tracker margin** | (EV − cumulative actual cost) ÷ EV — EV is contract price, AC is role-rate cost (testing only; replaces the old dollar CPI) |
 | **Overlap conflict** | Two+ engagements ≥ 60% on different projects with overlapping dates |
@@ -596,7 +623,7 @@ message. Role changes and deactivation take effect on the very next request.
   **checkpoints**. Client milestones are added on Milestones & Payments.
 - **"Why is Health red when the project feels fine?"** Hover the health
   badge or read the reasons under the Health tile — it's either an open high
-  risk or SPI below 0.9.
+  risk or issue (Risk & CR → Risk Register, "Open — high") or SPI below 0.9.
 - **"I get no reminders."** Only Super Admin, Admin, and PM get them, and
   only for items that have a date.
 - **"I can't permanently delete something."** Only a Super Admin can, and

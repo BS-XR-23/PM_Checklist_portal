@@ -3,7 +3,8 @@
 // a project can never read GREEN on one page and RED on another (it did:
 // Dashboard computed health from Budget Tracker's dollar CPI while Delivery
 // used its own story-point SPI and competency CPI).
-import { checklistCompletionPct, competencyCpi, riskScore, sprintTotalsFor, type SprintForBudget } from "@/lib/calculations";
+import { checklistCompletionPct, competencyCpi, sprintTotalsFor, type SprintForBudget } from "@/lib/calculations";
+import { isOpenHighThreat } from "@/lib/risks";
 import type { Rag } from "@/lib/rag";
 import { isMilestoneDone, milestoneDueDate } from "@/lib/milestones";
 
@@ -118,10 +119,9 @@ export function deliveryIndices(sprints: SprintForBudget[]): DeliveryIndices {
   };
 }
 
+/** Open Risks and Issues scoring 6–9 (lib/risks.ts) — the same count the Risk & CR tiles show. */
 export function countOpenHighRisks(risks: { type: string; status: string; probability: string; impact: string }[]): number {
-  return risks.filter(
-    (r) => r.type === "Risk" && r.status !== "Closed" && r.status !== "Mitigated" && riskScore(r.probability, r.impact) >= 6
-  ).length;
+  return risks.filter(isOpenHighThreat).length;
 }
 
 type MilestoneDates = { status: string; plannedDate: Date | null; forecastDate?: Date | null };
@@ -175,7 +175,7 @@ export function computeProjectHealth(input: {
 
   const red: string[] = [];
   const amber: string[] = [];
-  if (openHighRisks > 0) red.push(`${openHighRisks} open high risk${openHighRisks > 1 ? "s" : ""}`);
+  if (openHighRisks > 0) red.push(`${openHighRisks} open high risk${openHighRisks > 1 ? "s/issues" : "/issue"}`);
   if (spi != null && spi < SPI_RED_BELOW) red.push(`SPI ${spi.toFixed(2)}`);
   else if (spi != null && spi < SPI_AMBER_BELOW) amber.push(`SPI ${spi.toFixed(2)}`);
   if (overdueMilestones > 0) amber.push(`${overdueMilestones} overdue milestone${overdueMilestones > 1 ? "s" : ""}`);

@@ -15,30 +15,6 @@ export function crAmount(billableManDays: number | null, rate: number | null): n
   return billableManDays * rate;
 }
 
-export type CrKpis = {
-  upcomingCrManDays: number; // Proposed
-  workOrderCrManDays: number; // Approved + In Progress
-  remainingCrManDays: number; // In Progress
-};
-
-export function computeCrKpis(
-  crs: { status: string; manDaysPlanned: number | null; billableManDays: number | null }[]
-): CrKpis {
-  const upcomingCrManDays = crs
-    .filter((c) => c.status === "Proposed")
-    .reduce((sum, c) => sum + (c.manDaysPlanned ?? 0), 0);
-
-  const workOrderCrManDays = crs
-    .filter((c) => c.status === "Approved" || c.status === "In Progress")
-    .reduce((sum, c) => sum + (c.billableManDays ?? 0), 0);
-
-  const remainingCrManDays = crs
-    .filter((c) => c.status === "In Progress")
-    .reduce((sum, c) => sum + (c.billableManDays ?? 0), 0);
-
-  return { upcomingCrManDays, workOrderCrManDays, remainingCrManDays };
-}
-
 export type EvmPoint = {
   weekEnding: Date;
   pctPlannedComplete: number;

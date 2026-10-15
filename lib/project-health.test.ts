@@ -175,15 +175,17 @@ describe("computeProjectHealth", () => {
   it("an open high-severity risk is RED", () => {
     const health = computeProjectHealth({ sprints: [], risks: [highRisk], milestones: [], today: TODAY });
     expect(health.rag).toBe("RED");
-    expect(health.reasons).toEqual(["1 open high risk"]);
+    expect(health.reasons).toEqual(["1 open high risk/issue"]);
   });
 
-  it("closed/mitigated risks, issues, and non-high scores don't count", () => {
+  it("open high Issues count; closed items, opportunities and non-high scores don't", () => {
     const health = computeProjectHealth({
       sprints: [],
       risks: [
         { ...highRisk, status: "Closed" },
         { ...highRisk, status: "Mitigated" },
+        { ...highRisk, status: "Not Pursued" },
+        { ...highRisk, type: "Opportunity" },
         { ...highRisk, type: "Issue" },
         { ...highRisk, impact: "Medium" }, // 3 x 2 = 6 -> still high
         { ...highRisk, probability: "Low", impact: "Medium" }, // 1 x 2 = 2 -> not high
@@ -191,7 +193,7 @@ describe("computeProjectHealth", () => {
       milestones: [],
       today: TODAY,
     });
-    expect(health.openHighRisks).toBe(1);
+    expect(health.openHighRisks).toBe(2); // the Issue and the Medium×High risk
   });
 
   it("SPI under 0.9 is RED, 0.9–0.99 is AMBER", () => {
@@ -224,6 +226,6 @@ describe("computeProjectHealth", () => {
       today: TODAY,
     });
     expect(red.rag).toBe("RED");
-    expect(red.reasons).toEqual(["2 open high risks", "1 overdue milestone"]);
+    expect(red.reasons).toEqual(["2 open high risks/issues", "1 overdue milestone"]);
   });
 });

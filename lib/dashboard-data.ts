@@ -269,7 +269,7 @@ export async function getDashboardData(projectId: string) {
     warnings.push({ tone: "red", text: `Milestone payments add up to ${Math.round(totalAllocatedPct * 100)}% of the contract — more than 100%.`, route: "milestones" });
   }
   if (openHighRisks > 0) {
-    warnings.push({ tone: "red", text: `${openHighRisks} open high-severity risk${openHighRisks > 1 ? "s" : ""} — mitigate or close ${openHighRisks > 1 ? "them" : "it"} to clear Critical health.`, route: "risks" });
+    warnings.push({ tone: "red", text: `${openHighRisks} open high-severity risk${openHighRisks > 1 ? "s or issues" : " or issue"} — mitigate or close ${openHighRisks > 1 ? "them" : "it"} to clear Critical health.`, route: "risks" });
   }
 
   return {

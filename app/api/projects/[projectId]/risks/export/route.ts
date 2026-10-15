@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getModuleAccess, meetsLevel } from "@/lib/rbac";
 import { formatDate } from "@/lib/format";
 import { riskScore } from "@/lib/calculations";
+import { sortRisks } from "@/lib/risks";
 import { buildXlsxBuffer, xlsxFilename } from "@/lib/xlsx-export";
 
 export async function GET(_req: NextRequest, { params }: { params: { projectId: string } }) {
@@ -20,7 +21,9 @@ export async function GET(_req: NextRequest, { params }: { params: { projectId: 
     include: { ownerPerson: { select: { name: true } } },
   });
 
-  const sheetRows = rows.map((r, i) => ({
+  // Read Limited hides Notes, same as the page.
+  const notesHidden = access === "READ_LIMITED";
+  const sheetRows = sortRisks(rows).map((r, i) => ({
     "No.": i + 1,
     Type: r.type,
     Category: r.category ?? "",
@@ -33,7 +36,7 @@ export async function GET(_req: NextRequest, { params }: { params: { projectId: 
     Status: r.status,
     "Date Raised": formatDate(r.dateRaised),
     "Date Closed": formatDate(r.dateClosed),
-    Notes: r.notes ?? "",
+    ...(notesHidden ? {} : { Notes: r.notes ?? "" }),
   }));
 
   const buffer = buildXlsxBuffer("Risk Register", sheetRows);
