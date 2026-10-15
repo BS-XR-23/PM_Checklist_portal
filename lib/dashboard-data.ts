@@ -3,7 +3,7 @@ import { parseDateInput } from "@/lib/format";
 import { ITEM_STATUSES, type ItemStatus } from "@/lib/constants";
 import { CHECKLIST_TYPES, CHECKLIST_TYPE_BY_KEY, type ChecklistType } from "@/lib/checklist-types";
 import { computeProjectHealth, deliveryIndices, deliveryPct, governancePct, wbsBaselinePoints } from "@/lib/project-health";
-import { summarizeMilestones, milestoneDueDate, isMilestoneDone } from "@/lib/milestones";
+import { summarizeMilestones, milestoneDueDate, isMilestoneDone, contractMoneySplit } from "@/lib/milestones";
 import { PM_STAGES } from "@/lib/seed-data";
 import {
   COMPLETED_STAGE_LABEL,
@@ -232,16 +232,8 @@ export async function getDashboardData(projectId: string) {
   const { nextMilestone, overdue: overdueMilestones, plannedEnd, nextPayment, paidAmount, invoicedAmount, totalAllocatedPct } =
     milestoneSummary;
 
-  // Contract value split for the money bar: collected · invoiced awaiting
-  // payment · on a milestone but not invoiced · not on any milestone.
-  const allocatedValue = project.contractValue * Math.min(1, totalAllocatedPct);
-  const money = {
-    contractValue: project.contractValue,
-    collected: paidAmount,
-    awaiting: invoicedAmount,
-    scheduled: Math.max(0, allocatedValue - paidAmount - invoicedAmount),
-    unallocated: Math.max(0, project.contractValue - allocatedValue),
-  };
+  const money = contractMoneySplit(project.contractValue, milestoneSummary);
+
 
   // Data-quality problems that make other figures on this page wrong or
   // blank — each links to where it's fixed.

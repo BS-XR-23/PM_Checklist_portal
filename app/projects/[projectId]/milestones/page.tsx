@@ -1,151 +1,164 @@
 import { prisma } from "@/lib/prisma";
-import { formatMoney, formatPct } from "@/lib/format";
-import { trancheAmount } from "@/lib/calculations";
+import { formatDate, formatMoney, formatPct } from "@/lib/format";
 import type { ItemStatus } from "@/lib/constants";
-import { countOverdueMilestones } from "@/lib/project-health";
 import { requireModuleAccess } from "@/lib/rbac";
+import { summarizeMilestones, contractMoneySplit, milestoneFlags, milestoneDueDate, isMilestoneDone } from "@/lib/milestones";
 import { StatTile } from "@/components/ui/stat-tile";
 import { PageGuide } from "@/components/ui/page-guide";
-import { IconLayers, IconCheckCircle, IconTarget, IconAlertCircle, IconDollar } from "@/components/layout/icons";
+import { MoneyBar } from "@/components/ui/money-bar";
+import { IconCheckCircle, IconTarget, IconAlertCircle, IconAlertTriangle } from "@/components/layout/icons";
 import { ContractValueField } from "./contract-value-field";
-import { MilestonesTable } from "./milestones-table";
-import { AddMilestoneModal } from "./add-milestone-modal";
+import { MilestoneList, type MilestoneRow } from "./milestone-list";
 
 export default async function MilestonesPage({ params }: { params: { projectId: string } }) {
   const access = await requireModuleAccess(params.projectId, "MILESTONES", "READ_LIMITED");
   const canWrite = access === "WRITE";
-  const notesHidden = access === "READ_LIMITED";
+  // Read Limited hides financial fields and Notes (docs/USER_GUIDE.md §3):
+  // no contract value, payment %, tranche or invoice status — stripped here,
+  // not just hidden in the browser.
+  const showMoney = access !== "READ_LIMITED";
 
-  // Independent of each other — fetched concurrently instead of serialized round trips.
   const [project, milestones, people] = await Promise.all([
-    prisma.project.findUniqueOrThrow({ where: { id: params.projectId } }),
+    prisma.project.findUniqueOrThrow({ where: { id: params.projectId }, select: { id: true, contractValue: true } }),
     prisma.milestone.findMany({
       where: { projectId: params.projectId },
       include: {
         payment: true,
         ownerPerson: { select: { name: true } },
-        checklistItems: { select: { status: true } }, // linked gates
+        checklistItems: { select: { status: true } },
       },
-      orderBy: [{ plannedDate: { sort: "asc", nulls: "last" } }, { order: "asc" }],
+      orderBy: { order: "asc" },
     }),
     canWrite ? prisma.person.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }) : Promise.resolve([]),
   ]);
 
-  const pctOf = (m: (typeof milestones)[number]) => m.payment?.paymentPct ?? 0;
-  const totalAllocatedPct = milestones.reduce((sum, m) => sum + pctOf(m), 0);
-  const paidAmount = milestones
-    .filter((m) => m.payment?.invoiceStatus === "Paid")
-    .reduce((sum, m) => sum + trancheAmount(project.contractValue, pctOf(m)), 0);
+  const today = new Date();
+  const summary = summarizeMilestones(
+    milestones.map((m) => ({ ...m, ownerName: m.ownerPerson?.name ?? null })),
+    project.contractValue,
+    today
+  );
+  const money = contractMoneySplit(project.contractValue, summary);
 
-  const totalMilestones = milestones.length;
-  const completedCount = milestones.filter((m) => m.status === "COMPLETED").length;
-  const inProgressCount = milestones.filter((m) => m.status === "IN_PROGRESS").length;
-  const overdueCount = countOverdueMilestones(milestones);
-  const remainingAmount = project.contractValue - paidAmount;
+  // Timeline order: when it happened (done) or is due; undated last.
+  const when = (m: (typeof milestones)[number]) => (m.status === "COMPLETED" ? m.actualDate ?? milestoneDueDate(m) : milestoneDueDate(m));
+  const ordered = [...milestones].sort((a, b) => (when(a)?.getTime() ?? Infinity) - (when(b)?.getTime() ?? Infinity) || a.order - b.order);
 
-  const allocationOff = Math.round(totalAllocatedPct * 1000) !== 1000; // != 100%, tolerant of float error
+  const rows: MilestoneRow[] = ordered.map((m) => ({
+    id: m.id,
+    name: m.name,
+    type: m.type,
+    description: m.description,
+    acceptanceCriteria: m.acceptanceCriteria,
+    plannedDate: m.plannedDate,
+    forecastDate: m.forecastDate,
+    actualDate: m.actualDate,
+    status: m.status as ItemStatus,
+    ownerPersonId: m.ownerPersonId,
+    ownerName: m.ownerPerson?.name ?? null,
+    paymentPct: showMoney ? m.payment?.paymentPct ?? 0 : null,
+    invoiceStatus: showMoney ? m.payment?.invoiceStatus ?? "Not Invoiced" : null,
+    clientSignoff: m.payment?.clientSignoff ?? "Pending",
+    notes: showMoney ? m.payment?.notes ?? null : null,
+    checkpointsDone: m.checklistItems.filter((g) => g.status === "COMPLETED" || g.status === "NOT_APPLICABLE").length,
+    checkpointsTotal: m.checklistItems.length,
+    flags: milestoneFlags(
+      { ...m, payment: m.payment ? { paymentPct: m.payment.paymentPct, invoiceStatus: m.payment.invoiceStatus, clientSignoff: m.payment.clientSignoff } : null },
+      today,
+      showMoney
+    ),
+  }));
+
+  const applicable = milestones.filter((m) => m.status !== "NOT_APPLICABLE");
+  const doneCount = applicable.filter((m) => isMilestoneDone(m)).length;
+  const flagged = rows.filter((r) => r.flags.some((f) => f.tone !== "blue")).length;
+  const allocatedPct = summary.totalAllocatedPct;
+  const allocationOk = Math.round(allocatedPct * 1000) === 1000;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h2 className="text-base font-semibold text-slate-900">Milestones & Payments</h2>
-          <p className="text-sm text-slate-500">
-            The project&apos;s client-facing delivery commitments — dates, status, payment tranche, invoice, and
-            client sign-off in one place.
-          </p>
-        </div>
-        {canWrite && <AddMilestoneModal projectId={project.id} />}
+    <div className="space-y-5">
+      <div>
+        <h2 className="text-base font-semibold text-slate-900">Milestones & Payments</h2>
+        <p className="text-sm text-slate-500">
+          What this project delivers to the client and when{showMoney ? ", and the payment tied to each" : ""}. Dashboard, Delivery, Portfolio and the PM Plan all read this list.
+        </p>
       </div>
 
-      <PageGuide
-        id="milestones-payments"
-        title="Milestones vs. Checkpoints"
-        points={[
-          <><strong>Milestones</strong> (this page) are what you deliver to the client — e.g. Phase 1 MVP, UAT Complete, Go-Live. Each carries its dates, owner, payment %, invoice status, and client sign-off. Dashboard, Delivery, Portfolio, and the PM Plan all read this list.</>,
-          <><strong>Checkpoints</strong> are internal steps tagged on the Checklist tab (e.g. &quot;DoR Approved&quot;, &quot;CI Pipeline Green&quot;). They never carry payment. A milestone shows <em>Checkpoints 2/3</em> when checklist checkpoints are linked to it.</>,
-          <>Payment % across every milestone should add up to 100% of Contract Value — the table flags it if the allocation is off. A milestone that&apos;s already invoiced or paid can&apos;t be deleted until its invoice status is reset.</>,
-        ]}
-      />
+      {canWrite && (
+        <PageGuide
+          id="milestones-payments"
+          title="How milestones work"
+          points={[
+            <><strong>Milestones</strong> are client-facing commitments (Phase 1 MVP, UAT complete, Go-Live). <strong>Checkpoints</strong> are internal steps tagged on the Checklist tab — they show here as &quot;checkpoints 2/3&quot; but never carry payment.</>,
+            <>A milestone is due on its <strong>forecast</strong> date if you&apos;ve moved it, otherwise its planned date. Marking it Completed fills in today as the actual date (if empty); reopening clears it.</>,
+            <>Payment % across all milestones should reach 100% of the contract and can&apos;t go over. A milestone that&apos;s invoiced or paid can&apos;t be deleted until its invoice is set back to Not Invoiced.</>,
+          ]}
+        />
+      )}
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,260px)_1fr] items-start">
-        {canWrite ? (
-          <div className="rounded-xl border border-slate-200 bg-white p-4">
-            <ContractValueField projectId={project.id} value={project.contractValue} />
+      {showMoney && (
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            {canWrite ? (
+              <div className="w-56">
+                <ContractValueField projectId={project.id} value={project.contractValue} />
+              </div>
+            ) : (
+              <div>
+                <p className="text-xs text-slate-500">Contract value</p>
+                <p className="text-2xl font-bold text-slate-900">{formatMoney(project.contractValue)}</p>
+              </div>
+            )}
+            <p className={allocationOk ? "text-xs text-emerald-700" : "text-xs font-medium text-amber-700"}>
+              {allocationOk
+                ? "100% of the contract is on milestones."
+                : allocatedPct > 1.0001
+                  ? `Payments add up to ${formatPct(allocatedPct)} — more than the contract.`
+                  : `Payments cover ${formatPct(allocatedPct)} of the contract — ${formatPct(1 - allocatedPct)} isn't on any milestone yet.`}
+            </p>
           </div>
-        ) : (
-          <div className="rounded-xl border border-slate-200 bg-white p-4">
-            <p className="text-xs font-medium text-slate-600 mb-1">Total Contract Value</p>
-            <p className="text-sm text-slate-800">{formatMoney(project.contractValue)}</p>
-          </div>
-        )}
-
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-          <StatTile icon={<IconLayers />} iconWrapClass="bg-violet-50 text-violet-600" label="Total Milestones" value={String(totalMilestones)} subtitle="Milestones" />
-          <StatTile
-            icon={<IconCheckCircle />}
-            iconWrapClass="bg-emerald-50 text-emerald-600"
-            label="Completed"
-            value={String(completedCount)}
-            subtitle={formatPct(totalMilestones ? completedCount / totalMilestones : 0)}
-          />
-          <StatTile
-            icon={<IconTarget />}
-            iconWrapClass="bg-blue-50 text-blue-600"
-            label="In Progress"
-            value={String(inProgressCount)}
-            subtitle={formatPct(totalMilestones ? inProgressCount / totalMilestones : 0)}
-          />
-          <StatTile
-            icon={<IconAlertCircle />}
-            iconWrapClass="bg-rose-50 text-rose-600"
-            label="Overdue"
-            value={String(overdueCount)}
-            subtitle="Past planned date"
-          />
-          <StatTile
-            icon={<IconDollar />}
-            iconWrapClass="bg-emerald-50 text-emerald-600"
-            label="Total Paid"
-            value={formatMoney(paidAmount)}
-            subtitle={`${formatPct(project.contractValue ? paidAmount / project.contractValue : 0)} of contract`}
-          />
-          <StatTile
-            icon={<IconDollar />}
-            iconWrapClass="bg-amber-50 text-amber-600"
-            label="Remaining"
-            value={formatMoney(remainingAmount)}
-            subtitle={`${formatPct(project.contractValue ? remainingAmount / project.contractValue : 0)} of contract`}
-          />
+          {project.contractValue > 0 && (
+            <div className="mt-3 space-y-2">
+              <MoneyBar money={money} />
+            </div>
+          )}
         </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatTile
+          icon={<IconCheckCircle />}
+          iconWrapClass="bg-emerald-50 text-emerald-600"
+          label="Delivered"
+          value={`${doneCount} of ${applicable.length}`}
+          subtitle={applicable.length ? formatPct(doneCount / applicable.length) : "no milestones yet"}
+        />
+        <StatTile
+          icon={<IconTarget />}
+          iconWrapClass="bg-blue-50 text-blue-600"
+          label="Next milestone"
+          value={summary.nextMilestone ? formatDate(summary.nextMilestone.date) : "—"}
+          subtitle={summary.nextMilestone?.name ?? "nothing upcoming with a date"}
+        />
+        <StatTile
+          icon={<IconAlertCircle />}
+          iconWrapClass={summary.overdue.length ? "bg-rose-50 text-rose-600" : "bg-slate-100 text-slate-500"}
+          label="Overdue"
+          value={String(summary.overdue.length)}
+          subtitle="past their due date (forecast, else planned)"
+          accentColor={summary.overdue.length ? "#DC2626" : undefined}
+        />
+        <StatTile
+          icon={<IconAlertTriangle />}
+          iconWrapClass={flagged ? "bg-amber-50 text-amber-600" : "bg-slate-100 text-slate-500"}
+          label="Need attention"
+          value={String(flagged)}
+          subtitle="flagged below"
+          accentColor={flagged ? "#D97706" : undefined}
+        />
       </div>
 
-      <MilestonesTable
-        projectId={project.id}
-        contractValue={project.contractValue}
-        canWrite={canWrite}
-        notesHidden={notesHidden}
-        totalAllocatedPct={totalAllocatedPct}
-        allocationOff={allocationOff}
-        people={people}
-        rows={milestones.map((m) => ({
-          id: m.id,
-          name: m.name,
-          type: m.type,
-          plannedDate: m.plannedDate,
-          forecastDate: m.forecastDate,
-          actualDate: m.actualDate,
-          status: m.status as ItemStatus,
-          ownerPersonId: m.ownerPersonId,
-          ownerName: m.ownerPerson?.name ?? null,
-          paymentPct: pctOf(m),
-          invoiceStatus: m.payment?.invoiceStatus ?? "Not Invoiced",
-          clientSignoff: m.payment?.clientSignoff ?? "Pending",
-          notes: notesHidden ? null : m.payment?.notes ?? null,
-          gatesDone: m.checklistItems.filter((g) => g.status === "COMPLETED" || g.status === "NOT_APPLICABLE").length,
-          gatesTotal: m.checklistItems.length,
-        }))}
-      />
+      <MilestoneList projectId={project.id} rows={rows} contractValue={project.contractValue} canWrite={canWrite} showMoney={showMoney} people={people} />
     </div>
   );
 }

@@ -236,24 +236,31 @@ The single home of the project's **client-facing milestones**. Dashboard,
 Delivery, Portfolio, PM Plan, health, and the `.docx` export all read this
 list.
 
-**+ Add Milestone:** name, type (Planning · Design · Development · QA · UAT ·
-Release · Custom), planned date.
-
-**Each milestone row:** name, type, **Checkpoints n/m** (checklist
-checkpoints linked to it, if any), owner, **planned / forecast / actual**
-dates (⚠ when the forecast slips past the plan), status, **payment %**,
-tranche amount (= contract value × payment %), invoice status (Not Invoiced ·
-Invoiced · Paid), client sign-off (Pending · Signed · Acknowledged · N/A),
-notes.
-
-- **Total Contract Value** is editable here (PM or Super Admin) — the same
-  single value Budget Tracker uses.
-- Payment % across all milestones should total **100%**; the table flags it
-  in red otherwise.
+- **Money** (hidden from Read Limited): the contract value (editable by a
+  PM or Super Admin — the same value Budget Tracker uses), how much of it is
+  on milestones, and the same bar as the Dashboard: collected · invoiced,
+  awaiting payment · on milestones, not invoiced · not on any milestone.
+- **Tiles:** Delivered (done of applicable) · Next milestone · Overdue (past
+  the due date — forecast if moved, else planned) · Need attention.
+- **Timeline**, in date order (done ones by when they were done; undated
+  last). Each milestone shows its status, when it's due or was done (with
+  the original plan if it moved), type, owner, checkpoints n/m, the tranche
+  (amount and %) with its invoice status, client sign-off, description and
+  acceptance criteria.
+- **Flags** on a milestone: invoiced or paid but not completed · overdue by
+  N days · no date · forecast after plan · client sign-off recorded but not
+  completed · completed with no actual date · **Ready to invoice** (completed,
+  has a payment, not invoiced).
+- **Add** from the one-line box: name, then type, planned date and payment %.
+  **Edit** opens every field, including description and acceptance criteria.
+- Marking a milestone **Completed** fills in today as the actual date if
+  empty; reopening clears it.
+- Payment % must be 0–100% per milestone, and all of them together **can't
+  pass 100%** — lower another milestone first.
 - A milestone that's already **Invoiced or Paid can't be deleted** until its
   invoice status is set back to Not Invoiced.
-- **Stats:** total, completed, in progress, overdue (past due date), total
-  paid, remaining.
+- **Read Limited** viewers see milestones, dates, status and sign-off, but no
+  contract value, payment, invoice status or notes.
 
 ## 9. Risk & CR
 

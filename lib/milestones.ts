@@ -75,3 +75,75 @@ export function summarizeMilestones(milestones: MilestoneLike[], contractValue: 
     totalAllocatedPct: milestones.reduce((sum, m) => sum + pct(m), 0),
   };
 }
+
+export type MoneySplit = { contractValue: number; collected: number; awaiting: number; scheduled: number; unallocated: number };
+
+/**
+ * Contract value split four ways — collected · invoiced, awaiting payment ·
+ * on a milestone but not invoiced · not on any milestone. The Dashboard and
+ * Milestones & Payments both show this, so it's computed once here.
+ */
+export function contractMoneySplit(contractValue: number, s: Pick<MilestoneSummary, "paidAmount" | "invoicedAmount" | "totalAllocatedPct">): MoneySplit {
+  const allocatedValue = contractValue * Math.min(1, s.totalAllocatedPct);
+  return {
+    contractValue,
+    collected: s.paidAmount,
+    awaiting: s.invoicedAmount,
+    scheduled: Math.max(0, allocatedValue - s.paidAmount - s.invoicedAmount),
+    unallocated: Math.max(0, contractValue - allocatedValue),
+  };
+}
+
+/**
+ * The Actual date that goes with a status change: completing stamps today
+ * if none is set; reopening clears it. undefined = leave as is.
+ * Not Applicable leaves the date alone either way.
+ */
+export function actualDateForStatus(nextStatus: string, current: Date | null, today: Date): Date | null | undefined {
+  if (nextStatus === "NOT_APPLICABLE") return undefined;
+  if (nextStatus === "COMPLETED") return current ? undefined : today;
+  return current ? null : undefined;
+}
+
+export type MilestoneFlag = { tone: "red" | "amber" | "blue"; text: string };
+
+const DAY_MS = 86_400_000;
+
+/**
+ * What's wrong (or due) on one milestone, worst first. Money flags are left
+ * out when the viewer can't see payment details.
+ */
+export function milestoneFlags(
+  m: {
+    status: string;
+    plannedDate: Date | null;
+    forecastDate: Date | null;
+    actualDate: Date | null;
+    payment: { paymentPct: number; invoiceStatus: string; clientSignoff: string } | null;
+  },
+  today: Date = new Date(),
+  showMoney = true
+): MilestoneFlag[] {
+  const startOfToday = new Date(today);
+  startOfToday.setHours(0, 0, 0, 0);
+  const done = isMilestoneDone(m);
+  const due = milestoneDueDate(m);
+  const invoice = m.payment?.invoiceStatus ?? "Not Invoiced";
+  const signoff = m.payment?.clientSignoff ?? "Pending";
+  const flags: MilestoneFlag[] = [];
+
+  if (!done && showMoney && invoice !== "Not Invoiced") flags.push({ tone: "red", text: `${invoice} but not completed — update the status` });
+  if (!done && due && due < startOfToday) {
+    const days = Math.round((startOfToday.getTime() - due.getTime()) / DAY_MS);
+    flags.push({ tone: "red", text: `Overdue by ${days} day${days === 1 ? "" : "s"}` });
+  }
+  if (!done && !due) flags.push({ tone: "amber", text: "No date" });
+  if (!done && m.plannedDate && m.forecastDate && m.forecastDate > m.plannedDate) {
+    const days = Math.round((m.forecastDate.getTime() - m.plannedDate.getTime()) / DAY_MS);
+    flags.push({ tone: "amber", text: `Forecast ${days} day${days === 1 ? "" : "s"} after plan` });
+  }
+  if (!done && (signoff === "Signed" || signoff === "Acknowledged")) flags.push({ tone: "amber", text: `Client sign-off is ${signoff} but not completed` });
+  if (m.status === "COMPLETED" && !m.actualDate) flags.push({ tone: "amber", text: "No actual date" });
+  if (m.status === "COMPLETED" && showMoney && (m.payment?.paymentPct ?? 0) > 0 && invoice === "Not Invoiced") flags.push({ tone: "blue", text: "Ready to invoice" });
+  return flags;
+}

@@ -3,6 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireModuleWrite, writeAudit } from "@/lib/rbac";
+import { parseDateInput } from "@/lib/format";
+import { INVOICE_STATUSES, ITEM_STATUSES, MILESTONE_TYPES, SIGNOFF_STATUSES } from "@/lib/constants";
+import { actualDateForStatus } from "@/lib/milestones";
 import type { MilestoneType } from "@prisma/client";
 
 // Milestones are the project's client-facing delivery commitments (MVP
@@ -21,25 +24,50 @@ function revalidateMilestones(projectId: string) {
   revalidatePath(`/projects/${projectId}/delivery`);
   revalidatePath(`/projects/${projectId}/pm-plan`);
   revalidatePath(`/projects/${projectId}/activity`);
+  // Next milestone, overdue count and payments also show on these.
+  revalidatePath("/projects");
+  revalidatePath("/portfolio");
+}
+
+function checkOneOf(value: string | undefined, allowed: readonly string[], field: string) {
+  if (value !== undefined && !allowed.includes(value)) throw new Error(`${field} must be one of: ${allowed.join(", ")}.`);
+}
+
+/** A milestone's payment % must be 0–100%, and all of the project's together can't pass 100% of the contract. */
+async function checkPaymentPct(projectId: string, milestoneId: string | null, pct: number) {
+  if (!Number.isFinite(pct) || pct < 0 || pct > 1) throw new Error("Payment % must be between 0% and 100%.");
+  const others = await prisma.milestonePayment.aggregate({
+    where: { milestone: { projectId, ...(milestoneId ? { id: { not: milestoneId } } : {}) } },
+    _sum: { paymentPct: true },
+  });
+  const total = (others._sum.paymentPct ?? 0) + pct;
+  if (total > 1.0001) {
+    throw new Error(`That would put ${Math.round(total * 100)}% of the contract on milestones. Lower another milestone's payment first — the total can't pass 100%.`);
+  }
 }
 
 export async function createMilestone(
   projectId: string,
-  input: { name: string; type: MilestoneType; plannedDate?: string | null; ownerPersonId?: string | null }
+  input: { name: string; type: MilestoneType; plannedDate?: string | null; ownerPersonId?: string | null; paymentPct?: number | null }
 ) {
   const user = await requireModuleWrite(projectId, "MILESTONES");
+  const name = input.name.trim();
+  if (!name) throw new Error("Give the milestone a name first.");
+  checkOneOf(input.type, MILESTONE_TYPES, "Type");
+  if (input.paymentPct) await checkPaymentPct(projectId, null, input.paymentPct);
 
   const { _max } = await prisma.milestone.aggregate({ where: { projectId }, _max: { order: true } });
-  // No payment row yet — updateMilestonePayment creates it the first time a
-  // payment field is set, so a milestone with no tranche carries no empty row.
+  // A payment row only when a payment % is given — otherwise
+  // updateMilestonePayment creates it the first time a payment field is set.
   const created = await prisma.milestone.create({
     data: {
       projectId,
-      name: input.name,
+      name,
       type: input.type,
       order: (_max.order ?? 0) + 1,
-      plannedDate: input.plannedDate ? new Date(input.plannedDate) : null,
+      plannedDate: parseDateInput(input.plannedDate ?? null),
       ownerPersonId: input.ownerPersonId || null,
+      ...(input.paymentPct ? { payment: { create: { paymentPct: input.paymentPct } } } : {}),
     },
   });
 
@@ -49,7 +77,7 @@ export async function createMilestone(
     action: "create",
     entityType: "Milestone",
     entityId: created.id,
-    summary: `Added milestone "${input.name}"`,
+    summary: `Added milestone "${name}"`,
   });
 
   revalidateMilestones(projectId);
@@ -76,6 +104,14 @@ export async function updateMilestone(
   const existing = await prisma.milestone.findUniqueOrThrow({ where: { id } });
   // Guessed-ID fix: authorize against the milestone's real project, not the caller's claim.
   const user = await requireModuleWrite(existing.projectId, "MILESTONES");
+  checkOneOf(data.type, MILESTONE_TYPES, "Type");
+  checkOneOf(data.status, ITEM_STATUSES, "Status");
+  if (data.name !== undefined && !data.name.trim()) throw new Error("The name can't be empty.");
+  // Completing stamps the actual date (if empty); reopening clears it.
+  const autoActual =
+    data.status !== undefined && data.actualDate === undefined
+      ? actualDateForStatus(data.status, existing.actualDate, new Date(new Date().setHours(0, 0, 0, 0)))
+      : undefined;
 
   await prisma.milestone.update({
     where: { id },
@@ -83,9 +119,9 @@ export async function updateMilestone(
       ...(data.name !== undefined ? { name: data.name } : {}),
       ...(data.type !== undefined ? { type: data.type } : {}),
       ...(data.description !== undefined ? { description: data.description || null } : {}),
-      ...(data.plannedDate !== undefined ? { plannedDate: data.plannedDate ? new Date(data.plannedDate) : null } : {}),
-      ...(data.forecastDate !== undefined ? { forecastDate: data.forecastDate ? new Date(data.forecastDate) : null } : {}),
-      ...(data.actualDate !== undefined ? { actualDate: data.actualDate ? new Date(data.actualDate) : null } : {}),
+      ...(data.plannedDate !== undefined ? { plannedDate: parseDateInput(data.plannedDate) } : {}),
+      ...(data.forecastDate !== undefined ? { forecastDate: parseDateInput(data.forecastDate) } : {}),
+      ...(data.actualDate !== undefined ? { actualDate: parseDateInput(data.actualDate) } : autoActual !== undefined ? { actualDate: autoActual } : {}),
       ...(data.status !== undefined ? { status: data.status } : {}),
       ...(data.pctComplete !== undefined ? { pctComplete: data.pctComplete } : {}),
       ...(data.ownerPersonId !== undefined ? { ownerPersonId: data.ownerPersonId || null } : {}),
@@ -115,6 +151,9 @@ export async function updateMilestonePayment(
 ) {
   const milestone = await prisma.milestone.findUniqueOrThrow({ where: { id: milestoneId }, include: { payment: true } });
   const user = await requireModuleWrite(milestone.projectId, "MILESTONES");
+  checkOneOf(data.invoiceStatus, INVOICE_STATUSES, "Invoice status");
+  checkOneOf(data.clientSignoff, SIGNOFF_STATUSES, "Client sign-off");
+  if (data.paymentPct !== undefined) await checkPaymentPct(milestone.projectId, milestoneId, data.paymentPct);
 
   const changes = {
     ...(data.paymentPct !== undefined ? { paymentPct: data.paymentPct } : {}),
