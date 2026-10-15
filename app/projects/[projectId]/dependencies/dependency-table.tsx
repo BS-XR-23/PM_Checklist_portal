@@ -8,6 +8,7 @@ import { IconCalendar, IconFileText, IconFolder, IconChevronDown, IconSearch } f
 import { DEPENDENCY_PRIORITIES, DEPENDENCY_STATUSES } from "@/lib/constants";
 import { DEPENDENCY_PRIORITY_COLORS, DEPENDENCY_STATUS_COLORS, avatarColorFromString, tagPillStyle } from "@/lib/colors";
 import { formatDate, toDateInputValue, initials } from "@/lib/format";
+import { dependencyDaysLeft } from "@/lib/dependencies";
 import { updateDependency, deleteDependency } from "./dependency-actions";
 
 export type DependencyTableRow = {
@@ -24,7 +25,7 @@ export type DependencyTableRow = {
 
 const PAGE_SIZES = [10, 25, 50] as const;
 
-export function DependencyTable({ projectId, canWrite, rows }: { projectId: string; canWrite: boolean; rows: DependencyTableRow[] }) {
+export function DependencyTable({ projectId, canWrite, notesHidden, rows }: { projectId: string; canWrite: boolean; notesHidden: boolean; rows: DependencyTableRow[] }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<(typeof PAGE_SIZES)[number]>(10);
@@ -156,12 +157,12 @@ export function DependencyTable({ projectId, canWrite, rows }: { projectId: stri
           <thead>
             <tr className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide bg-slate-50">
               <th className="px-3 py-2.5 w-10">#</th>
-              <th className="px-3 py-2.5 w-28">Category</th>
+              <th className="px-3 py-2.5 w-44">Category</th>
               <th className="px-3 py-2.5 min-w-[260px]">Item Description</th>
               <th className="px-3 py-2.5 w-36">Preferred Format</th>
               <th className="px-3 py-2.5 w-40">Responsible</th>
               <th className="px-3 py-2.5 w-24">Priority</th>
-              <th className="px-3 py-2.5 w-32">Expected Date</th>
+              <th className="px-3 py-2.5 w-40">Expected Date</th>
               <th className="px-3 py-2.5 w-28">Status</th>
               <th className="px-3 py-2.5 w-14">Actions</th>
             </tr>
@@ -201,7 +202,7 @@ export function DependencyTable({ projectId, canWrite, rows }: { projectId: stri
                             value={d.category ?? ""}
                             placeholder="—"
                             onSave={(v) => updateDependency(d.id, projectId, { category: v })}
-                            className="w-24 min-w-0 truncate bg-transparent text-sm text-slate-700 px-1 py-1 rounded border border-transparent hover:border-slate-300 hover:bg-slate-100 focus:bg-white focus:outline-none focus:ring-1 focus:ring-slate-400"
+                            className="w-36 min-w-0 truncate bg-transparent text-sm text-slate-700 px-1 py-1 rounded border border-transparent hover:border-slate-300 hover:bg-slate-100 focus:bg-white focus:outline-none focus:ring-1 focus:ring-slate-400"
                           />
                         ) : (
                           <span className="text-sm text-slate-700">{d.category || "—"}</span>
@@ -215,7 +216,7 @@ export function DependencyTable({ projectId, canWrite, rows }: { projectId: stri
                       ) : (
                         <p className="text-sm font-medium text-slate-900">{d.description}</p>
                       )}
-                      {expanded && (
+                      {expanded && !notesHidden && (
                         <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50/60 px-2.5 py-2">
                           <p className="text-xs font-semibold text-slate-500">Notes</p>
                           {canWrite ? (
@@ -293,6 +294,7 @@ export function DependencyTable({ projectId, canWrite, rows }: { projectId: stri
                           <span className="text-sm text-slate-600">{formatDate(d.expectedDate)}</span>
                         )}
                       </div>
+                      <DaysLeft row={d} />
                     </td>
 
                     <td className="px-3 py-3">
@@ -316,6 +318,7 @@ export function DependencyTable({ projectId, canWrite, rows }: { projectId: stri
 
                     <td className="px-3 py-3">
                       <div className="flex items-center gap-1">
+                        {!notesHidden && (
                         <button
                           type="button"
                           onClick={() => setExpandedId(expanded ? null : d.id)}
@@ -324,9 +327,18 @@ export function DependencyTable({ projectId, canWrite, rows }: { projectId: stri
                         >
                           <IconChevronDown className={clsx("h-3.5 w-3.5 transition-transform", expanded && "-rotate-180")} />
                         </button>
+                        )}
                         {canWrite && (
                           <RowActionsMenu
-                            actions={[{ label: "Delete dependency", pendingLabel: "Deleting...", danger: true, onClick: () => deleteDependency(d.id, projectId) }]}
+                            actions={[
+                              {
+                                label: "Delete dependency",
+                                pendingLabel: "Deleting...",
+                                danger: true,
+                                confirmMessage: `Delete "${d.description.slice(0, 80)}"? It stays in the Activity log but disappears from the tracker. To keep it on record, set its status to Done instead.`,
+                                onClick: () => deleteDependency(d.id, projectId),
+                              },
+                            ]}
                           />
                         )}
                       </div>
@@ -391,5 +403,15 @@ export function DependencyTable({ projectId, canWrite, rows }: { projectId: stri
         </div>
       )}
     </div>
+  );
+}
+
+/** "Overdue by N days" / "Due today" / "N days left" under the expected date; nothing once received. */
+function DaysLeft({ row }: { row: DependencyTableRow }) {
+  const left = dependencyDaysLeft(row);
+  if (left == null) return null;
+  const text = left < 0 ? `Overdue by ${-left} day${left === -1 ? "" : "s"}` : left === 0 ? "Due today" : `${left} day${left === 1 ? "" : "s"} left`;
+  return (
+    <p className={clsx("mt-1 pl-5 text-[11px] font-medium", left < 0 ? "text-rose-700" : left <= 3 ? "text-amber-700" : "text-slate-400")}>{text}</p>
   );
 }

@@ -104,6 +104,7 @@ export const DEPENDENCY_STATUS_COLORS = {
 export const REMINDER_SOURCE_STYLE = {
   CHECKLIST: { bg: "#DBEAFE", text: "#1D4ED8", label: "Checklist" },
   ACTION_ITEM: { bg: "#EDE9FE", text: "#6D28D9", label: "Action Item" },
+  DEPENDENCY: { bg: "#FFEDD5", text: "#9A3412", label: "Dependency" },
   PRESALES_OPPORTUNITY: { bg: "#FEF3C7", text: "#92400E", label: "Presales" },
   PRESALES_ACTION_ITEM: { bg: "#FEF3C7", text: "#92400E", label: "Presales Action" },
   PRESALES_STALE: { bg: "#FFE4E6", text: "#9F1239", label: "Presales Stale" },

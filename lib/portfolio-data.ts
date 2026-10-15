@@ -5,6 +5,7 @@ import { summarizeMilestones, milestoneDueDate, isMilestoneDone } from "@/lib/mi
 import { computeProjectHealth, deliveryIndices, deliveryPct, governancePct } from "@/lib/project-health";
 import type { Rag } from "@/lib/rag";
 import { buildBillingForecast, type BillingForecast } from "@/lib/billing-forecast";
+import { isDependencyOverdue } from "@/lib/dependencies";
 
 // The exact `include` this module needs from `prisma.project.findMany` — kept
 // next to the code that consumes it so the two can never drift apart.
@@ -17,7 +18,7 @@ export const PORTFOLIO_PROJECT_INCLUDE = {
   checklistItems: true,
   milestones: { include: { payment: true, ownerPerson: { select: { name: true } } } },
   memberships: { where: { role: "PM" as const }, include: { user: { select: { name: true } } }, take: 1 },
-  dependencies: { where: { status: "Blocked" as const }, select: { id: true } },
+  dependencies: { where: { status: { not: "Done" } }, select: { status: true, priority: true, expectedDate: true } },
   wbsTasks: { select: { storyPoints: true, pctComplete: true } },
 } satisfies Prisma.ProjectInclude;
 
@@ -75,6 +76,7 @@ function buildAttentionIssues(input: {
   latestSpi: number | null;
   nextMilestone: { name: string; date: Date } | null;
   blockedDependencies: number;
+  overdueDependencies: number;
   hasMissingData: boolean;
   overdueChecklistCount: number;
 }): AttentionIssue[] {
@@ -98,6 +100,9 @@ function buildAttentionIssues(input: {
   if (input.blockedDependencies > 0) {
     issues.push({ severity: "Medium", label: `${input.blockedDependencies} blocked dependenc${input.blockedDependencies > 1 ? "ies" : "y"}` });
   }
+  if (input.overdueDependencies > 0) {
+    issues.push({ severity: "Medium", label: `${input.overdueDependencies} overdue dependenc${input.overdueDependencies > 1 ? "ies" : "y"}` });
+  }
   if (input.hasMissingData) {
     issues.push({ severity: "Low", label: "Missing PM or contract value" });
   }
@@ -115,6 +120,7 @@ function buildPortfolioRow(
     sprints: toSprintsForBudget(p.sprints),
     risks: p.risks,
     milestones: p.milestones,
+    dependencies: p.dependencies,
     today,
   });
   const { rag, spi: latestSpi, effortIndex, openHighRisks } = health;
@@ -159,11 +165,15 @@ function buildPortfolioRow(
   // drives the "<name> overdue" attention issue and the table's Next column.
   const nextMilestone = milestoneSummary.overdue[0] ?? milestoneSummary.nextMilestone;
 
+  const blockedDependencies = p.dependencies.filter((d) => d.status === "Blocked").length;
+  const overdueDependencies = p.dependencies.filter((d) => isDependencyOverdue(d, today)).length;
+
   const issues = buildAttentionIssues({
     openHighRisks,
     latestSpi,
     nextMilestone,
-    blockedDependencies: p.dependencies.length,
+    blockedDependencies,
+    overdueDependencies,
     hasMissingData,
     overdueChecklistCount: overdue.length,
   });
@@ -184,7 +194,7 @@ function buildPortfolioRow(
     effortIndex,
     openHighRisks,
     openRisks,
-    blockedDependencies: p.dependencies.length,
+    blockedDependencies,
     paidAmount,
     invoicedAmount,
     nextPaymentAmount,

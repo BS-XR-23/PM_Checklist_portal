@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getModuleAccess, meetsLevel } from "@/lib/rbac";
 import { formatDate } from "@/lib/format";
+import { sortDependencies, isDependencyOverdue, dependencyDaysLeft } from "@/lib/dependencies";
 import { buildXlsxBuffer, xlsxFilename } from "@/lib/xlsx-export";
 
 export async function GET(_req: NextRequest, { params }: { params: { projectId: string } }) {
@@ -19,7 +20,9 @@ export async function GET(_req: NextRequest, { params }: { params: { projectId: 
     orderBy: { order: "asc" },
   });
 
-  const sheetRows = rows.map((d, i) => ({
+  // Same order as the page, and Read Limited hides Notes like the page does.
+  const notesHidden = access === "READ_LIMITED";
+  const sheetRows = sortDependencies(rows).map((d, i) => ({
     "No.": i + 1,
     Category: d.category ?? "",
     "Item Description": d.description,
@@ -28,7 +31,8 @@ export async function GET(_req: NextRequest, { params }: { params: { projectId: 
     Priority: d.priority,
     "Expected Date": formatDate(d.expectedDate),
     Status: d.status,
-    Notes: d.notes ?? "",
+    "Days late": isDependencyOverdue(d) ? -(dependencyDaysLeft(d) ?? 0) : "",
+    ...(notesHidden ? {} : { Notes: d.notes ?? "" }),
   }));
 
   const buffer = buildXlsxBuffer("Dependencies", sheetRows);

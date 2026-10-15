@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { reminderBand } from "@/lib/calculations";
 import { CHECKLIST_TYPE_BY_KEY, type ChecklistType } from "@/lib/checklist-types";
 import { PRESALES_STALE_DAYS } from "@/lib/presales-stage";
+import { isDependencyOverdue } from "@/lib/dependencies";
 import type { CurrentUser } from "@/lib/rbac";
 import type { Role } from "@prisma/client";
 
@@ -30,8 +31,8 @@ export type ReminderItem = {
   href: string;
   contextLabel: string; // project name, or the opportunity name for a presales reminder
   groupId: string; // groups reminders for the "grouped by project" view — a real project id, or the presales opportunity's id when there's no project
-  projectId?: string; // present for CHECKLIST/ACTION_ITEM only — a presales reminder isn't scoped to a project
-  source: "CHECKLIST" | "ACTION_ITEM" | "PRESALES_OPPORTUNITY" | "PRESALES_ACTION_ITEM" | "PRESALES_STALE";
+  projectId?: string; // present for CHECKLIST/ACTION_ITEM/DEPENDENCY only — a presales reminder isn't scoped to a project
+  source: "CHECKLIST" | "ACTION_ITEM" | "DEPENDENCY" | "PRESALES_OPPORTUNITY" | "PRESALES_ACTION_ITEM" | "PRESALES_STALE";
   context: string; // stage / owner / client — the subtitle's first segment
   itemText: string;
   plannedDate: Date;
@@ -51,6 +52,7 @@ function reminderPriority(band: "OVERDUE" | "DUE_SOON", plannedDate: Date, today
 type ReminderSource = {
   checklistItems: Awaited<ReturnType<typeof fetchChecklistItems>>;
   actionItems: Awaited<ReturnType<typeof fetchActionItems>>;
+  dependencies: Awaited<ReturnType<typeof fetchDependencies>>;
   presalesOpportunities: Awaited<ReturnType<typeof fetchPresalesOpportunities>>;
   presalesActionItems: Awaited<ReturnType<typeof fetchPresalesActionItems>>;
   stalePresalesOpportunities: Awaited<ReturnType<typeof fetchStalePresalesOpportunities>>;
@@ -73,6 +75,17 @@ function fetchActionItems(projectIds: string[]) {
     : prisma.actionItem.findMany({
         where: { projectId: { in: projectIds }, status: { not: "Done" }, dueDate: { not: null } },
         include: { project: { select: { id: true, name: true } }, ownerPerson: { select: { name: true } } },
+      });
+}
+
+// Only High/Extreme items, and only once they're overdue (filtered in
+// buildReminders) — same rule as project health (lib/dependencies.ts).
+function fetchDependencies(projectIds: string[]) {
+  return projectIds.length === 0
+    ? Promise.resolve([])
+    : prisma.dependencyItem.findMany({
+        where: { projectId: { in: projectIds }, status: { not: "Done" }, priority: { in: ["High", "Extreme"] }, expectedDate: { not: null } },
+        include: { project: { select: { id: true, name: true } } },
       });
 }
 
@@ -108,17 +121,18 @@ function fetchStalePresalesOpportunities() {
 
 async function fetchReminderSource(user: CurrentUser): Promise<ReminderSource> {
   if (!REMINDER_ROLES.includes(user.role)) {
-    return { checklistItems: [], actionItems: [], presalesOpportunities: [], presalesActionItems: [], stalePresalesOpportunities: [] };
+    return { checklistItems: [], actionItems: [], dependencies: [], presalesOpportunities: [], presalesActionItems: [], stalePresalesOpportunities: [] };
   }
   const projectIds = await visibleActiveProjectIds(user);
-  const [checklistItems, actionItems, presalesOpportunities, presalesActionItems, stalePresalesOpportunities] = await Promise.all([
+  const [checklistItems, actionItems, dependencies, presalesOpportunities, presalesActionItems, stalePresalesOpportunities] = await Promise.all([
     fetchChecklistItems(projectIds),
     fetchActionItems(projectIds),
+    fetchDependencies(projectIds),
     fetchPresalesOpportunities(),
     fetchPresalesActionItems(),
     fetchStalePresalesOpportunities(),
   ]);
-  return { checklistItems, actionItems, presalesOpportunities, presalesActionItems, stalePresalesOpportunities };
+  return { checklistItems, actionItems, dependencies, presalesOpportunities, presalesActionItems, stalePresalesOpportunities };
 }
 
 function buildReminders(source: ReminderSource, today: Date): ReminderItem[] {
@@ -152,6 +166,21 @@ function buildReminders(source: ReminderSource, today: Date): ReminderItem[] {
       plannedDate: a.dueDate as Date,
       band,
       priority: reminderPriority(band, a.dueDate as Date, today),
+    }));
+
+  const dependencyReminders = source.dependencies
+    .filter((d) => isDependencyOverdue(d, today))
+    .map((d) => ({
+      href: `/projects/${d.project.id}/dependencies`,
+      contextLabel: d.project.name,
+      groupId: d.project.id,
+      projectId: d.project.id,
+      source: "DEPENDENCY" as const,
+      context: `Waiting on ${d.responsible?.trim() || "someone outside the team"} · ${d.priority}`,
+      itemText: d.description,
+      plannedDate: d.expectedDate as Date,
+      band: "OVERDUE" as const,
+      priority: reminderPriority("OVERDUE", d.expectedDate as Date, today),
     }));
 
   const presalesReminders = source.presalesOpportunities
@@ -206,7 +235,7 @@ function buildReminders(source: ReminderSource, today: Date): ReminderItem[] {
       priority: reminderPriority(band, deadline, today),
     }));
 
-  return [...checklistReminders, ...actionItemReminders, ...presalesReminders, ...presalesActionItemReminders, ...staleReminders].sort((a, b) => {
+  return [...checklistReminders, ...actionItemReminders, ...dependencyReminders, ...presalesReminders, ...presalesActionItemReminders, ...staleReminders].sort((a, b) => {
     if (a.band !== b.band) return a.band === "OVERDUE" ? -1 : 1;
     return a.plannedDate.getTime() - b.plannedDate.getTime();
   });

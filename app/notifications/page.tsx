@@ -36,7 +36,7 @@ export default async function NotificationsPage() {
     <AppShell user={user}>
       <HeaderBar
         title="Reminders"
-        subtitle="Track your pending checklist items, action items, and presales opportunities — organized by project."
+        subtitle="Track your pending checklist items, action items, overdue dependencies and presales opportunities — organized by project."
         activityHref={user.role === "ADMIN" ? "/admin/audit-log" : undefined}
       />
 

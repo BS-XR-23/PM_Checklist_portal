@@ -5,10 +5,16 @@ import { prisma } from "@/lib/prisma";
 import { parseDateInput } from "@/lib/format";
 import { requireModuleWrite, writeAudit } from "@/lib/rbac";
 
+// Overdue High/Extreme dependencies feed project health and Reminders, so
+// every page showing either is refreshed too.
 function revalidateDependencies(projectId: string) {
   revalidatePath(`/projects/${projectId}/dependencies`);
   revalidatePath(`/projects/${projectId}/dashboard`);
+  revalidatePath(`/projects/${projectId}/delivery`);
   revalidatePath(`/projects/${projectId}/activity`);
+  revalidatePath("/projects");
+  revalidatePath("/portfolio");
+  revalidatePath("/notifications");
 }
 
 export async function createDependency(projectId: string) {

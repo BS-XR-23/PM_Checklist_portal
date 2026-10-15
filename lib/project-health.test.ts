@@ -136,7 +136,7 @@ describe("computeProjectHealth", () => {
   it("regression: an on-schedule project with logged hours is GREEN — never RED from a 0.00 CPI", () => {
     // The old RAG used Budget Tracker's dollar CPI with a 0 story-point
     // baseline: EV = 0, AC > 0 -> CPI 0.00 -> RED on every project.
-    const health = computeProjectHealth({
+    const health = computeProjectHealth({ dependencies: [],
       sprints: [
         sprint({
           closedAt: new Date("2026-01-14"),
@@ -156,30 +156,30 @@ describe("computeProjectHealth", () => {
   });
 
   it("no sprints, risks, or milestones yet is NONE (No data yet) — unknown, not failing and not healthy", () => {
-    const health = computeProjectHealth({ sprints: [], risks: [], milestones: [], today: TODAY });
+    const health = computeProjectHealth({ dependencies: [], sprints: [], risks: [], milestones: [], today: TODAY });
     expect(health).toMatchObject({ rag: "NONE", spi: null, effortIndex: null, reasons: [] });
   });
 
   it("a running first sprint (no SPI yet) is enough to rate health — GREEN, not No data", () => {
-    const health = computeProjectHealth({ sprints: [sprint({ liveEntries: [contribution({ storyPoints: 5 })] })], risks: [], milestones: [], today: TODAY });
+    const health = computeProjectHealth({ dependencies: [], sprints: [sprint({ liveEntries: [contribution({ storyPoints: 5 })] })], risks: [], milestones: [], today: TODAY });
     expect(health).toMatchObject({ rag: "GREEN", spi: null });
   });
 
   it("any one signal is enough to rate health — a logged low risk alone makes it GREEN", () => {
     const lowRisk = { ...highRisk, probability: "Low", impact: "Low" };
-    expect(computeProjectHealth({ sprints: [], risks: [lowRisk], milestones: [], today: TODAY }).rag).toBe("GREEN");
+    expect(computeProjectHealth({ dependencies: [], sprints: [], risks: [lowRisk], milestones: [], today: TODAY }).rag).toBe("GREEN");
     const future = { status: "NOT_STARTED", plannedDate: new Date("2099-01-01") };
-    expect(computeProjectHealth({ sprints: [], risks: [], milestones: [future], today: TODAY }).rag).toBe("GREEN");
+    expect(computeProjectHealth({ dependencies: [], sprints: [], risks: [], milestones: [future], today: TODAY }).rag).toBe("GREEN");
   });
 
   it("an open high-severity risk is RED", () => {
-    const health = computeProjectHealth({ sprints: [], risks: [highRisk], milestones: [], today: TODAY });
+    const health = computeProjectHealth({ dependencies: [], sprints: [], risks: [highRisk], milestones: [], today: TODAY });
     expect(health.rag).toBe("RED");
     expect(health.reasons).toEqual(["1 open high risk/issue"]);
   });
 
   it("open high Issues count; closed items, opportunities and non-high scores don't", () => {
-    const health = computeProjectHealth({
+    const health = computeProjectHealth({ dependencies: [],
       sprints: [],
       risks: [
         { ...highRisk, status: "Closed" },
@@ -196,9 +196,28 @@ describe("computeProjectHealth", () => {
     expect(health.openHighRisks).toBe(2); // the Issue and the Medium×High risk
   });
 
+  it("an overdue High/Extreme dependency is AMBER; Medium, received or on-time ones aren't", () => {
+    const late = new Date(TODAY.getTime() - 3 * 86_400_000);
+    const health = computeProjectHealth({
+      sprints: [],
+      risks: [],
+      milestones: [],
+      dependencies: [
+        { status: "Due", priority: "High", expectedDate: late },
+        { status: "Blocked", priority: "Extreme", expectedDate: late },
+        { status: "Due", priority: "Medium", expectedDate: late },
+        { status: "Done", priority: "High", expectedDate: late },
+        { status: "Due", priority: "High", expectedDate: new Date(TODAY.getTime() + 3 * 86_400_000) },
+      ],
+      today: TODAY,
+    });
+    expect(health.rag).toBe("AMBER");
+    expect(health.reasons).toEqual(["2 overdue high-priority dependencies"]);
+  });
+
   it("SPI under 0.9 is RED, 0.9–0.99 is AMBER", () => {
     const withSpi = (earned: number) =>
-      computeProjectHealth({
+      computeProjectHealth({ dependencies: [],
         sprints: [sprint({ closedAt: new Date("2026-01-14"), frozenPlannedPoints: 100, frozenEarnedPoints: earned, frozenActualValue: 1 })],
         risks: [],
         milestones: [],
@@ -210,7 +229,7 @@ describe("computeProjectHealth", () => {
   });
 
   it("an overdue milestone is AMBER, and lists every reason most-severe first", () => {
-    const amber = computeProjectHealth({
+    const amber = computeProjectHealth({ dependencies: [],
       sprints: [],
       risks: [],
       milestones: [{ status: "NOT_STARTED", plannedDate: new Date("2026-05-01") }],
@@ -219,7 +238,7 @@ describe("computeProjectHealth", () => {
     expect(amber.rag).toBe("AMBER");
     expect(amber.reasons).toEqual(["1 overdue milestone"]);
 
-    const red = computeProjectHealth({
+    const red = computeProjectHealth({ dependencies: [],
       sprints: [],
       risks: [highRisk, highRisk],
       milestones: [{ status: "NOT_STARTED", plannedDate: new Date("2026-05-01") }],

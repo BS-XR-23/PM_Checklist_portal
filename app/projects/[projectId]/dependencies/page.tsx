@@ -1,7 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { requireModuleAccess } from "@/lib/rbac";
-import { IconClock, IconCheckCircle, IconAlertTriangle, IconClipboardList } from "@/components/layout/icons";
+import { IconClock, IconCheckCircle, IconAlertTriangle, IconClipboardList, IconAlertCircle } from "@/components/layout/icons";
 import { InfoTooltip } from "@/components/ui/info-tooltip";
+import { sortDependencies, summarizeOverdueDependencies } from "@/lib/dependencies";
 import { AddDependencyButton } from "./add-dependency-button";
 import { DependencyTable } from "./dependency-table";
 
@@ -43,11 +44,16 @@ function DependencyStatCard({
 export default async function DependenciesPage({ params }: { params: { projectId: string } }) {
   const access = await requireModuleAccess(params.projectId, "DEPENDENCIES", "READ_LIMITED");
   const canWrite = access === "WRITE";
+  // Read Limited hides Notes (docs/USER_GUIDE.md §3) — stripped here, not just hidden in the browser.
+  const notesHidden = access === "READ_LIMITED";
 
-  const rows = await prisma.dependencyItem.findMany({
+  const raw = await prisma.dependencyItem.findMany({
     where: { projectId: params.projectId },
     orderBy: { order: "asc" },
   });
+  // Worst first: overdue, then priority, then expected date; received last.
+  const rows = sortDependencies(raw).map((d) => (notesHidden ? { ...d, notes: null } : d));
+  const overdue = summarizeOverdueDependencies(raw);
 
   const total = rows.length;
   const doneCount = rows.filter((d) => d.status === "Done").length;
@@ -61,7 +67,7 @@ export default async function DependenciesPage({ params }: { params: { projectId
         <div>
           <h2 className="flex items-center gap-1.5 text-base font-semibold text-slate-900">
             Dependency Tracker
-            <InfoTooltip text="Due = waiting, on track. Blocked = stuck on something outside the delivery team's control. Done = received. Expected Date drives the days-remaining countdown in the table." />
+            <InfoTooltip text="Due = still waiting. Blocked = stuck on something outside the delivery team's control. Done = received. Anything not received by its expected date shows as overdue; overdue High/Extreme items turn project health At Risk and appear in Reminders." />
           </h2>
           <p className="text-sm text-slate-500">Track items or approvals this project is waiting on from external teams or third parties.</p>
         </div>
@@ -76,8 +82,16 @@ export default async function DependenciesPage({ params }: { params: { projectId
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         <DependencyStatCard label="Total Dependencies" value={String(total)} icon={<IconClipboardList />} iconWrapClass="bg-blue-50 text-blue-600" />
+        <DependencyStatCard
+          label="Overdue"
+          value={String(overdue.count)}
+          subtitle={overdue.count ? `oldest by ${overdue.oldestDays} day${overdue.oldestDays === 1 ? "" : "s"}` : "none late"}
+          valueColor={overdue.count ? "#B91C1C" : undefined}
+          icon={<IconAlertCircle />}
+          iconWrapClass={overdue.count ? "bg-rose-50 text-rose-600" : "bg-slate-100 text-slate-500"}
+        />
         <DependencyStatCard
           label="Due"
           value={String(dueCount)}
@@ -104,7 +118,7 @@ export default async function DependenciesPage({ params }: { params: { projectId
         />
       </div>
 
-      <DependencyTable projectId={params.projectId} canWrite={canWrite} rows={rows} />
+      <DependencyTable projectId={params.projectId} canWrite={canWrite} notesHidden={notesHidden} rows={rows} />
     </div>
   );
 }

@@ -11,6 +11,7 @@ import type { ReminderItem } from "@/lib/notifications";
 const SOURCE_ICON: Record<ReminderItem["source"], (props: React.SVGProps<SVGSVGElement>) => React.JSX.Element> = {
   CHECKLIST: IconClipboardList,
   ACTION_ITEM: IconCheckCircle,
+  DEPENDENCY: IconFolder,
   PRESALES_OPPORTUNITY: IconTarget,
   PRESALES_ACTION_ITEM: IconTarget,
   PRESALES_STALE: IconClock,

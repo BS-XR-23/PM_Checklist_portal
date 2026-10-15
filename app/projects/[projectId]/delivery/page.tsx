@@ -34,7 +34,7 @@ export default async function DeliveryOverviewPage({ params }: { params: { proje
   ]);
   const projectId = params.projectId;
 
-  const [wbsTasks, sprints, milestones, releases, uatCases, uatDefects, risks] = await Promise.all([
+  const [wbsTasks, sprints, milestones, releases, uatCases, uatDefects, risks, dependencies] = await Promise.all([
     prisma.wbsTask.findMany({ where: { projectId } }),
     prisma.sprint.findMany({
       where: { projectId },
@@ -50,6 +50,7 @@ export default async function DeliveryOverviewPage({ params }: { params: { proje
     prisma.uatDefect.findMany({ where: { projectId } }),
     // Health inputs — same sources Dashboard/Portfolio feed computeProjectHealth.
     prisma.riskItem.findMany({ where: { projectId }, select: { type: true, status: true, probability: true, impact: true } }),
+    prisma.dependencyItem.findMany({ where: { projectId, status: { not: "Done" } }, select: { status: true, priority: true, expectedDate: true } }),
   ]);
 
   // --- Execution KPIs: task counts (same derivation as the Tasks tab) ---
@@ -66,7 +67,7 @@ export default async function DeliveryOverviewPage({ params }: { params: { proje
   // lib/project-health.ts, identical to Dashboard, Projects, and Portfolio.
   const sprintsForBudget = toSprintsForBudget(sprints);
   const { spi, effortIndex, scheduleVariancePts } = deliveryIndices(sprintsForBudget);
-  const health = computeProjectHealth({ sprints: sprintsForBudget, risks, milestones });
+  const health = computeProjectHealth({ sprints: sprintsForBudget, risks, milestones, dependencies });
 
   const currentSprint =
     sprints.find((s) => s.startedAt && !s.closedAt) ??
@@ -134,7 +135,7 @@ export default async function DeliveryOverviewPage({ params }: { params: { proje
         title="How to read this page"
         points={[
           <>Nothing is entered here — every figure is aggregated live from the Tasks, Sprints, Releases, and UAT tabs plus the project&apos;s Milestones &amp; Payments tab. To change a number, go edit it at its source.</>,
-          <><strong>Health</strong> is the same rating shown on the Dashboard and Portfolio: red for any open high risk or issue or SPI under 0.9, amber for SPI under 1.0 or an overdue milestone, green otherwise — or grey &quot;No data&quot; when there&apos;s nothing to judge yet.</>,
+          <><strong>Health</strong> is the same rating shown on the Dashboard and Portfolio: red for any open high risk or issue or SPI under 0.9, amber for SPI under 1.0, an overdue milestone or an overdue High/Extreme dependency, green otherwise — or grey &quot;No data&quot; when there&apos;s nothing to judge yet.</>,
           <><strong>SPI</strong> and <strong>Effort Index</strong> use closed sprints only. A running sprint shows in <strong>Current Sprint Progress</strong> and joins SPI when it closes — so SPI doesn&apos;t drop every time a sprint starts.</>,
           <><strong>Effort Index</strong> is story points earned ÷ competency-adjusted man-days spent — above 1.0 means work took less effort than estimated. It measures estimate accuracy and doesn&apos;t affect Health.</>,
           <><strong>Schedule Variance</strong> is EV − PV in story points — negative means the project is behind its plan.</>,

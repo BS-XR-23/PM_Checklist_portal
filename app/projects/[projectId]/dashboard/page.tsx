@@ -18,12 +18,13 @@ import { DetailedReporting } from "./detailed-reporting";
 // What needs me? (attention) · How far along? (progress) · Money ·
 // then reporting depth, collapsed.
 export default async function DashboardPage({ params }: { params: { projectId: string } }) {
-  const [access, decisionLogAccess, riskRegisterAccess, milestonesAccess, pmPlanAccess, user] = await Promise.all([
+  const [access, decisionLogAccess, riskRegisterAccess, milestonesAccess, pmPlanAccess, dependenciesAccess, user] = await Promise.all([
     requireModuleAccess(params.projectId, "DASHBOARD", "READ_LIMITED"),
     getModuleAccess(params.projectId, "DECISION_LOG"),
     getModuleAccess(params.projectId, "RISK_REGISTER"),
     getModuleAccess(params.projectId, "MILESTONES"),
     getModuleAccess(params.projectId, "PM_PLAN"),
+    getModuleAccess(params.projectId, "DEPENDENCIES"),
     requireUser(),
   ]);
   // READ_LIMITED (the Client default): overall progress only — no financial/
@@ -41,7 +42,10 @@ export default async function DashboardPage({ params }: { params: { projectId: s
   const overdueCount = data.reminders.filter((r) => r.band === "OVERDUE").length;
   // Only warnings whose fix page this viewer can open.
   const warnings = financialsVisible
-    ? data.warnings.filter((w) => (w.route === "risks" ? riskRegisterAccess !== "NONE" : milestonesAccess !== "NONE"))
+    ? data.warnings.filter((w) => {
+        const fixAccess = w.route === "risks" ? riskRegisterAccess : w.route === "dependencies" ? dependenciesAccess : milestonesAccess;
+        return fixAccess !== "NONE";
+      })
     : [];
   const hasAttention = financialsVisible && (data.reminders.length > 0 || warnings.length > 0);
   const showDecisions = decisionLogAccess !== "NONE" && data.recentDecisions.length > 0;

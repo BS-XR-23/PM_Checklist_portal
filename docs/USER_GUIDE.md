@@ -311,8 +311,22 @@ In Progress) first, then Completed; Rejected folded away.
 What the project is waiting on from **outside the delivery team** — the
 client, another internal team, or a third party. Category, description,
 preferred format, responsible (organisation), priority (Low · Medium · High ·
-Extreme), expected date, status (Due · Done · Blocked), notes. Blocked
-dependencies appear as attention items on Portfolio.
+Extreme), expected date, status (Due = still waiting · Blocked · Done =
+received), notes.
+
+- **Worst first:** overdue items on top, then by priority, then expected
+  date; received items last.
+- Under each expected date: **Overdue by N days**, **Due today**, or **N days
+  left** (amber within 3 days). Received items show nothing.
+- Tiles: Total · **Overdue** (with the oldest) · Due · Blocked · Done.
+- **Overdue** = not received (Due or Blocked) and the expected date has
+  passed. Overdue items show as a Dashboard warning and on Portfolio's
+  attention list; overdue **High/Extreme** ones also turn project health
+  **At Risk** and appear in **Reminders**. Blocked items still show on
+  Portfolio as before.
+- Delete asks first — set Done instead to keep a record.
+- **Read Limited** viewers don't see Notes (page and export). The export is
+  in the same order and adds a "Days late" column.
 
 ## 11. Delivery
 
@@ -530,7 +544,7 @@ only** (archived projects appear only under the table's "All" tab).
   SPI (closed sprints). Click a tile to filter the table or jump to billing.
 - **Needs Management Attention** — first on the page: every active
   Critical or At Risk project with its reasons (high risks, overdue
-  milestone, SPI, blocked dependencies, missing PM/contract value). A green
+  milestone, SPI, blocked or overdue dependencies, missing PM/contract value). A green
   line says so when there are none.
 - **Billing & Cash** — built from each project's Milestones & Payments
   (tranche = contract value × payment %):
@@ -554,7 +568,8 @@ only** (archived projects appear only under the table's "All" tab).
 
 Super Admin, Admin, and PM only (a PM sees their own projects). Everything
 overdue or due within 7 days from: checklist items (not done, with a planned
-date, **excluding recurring cadence items**), action items, open presales
+date, **excluding recurring cadence items**), action items, **overdue
+High/Extreme dependencies** (overdue only), open presales
 opportunities (expected close date), presales action items on open deals,
 and stale presales opportunities. Overdue first, then soonest.
 
@@ -592,7 +607,8 @@ message. Role changes and deactivation take effect on the very next request.
 | **Effort Index** (scope) | Same closed-sprints-only rule as SPI |
 | **Effort Index** | Story points earned ÷ competency-adjusted man-days (actual hours ÷ 8 × competency multiplier). > 1 = less effort than estimated |
 | **Health — Red** | Any open high risk or issue, **or** SPI < 0.9 |
-| **Health — Amber** | SPI 0.9–0.99, **or** any overdue milestone |
+| **Health — Amber** | SPI 0.9–0.99, **or** any overdue milestone, **or** any High/Extreme dependency past its expected date |
+| **Overdue dependency** | Status Due or Blocked and the expected date has passed |
 | **Health — Green** | None of the above, and there is something to judge (a started sprint, a client milestone, or a logged risk) |
 | **Health — No data yet** | None of the above **and** nothing to judge yet — no started sprint, no client milestone, no risk. Shown grey; missing data never counts against a project, but it isn't "Healthy" either |
 | **Milestone due date** | Forecast date if set, otherwise planned date |

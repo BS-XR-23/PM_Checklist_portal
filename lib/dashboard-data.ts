@@ -4,6 +4,7 @@ import { ITEM_STATUSES, type ItemStatus } from "@/lib/constants";
 import { CHECKLIST_TYPES, CHECKLIST_TYPE_BY_KEY, type ChecklistType } from "@/lib/checklist-types";
 import { computeProjectHealth, deliveryIndices, deliveryPct, governancePct, wbsBaselinePoints } from "@/lib/project-health";
 import { summarizeMilestones, milestoneDueDate, isMilestoneDone, contractMoneySplit } from "@/lib/milestones";
+import { summarizeOverdueDependencies } from "@/lib/dependencies";
 import { PM_STAGES } from "@/lib/seed-data";
 import {
   COMPLETED_STAGE_LABEL,
@@ -22,7 +23,7 @@ const DAY_MS = 86_400_000;
 export type DashboardWarning = { tone: "red" | "amber"; text: string; route: string };
 
 export async function getDashboardData(projectId: string) {
-  const [project, allItems, risks, crs, sprints, milestones, actionItems, recentDecisionsRaw, pmPlan, wbsTasks] = await Promise.all([
+  const [project, allItems, risks, crs, sprints, milestones, actionItems, recentDecisionsRaw, pmPlan, wbsTasks, dependencies] = await Promise.all([
     prisma.project.findUniqueOrThrow({ where: { id: projectId } }),
     // One query for both checklists (differ only by `type`) instead of two —
     // filtering below preserves the orderBy order within each subset.
@@ -44,6 +45,7 @@ export async function getDashboardData(projectId: string) {
     prisma.decisionLogItem.findMany({ where: { projectId }, orderBy: { order: "desc" }, take: 5, include: { decidedByPerson: { select: { name: true } } } }),
     prisma.pMPlan.findUnique({ where: { projectId }, select: { timelineRows: { orderBy: { order: "asc" } } } }),
     prisma.wbsTask.findMany({ where: { projectId }, select: { storyPoints: true, pctComplete: true } }),
+    prisma.dependencyItem.findMany({ where: { projectId, status: { not: "Done" } }, select: { status: true, priority: true, expectedDate: true, responsible: true } }),
   ]);
 
   const recentDecisions = recentDecisionsRaw.map((d) => ({
@@ -220,6 +222,7 @@ export async function getDashboardData(projectId: string) {
     sprints: sprintsForBudget,
     risks,
     milestones,
+    dependencies,
   });
   const { spiHistory, running: runningSprint } = deliveryIndices(sprintsForBudget);
   const { rag, openHighRisks } = health;
@@ -262,6 +265,14 @@ export async function getDashboardData(projectId: string) {
   }
   if (openHighRisks > 0) {
     warnings.push({ tone: "red", text: `${openHighRisks} open high-severity risk${openHighRisks > 1 ? "s or issues" : " or issue"} — mitigate or close ${openHighRisks > 1 ? "them" : "it"} to clear Critical health.`, route: "risks" });
+  }
+  const overdueDeps = summarizeOverdueDependencies(dependencies);
+  if (overdueDeps.count > 0) {
+    warnings.push({
+      tone: overdueDeps.urgent > 0 ? "red" : "amber",
+      text: `${overdueDeps.count} dependenc${overdueDeps.count > 1 ? "ies" : "y"}${overdueDeps.from.length ? ` from ${overdueDeps.from.slice(0, 2).join(", ")}` : ""} overdue — the oldest by ${overdueDeps.oldestDays} day${overdueDeps.oldestDays === 1 ? "" : "s"}. Chase them or move the expected date.`,
+      route: "dependencies",
+    });
   }
 
   return {

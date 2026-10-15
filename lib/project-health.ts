@@ -5,6 +5,7 @@
 // used its own story-point SPI and competency CPI).
 import { checklistCompletionPct, competencyCpi, sprintTotalsFor, type SprintForBudget } from "@/lib/calculations";
 import { isOpenHighThreat } from "@/lib/risks";
+import { countOverdueUrgentDependencies, type DependencyLike } from "@/lib/dependencies";
 import type { Rag } from "@/lib/rag";
 import { isMilestoneDone, milestoneDueDate } from "@/lib/milestones";
 
@@ -152,7 +153,8 @@ export type ProjectHealth = {
 
 /**
  * RED: any open high-severity risk, or SPI below SPI_RED_BELOW.
- * AMBER: SPI below SPI_AMBER_BELOW, or any overdue milestone.
+ * AMBER: SPI below SPI_AMBER_BELOW, any overdue milestone, or any High/
+ * Extreme dependency past its expected date (lib/dependencies.ts).
  * GREEN: none of the above.
  * NONE ("No data yet"): none of the above AND nothing to judge — no started
  * sprint (no SPI), no client milestone, no risk logged. A project that hasn't
@@ -167,6 +169,7 @@ export function computeProjectHealth(input: {
   sprints: SprintForBudget[];
   risks: { type: string; status: string; probability: string; impact: string }[];
   milestones: MilestoneDates[];
+  dependencies: DependencyLike[];
   today?: Date;
 }): ProjectHealth {
   const { spi, effortIndex, running } = deliveryIndices(input.sprints);
@@ -179,6 +182,8 @@ export function computeProjectHealth(input: {
   if (spi != null && spi < SPI_RED_BELOW) red.push(`SPI ${spi.toFixed(2)}`);
   else if (spi != null && spi < SPI_AMBER_BELOW) amber.push(`SPI ${spi.toFixed(2)}`);
   if (overdueMilestones > 0) amber.push(`${overdueMilestones} overdue milestone${overdueMilestones > 1 ? "s" : ""}`);
+  const overdueDeps = countOverdueUrgentDependencies(input.dependencies, input.today);
+  if (overdueDeps > 0) amber.push(`${overdueDeps} overdue high-priority dependenc${overdueDeps > 1 ? "ies" : "y"}`);
 
   // A running first sprint has no SPI yet, but the project is clearly under
   // way — that counts as something to judge, same as a milestone or a risk.
