@@ -4,7 +4,6 @@ import {
   canManagePersonRegistry,
   canViewPersonRegistry,
   canManageEngagementsOnProject,
-  canViewPortfolioOverload,
 } from "./resourcing-rbac";
 import type { Role } from "@prisma/client";
 
@@ -61,19 +60,5 @@ describe("canManageEngagementsOnProject", () => {
       LIMITED: false,
     };
     for (const role of ALL_ROLES) expect(canManageEngagementsOnProject(role)).toBe(expected[role]);
-  });
-});
-
-describe("canViewPortfolioOverload", () => {
-  it("only ADMIN and TPM see the portfolio-wide overload/conflict rollup — not PROGRAM_MANAGER, even though it now drills into projects elsewhere", () => {
-    const expected: Record<Role, boolean> = {
-      ADMIN: true,
-      TPM: true,
-      PROGRAM_MANAGER: false,
-      CLIENT: false,
-      PM: false,
-      LIMITED: false,
-    };
-    for (const role of ALL_ROLES) expect(canViewPortfolioOverload(role)).toBe(expected[role]);
   });
 });

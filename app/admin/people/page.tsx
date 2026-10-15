@@ -2,8 +2,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/rbac";
 import { canManagePersonRegistry, canViewPersonRegistry } from "@/lib/resourcing-rbac";
-import { isCurrentlyActive, intensityForMonth } from "@/lib/overload";
-import { startOfMonthUTC } from "@/lib/format";
+import { isCurrentlyActive } from "@/lib/overload";
 import { AppShell } from "@/components/layout/app-shell";
 import { IconUsers, IconUserCheck, IconFolder, IconDollar, IconBadge } from "@/components/layout/icons";
 import { StatTile } from "@/components/ui/stat-tile";
@@ -26,11 +25,10 @@ export default async function AdminPeoplePage() {
   // Admin can actually edit it.
   const canEdit = canManagePersonRegistry(currentUser.role);
 
-  const currentMonth = startOfMonthUTC(new Date());
   const [people, users, roleRates, competencies] = await Promise.all([
     prisma.person.findMany({
       orderBy: { name: "asc" },
-      include: { user: true, roleRate: true, engagements: { include: { project: true, months: { where: { month: currentMonth } } } } },
+      include: { user: true, roleRate: true, engagements: { include: { project: true } } },
     }),
     prisma.user.findMany({ orderBy: { name: "asc" } }),
     prisma.roleRate.findMany({ orderBy: { roleName: "asc" } }),
@@ -57,15 +55,10 @@ export default async function AdminPeoplePage() {
       roleRateId: p.roleRateId,
       competencyId: p.competencyId,
       // Structured, not pre-joined into a string — PersonRow renders each as
-      // its own intensity-colored badge. One badge per line (not one long
-      // joined string) for the same reason as before: someone staffed
-      // across several projects was producing an unbroken line that forced
-      // the whole table wider than the viewport.
-      engagements: active.map((e) => ({
-        projectName: e.project.name,
-        roleOnProject: e.roleOnProject,
-        intensityPct: intensityForMonth(e.months, currentMonth),
-      })),
+      // its own badge, one per line: someone staffed across several projects
+      // was producing an unbroken line that forced the table wider than the
+      // viewport.
+      engagements: active.map((e) => ({ projectName: e.project.name, roleOnProject: e.roleOnProject })),
     };
   });
 

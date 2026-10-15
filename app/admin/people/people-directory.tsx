@@ -175,7 +175,7 @@ export function PeopleDirectory({
         </div>
 
         <p className="text-xs text-slate-400">
-          Assigning a Person to a specific project (role, intensity, dates) happens on that project&apos;s Resourcing
+          Putting a Person on a specific project (role, dates) happens on that project&apos;s Team → Engagement
           tab — Admin or that project&apos;s PM. A person&apos;s Rate Role is what the (testing-only) Budget Tracker
           resolves live to price their actual man-days from the Delivery tab. Their Competency is what converts real
           days worked into effort units for the Delivery tab&apos;s Sprint Summary.

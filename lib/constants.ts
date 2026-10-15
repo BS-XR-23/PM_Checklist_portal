@@ -95,27 +95,3 @@ export const UAT_DEFECT_SEVERITIES = ["Low", "Medium", "High", "Critical"] as co
 export const UAT_DEFECT_STATUSES = ["Open", "In Progress", "Fixed", "Retest", "Closed", "Rejected"] as const;
 
 export const UAT_SIGNOFF_STATUSES = ["Pending", "Signed", "Rejected"] as const;
-
-// Resourcing / engagement intensity. Stored as a 0-100 percentage so the
-// overload sum-threshold below is plain arithmetic; the UI offers these as
-// Low/Med/High presets plus free numeric entry.
-export const INTENSITY_PRESETS = { Low: 25, Med: 50, High: 90 } as const;
-
-// A person's combined intensity across currently-active engagements above
-// this is "overloaded". Change this single constant to retune it.
-export const OVERLOAD_THRESHOLD_PCT = 100;
-
-// An individual engagement at or above this intensity counts as "high" for
-// the overlapping-date-range conflict check (item 5b), independent of the
-// person's total.
-export const HIGH_INTENSITY_THRESHOLD_PCT = 60;
-
-// Lower edge of the Medium band for a single engagement's intensity
-// (Low < this <= Medium < HIGH_INTENSITY_THRESHOLD_PCT <= High).
-export const MEDIUM_INTENSITY_THRESHOLD_PCT = 40;
-
-// A person's TOTAL utilization across all active engagements at or above
-// this reads as "High Utilization" (amber), up to OVERLOAD_THRESHOLD_PCT.
-// A separate scale from the per-engagement bands above: those describe one
-// project's claim on someone, this describes how stretched they are overall.
-export const HIGH_UTILIZATION_THRESHOLD_PCT = 70;

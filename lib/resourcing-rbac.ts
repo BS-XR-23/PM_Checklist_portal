@@ -23,8 +23,3 @@ export function canViewPersonRegistry(role: Role): boolean {
 export function canManageEngagementsOnProject(role: Role): boolean {
   return role === "ADMIN" || role === "PM";
 }
-
-/** TPM/Admin see everyone; PM sees only people engaged on their own project(s). Client/Program Manager/Limited: none. */
-export function canViewPortfolioOverload(role: Role): boolean {
-  return role === "ADMIN" || role === "TPM";
-}

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { InlineText, InlineSelect } from "@/components/ui/inline-edit";
-import { INTENSITY_BAND_COLORS, intensityBand, avatarColorFromString } from "@/lib/colors";
+import { avatarColorFromString } from "@/lib/colors";
 import { initials } from "@/lib/format";
 import { updatePerson, deletePerson } from "./people-actions";
 import { PersonActionsMenu } from "./person-actions-menu";
@@ -17,7 +17,7 @@ export type PersonRowData = {
   linkableUsers: { id: string; name: string; email: string }[];
   roleRateId: string | null;
   competencyId: string | null;
-  engagements: { projectName: string; roleOnProject: string; intensityPct: number }[];
+  engagements: { projectName: string; roleOnProject: string }[];
 };
 
 function PlainText({ value }: { value: string | null }) {
@@ -142,19 +142,15 @@ export function PersonRow({
       <td className="px-4 py-3.5 max-w-[18rem]">
         {person.engagements.length > 0 ? (
           <div className="flex flex-col items-start gap-1">
-            {person.engagements.map((e, i) => {
-              const color = INTENSITY_BAND_COLORS[intensityBand(e.intensityPct)];
-              return (
-                <span
-                  key={i}
-                  className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium max-w-full truncate"
-                  style={{ backgroundColor: color.bg, color: color.text }}
-                  title={`${e.projectName} — ${e.roleOnProject} (${e.intensityPct}%)`}
-                >
-                  {e.projectName} — {e.roleOnProject} ({e.intensityPct}%)
-                </span>
-              );
-            })}
+            {person.engagements.map((e, i) => (
+              <span
+                key={i}
+                className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 max-w-full truncate"
+                title={`${e.projectName} — ${e.roleOnProject}`}
+              >
+                {e.projectName} — {e.roleOnProject}
+              </span>
+            ))}
           </div>
         ) : (
           <span className="text-slate-400">No current engagement</span>

@@ -7,9 +7,6 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
-import { toMonthParam, startOfMonthUTC } from "@/lib/format";
-
-const CURRENT_MONTH = toMonthParam(new Date());
 
 vi.mock("server-only", () => ({}));
 vi.mock("next/navigation", () => ({
@@ -66,12 +63,7 @@ describe("resourcing isolation boundary", () => {
       data: { projectId: projectA.id, personId: personOnA.id, roleOnProject: "Engineer" },
     });
     engagementOnB = await prisma.projectEngagement.create({
-      data: {
-        projectId: projectB.id,
-        personId: personOnB.id,
-        roleOnProject: "QA",
-        months: { create: { month: startOfMonthUTC(new Date()), intensityPct: 60 } },
-      },
+      data: { projectId: projectB.id, personId: personOnB.id, roleOnProject: "QA" },
     });
   });
 
@@ -92,58 +84,20 @@ describe("resourcing isolation boundary", () => {
     expect(stillUnchanged.roleOnProject).toBe("QA");
   });
 
-  it("guessed-ID attack: PM-A cannot set Project B's engagement intensity, even passing projectB.id", async () => {
-    const { setEngagementMonthIntensity } = await import("@/app/projects/[projectId]/resourcing/resourcing-actions");
+  it("assignEngagement refuses a person who is already on the project", async () => {
+    const { assignEngagement } = await import("@/app/projects/[projectId]/resourcing/resourcing-actions");
     actAs(pmAUserId);
 
-    await expect(setEngagementMonthIntensity(engagementOnB.id, projectB.id, CURRENT_MONTH, 99)).rejects.toThrow();
-
-    const monthRow = await prisma.projectEngagementMonth.findUniqueOrThrow({
-      where: { engagementId_month: { engagementId: engagementOnB.id, month: startOfMonthUTC(new Date()) } },
-    });
-    expect(monthRow.intensityPct).toBe(60);
-  });
-
-  it("assignEngagement seeds the current month's intensity (open-ended engagement)", async () => {
-    const { assignEngagement, removeEngagement } = await import("@/app/projects/[projectId]/resourcing/resourcing-actions");
-    actAs(pmAUserId);
-
-    await assignEngagement(projectA.id, { personId: personOnB.id, roleOnProject: "Seed Test", intensityPct: 35, startDate: null, endDate: null });
-    const created = await prisma.projectEngagement.findFirstOrThrow({ where: { projectId: projectA.id, roleOnProject: "Seed Test" } });
-
-    const monthRow = await prisma.projectEngagementMonth.findUniqueOrThrow({
-      where: { engagementId_month: { engagementId: created.id, month: startOfMonthUTC(new Date()) } },
-    });
-    expect(monthRow.intensityPct).toBe(35);
-
-    await removeEngagement(created.id, projectA.id); // cleanup
-  });
-
-  it("setEngagementMonthIntensity rejects a month outside the engagement's Start/End range", async () => {
-    const { assignEngagement, setEngagementMonthIntensity, removeEngagement } = await import(
-      "@/app/projects/[projectId]/resourcing/resourcing-actions"
-    );
-    actAs(pmAUserId);
-
-    // A short engagement bounded to this month only.
-    const today = new Date();
-    const start = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1)).toISOString().slice(0, 10);
-    const end = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 1, 0)).toISOString().slice(0, 10);
-    await assignEngagement(projectA.id, { personId: personOnA.id, roleOnProject: "Bounded", intensityPct: 40, startDate: start, endDate: end });
-    const created = await prisma.projectEngagement.findFirstOrThrow({ where: { projectId: projectA.id, roleOnProject: "Bounded" } });
-
-    const nextMonth = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 1, 1));
-    const nextMonthParam = `${nextMonth.getUTCFullYear()}-${String(nextMonth.getUTCMonth() + 1).padStart(2, "0")}`;
-    await expect(setEngagementMonthIntensity(created.id, projectA.id, nextMonthParam, 50)).rejects.toThrow();
-
-    await removeEngagement(created.id, projectA.id); // cleanup
+    await expect(
+      assignEngagement(projectA.id, { personId: personOnA.id, roleOnProject: "Duplicate", startDate: null, endDate: null })
+    ).rejects.toThrow(/already on this project/);
   });
 
   it("PM-A CAN assign an existing person to their own project (Project A)", async () => {
     const { assignEngagement, removeEngagement } = await import("@/app/projects/[projectId]/resourcing/resourcing-actions");
     actAs(pmAUserId);
 
-    await assignEngagement(projectA.id, { personId: personOnB.id, roleOnProject: "Extra Help", intensityPct: 20, startDate: null, endDate: null });
+    await assignEngagement(projectA.id, { personId: personOnB.id, roleOnProject: "Extra Help", startDate: null, endDate: null });
 
     const created = await prisma.projectEngagement.findFirstOrThrow({ where: { projectId: projectA.id, personId: personOnB.id } });
     expect(created.roleOnProject).toBe("Extra Help");
@@ -156,21 +110,18 @@ describe("resourcing isolation boundary", () => {
     actAs(pmAUserId);
 
     await expect(
-      assignEngagement(projectB.id, { personId: personOnA.id, roleOnProject: "Sneaky", intensityPct: 10, startDate: null, endDate: null })
+      assignEngagement(projectB.id, { personId: personOnA.id, roleOnProject: "Sneaky", startDate: null, endDate: null })
     ).rejects.toThrow();
   });
 
   it("Client-B has no resourcing access at all — even on their own assigned project", async () => {
-    const { assignEngagement, updateEngagement, setEngagementMonthIntensity } = await import(
-      "@/app/projects/[projectId]/resourcing/resourcing-actions"
-    );
+    const { assignEngagement, updateEngagement } = await import("@/app/projects/[projectId]/resourcing/resourcing-actions");
     actAs(clientBUserId);
 
     await expect(
-      assignEngagement(projectB.id, { personId: personOnB.id, roleOnProject: "Anything", intensityPct: 10, startDate: null, endDate: null })
+      assignEngagement(projectB.id, { personId: personOnB.id, roleOnProject: "Anything", startDate: null, endDate: null })
     ).rejects.toThrow();
     await expect(updateEngagement(engagementOnB.id, projectB.id, { roleOnProject: "Hacked" })).rejects.toThrow();
-    await expect(setEngagementMonthIntensity(engagementOnB.id, projectB.id, CURRENT_MONTH, 5)).rejects.toThrow();
   });
 
   it("a Limited user's self-service lookup is scoped strictly to their own linked Person, never another's", async () => {

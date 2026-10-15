@@ -4,8 +4,8 @@ import { requireUser, requireProjectAccess } from "@/lib/rbac";
 import { canViewResourcing } from "@/lib/resourcing-rbac";
 import { SubNav } from "@/components/ui/sub-nav";
 import { PageGuide } from "@/components/ui/page-guide";
-import { StatTile } from "@/components/ui/stat-tile";
-import { IconUsers, IconBadge, IconUserCheck, IconIdCard } from "@/components/layout/icons";
+import { IconUsers } from "@/components/layout/icons";
+import { ROLE_LABELS } from "@/lib/constants";
 import { AddMemberForm } from "./add-member-form";
 import { MemberCard } from "./member-card";
 
@@ -32,55 +32,34 @@ export default async function TeamPage({ params }: { params: { projectId: string
     orderBy: { createdAt: "asc" },
   });
 
-  const pmCount = memberships.filter((m) => m.role === "PM").length;
-  const clientCount = memberships.filter((m) => m.role === "CLIENT").length;
-  const limitedCount = memberships.filter((m) => m.role === "LIMITED").length;
+  const counts = (["PM", "CLIENT", "LIMITED"] as const)
+    .map((r) => ({ r, n: memberships.filter((m) => m.role === r).length }))
+    .filter((c) => c.n > 0)
+    .map((c) => `${c.n} ${ROLE_LABELS[c.r]}${c.n > 1 ? "s" : ""}`);
 
   return (
     <div className="space-y-6">
       <SubNav projectId={params.projectId} options={subNavOptions} />
       <div>
-        <h2 className="text-base font-semibold text-slate-900">Team Access</h2>
+        <h2 className="text-base font-semibold text-slate-900">Who can open this project</h2>
         <p className="text-sm text-slate-500">
-          Everyone explicitly assigned to this project, and what they can see. Admin and TPM always have full
-          portfolio-wide access and don&apos;t need a row here.
+          Portal accounts given access to this project, and which areas each one sees. Super Admin, Admin and Management already see every
+          project and don&apos;t need to be added here.
+          {memberships.length > 0 && <span className="text-slate-700"> {memberships.length} added: {counts.join(", ")}.</span>}
         </p>
       </div>
 
-      <PageGuide
-        id="team-access"
-        title="What the four access levels actually mean"
-        points={[
-          <>A member with the <strong>PM</strong> role always gets full read/write on every module — it&apos;s granted by role, not adjustable per module, so their card won&apos;t show a grid.</>,
-          <><strong>NONE</strong> hides that module&apos;s tab entirely. <strong>READ_LIMITED</strong> shows the tab but strips sensitive detail (rates and costs on Budget, notes on Checklist and Milestones, and similar per module). <strong>READ_FULL</strong> shows everything, read-only. <strong>WRITE</strong> allows editing.</>,
-          <>&quot;Quick preset&quot; sets every module at once to a sensible bundle for that access tier — you can still fine-tune individual modules afterward.</>,
-        ]}
-      />
-
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <StatTile
-          icon={<IconUsers />}
-          iconWrapClass="bg-violet-50 text-violet-600"
-          label="Total Members"
-          value={String(memberships.length)}
-          accentColor="#6D28D9"
+      {canEdit && (
+        <PageGuide
+          id="team-access"
+          title="How access works"
+          points={[
+            <>A <strong>PM</strong> sees and edits every area except the Budget Tracker — there&apos;s nothing to set per area.</>,
+            <>A <strong>Client</strong> or <strong>Guest</strong> is set per area: <strong>No Access</strong> hides it, <strong>Read Limited</strong> shows it without sensitive detail (rates and costs, internal notes), <strong>Read Full</strong> shows everything read-only, <strong>Write</strong> allows editing.</>,
+            <>A new Client starts locked down; a new Guest starts at Read Limited everywhere. Use a preset to set every area at once, then adjust single areas.</>,
+          ]}
         />
-        <StatTile icon={<IconBadge />} iconWrapClass="bg-emerald-50 text-emerald-600" label="PM" value={String(pmCount)} accentColor="#065F46" />
-        <StatTile
-          icon={<IconUserCheck />}
-          iconWrapClass="bg-amber-50 text-amber-600"
-          label="Client"
-          value={String(clientCount)}
-          accentColor="#92400E"
-        />
-        <StatTile
-          icon={<IconIdCard />}
-          iconWrapClass="bg-indigo-50 text-indigo-600"
-          label="Limited"
-          value={String(limitedCount)}
-          accentColor="#4338CA"
-        />
-      </div>
+      )}
 
       {canEdit && <AddMemberForm projectId={params.projectId} />}
 

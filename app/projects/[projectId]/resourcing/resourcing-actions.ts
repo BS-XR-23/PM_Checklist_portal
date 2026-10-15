@@ -4,8 +4,16 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUser, requireProjectAccess, writeAudit } from "@/lib/rbac";
 import { canManageEngagementsOnProject } from "@/lib/resourcing-rbac";
-import { parseDateInput, startOfMonthUTC, parseMonthParam } from "@/lib/format";
-import { isActiveDuringMonth } from "@/lib/overload";
+import { parseDateInput } from "@/lib/format";
+
+// The roster also feeds the assignee pickers on Delivery's Tasks/Sprints tabs.
+function revalidateTeam(projectId: string) {
+  revalidatePath(`/projects/${projectId}/resourcing`);
+  revalidatePath(`/projects/${projectId}/delivery/tasks`);
+  revalidatePath(`/projects/${projectId}/delivery/sprints`);
+  revalidatePath("/admin/people");
+  revalidatePath("/my-engagement");
+}
 
 async function requireResourcingWrite(projectId: string) {
   const user = await requireUser();
@@ -22,22 +30,24 @@ async function requireResourcingWrite(projectId: string) {
   return user;
 }
 
+/**
+ * Puts a person on this project's roster — a reference list of who works on
+ * it (and the pool WBS tasks and sprint work can be assigned from). No
+ * intensity/allocation: that was dropped as nobody used the numbers.
+ */
 export async function assignEngagement(
   projectId: string,
-  input: { personId: string; roleOnProject: string; intensityPct: number; startDate: string | null; endDate: string | null; notes?: string }
+  input: { personId: string; roleOnProject: string; startDate: string | null; endDate: string | null; notes?: string }
 ) {
   const user = await requireResourcingWrite(projectId);
 
   const person = await prisma.person.findUniqueOrThrow({ where: { id: input.personId } });
-  if (input.intensityPct < 0 || input.intensityPct > 100) throw new Error("Intensity must be between 0 and 100.");
+  const already = await prisma.projectEngagement.findFirst({ where: { projectId, personId: person.id } });
+  if (already) throw new Error(`${person.name} is already on this project — change their role or dates in the list instead.`);
 
   const startDate = parseDateInput(input.startDate);
   const endDate = parseDateInput(input.endDate);
-  // Seed the first month this engagement is actually relevant for — "now"
-  // unless it starts later, so assigning someone starting next quarter
-  // doesn't stamp an intensity on a month they haven't started yet.
-  const today = new Date();
-  const seedMonth = startOfMonthUTC(startDate && startDate > today ? startDate : today);
+  if (startDate && endDate && endDate < startDate) throw new Error("End date is before the start date.");
 
   const created = await prisma.projectEngagement.create({
     data: {
@@ -47,7 +57,6 @@ export async function assignEngagement(
       startDate,
       endDate,
       notes: input.notes?.trim() || null,
-      months: { create: { month: seedMonth, intensityPct: input.intensityPct } },
     },
   });
 
@@ -57,10 +66,10 @@ export async function assignEngagement(
     action: "create",
     entityType: "ProjectEngagement",
     entityId: created.id,
-    summary: `Assigned ${person.name} to this project as ${created.roleOnProject} at ${input.intensityPct}%`,
+    summary: `Added ${person.name} to this project as ${created.roleOnProject}`,
   });
 
-  revalidatePath(`/projects/${projectId}/resourcing`);
+  revalidateTeam(projectId);
 }
 
 export async function updateEngagement(
@@ -92,39 +101,7 @@ export async function updateEngagement(
     summary: `Updated ${existing.person.name}'s engagement on this project`,
   });
 
-  revalidatePath(`/projects/${projectId}/resourcing`);
-}
-
-/** Sets (or updates) one calendar month's intensity for an engagement — the
- * only way intensity is edited now that it varies month to month. */
-export async function setEngagementMonthIntensity(engagementId: string, projectId: string, month: string, intensityPct: number) {
-  const user = await requireResourcingWrite(projectId);
-
-  const existing = await prisma.projectEngagement.findUniqueOrThrow({ where: { id: engagementId }, include: { person: true } });
-  if (existing.projectId !== projectId) throw new Error("Engagement does not belong to this project.");
-  if (intensityPct < 0 || intensityPct > 100) throw new Error("Intensity must be between 0 and 100.");
-
-  const targetMonth = parseMonthParam(month);
-  if (!isActiveDuringMonth({ startDate: existing.startDate, endDate: existing.endDate }, targetMonth)) {
-    throw new Error("That month falls outside this engagement's Start/End range.");
-  }
-
-  await prisma.projectEngagementMonth.upsert({
-    where: { engagementId_month: { engagementId, month: targetMonth } },
-    create: { engagementId, month: targetMonth, intensityPct },
-    update: { intensityPct },
-  });
-
-  await writeAudit({
-    actor: user,
-    projectId,
-    action: "update",
-    entityType: "ProjectEngagementMonth",
-    entityId: engagementId,
-    summary: `Set ${existing.person.name}'s intensity for ${month} to ${intensityPct}%`,
-  });
-
-  revalidatePath(`/projects/${projectId}/resourcing`);
+  revalidateTeam(projectId);
 }
 
 export async function removeEngagement(engagementId: string, projectId: string) {
@@ -144,5 +121,5 @@ export async function removeEngagement(engagementId: string, projectId: string) 
     summary: `Removed ${existing.person.name} from this project's roster`,
   });
 
-  revalidatePath(`/projects/${projectId}/resourcing`);
+  revalidateTeam(projectId);
 }

@@ -401,26 +401,36 @@ The old Action Items link redirects here.
 
 ## 15. Team & Resourcing
 
-### Access (Team tab)
-Who can log in to this project and, for Client/Guest members, which modules
-they see. Visible to Super Admin, Admin, Management, PM; **only a Super Admin
-edits**. Add existing users as PM, Client, or Guest; set Client/Guest module
-access by dropdown or preset.
+### Access
+Which portal accounts can open this project and, for Client/Guest members,
+which areas they see. Visible to Super Admin, Admin, Management, PM; **only a
+Super Admin edits**. Super Admin, Admin and Management see every project
+already and don't need a row here.
 
-### Engagement (Resourcing)
-Who is working on the project and how hard. Editable by a Super Admin, or by
-the project's PM for their own project; read-only for Admin and Management.
+- Add an existing user (Admin → Users) as PM, Client, or Guest.
+- A PM sees and edits every area except the Budget Tracker — nothing to set.
+- Each Client/Guest card shows a one-line summary ("Sees 12 of 16 areas ·
+  read-only · all with details hidden"). **Change access** opens the
+  settings, laid out by project tab (Checklist → PM / Delivery & QA / DevOps /
+  Creative & XR, Risk & CR → Risks / Change requests, Delivery → Overview,
+  tasks & sprints / Dev checklist / Releases / UAT, Decisions → Decision log /
+  Action items, …). Levels: No Access · Read Limited (sensitive detail hidden)
+  · Read Full · Write. A preset sets every area at once.
 
-- Assign an existing person (from Admin → People) with a role and optional
-  start/end dates. Presets: Low 25% · Med 50% · High 90%.
-- **Intensity is set per calendar month** — use the month strip to move
-  between months.
-- **Intensity on this project:** Low 0–39% · Medium 40–59% · High 60%+.
-- **Signals (total utilization across all projects):** Healthy < 70% · High
-  70–100% · **Over-utilized > 100%**; plus Ending Soon (within 7 days) and New
-  to Project.
-- An **overlap conflict** is flagged when one person has two or more ≥ 60%
-  engagements on different projects with overlapping dates.
+### Engagement
+A reference list of who works on the project, their role and dates — no
+intensity or capacity numbers. Editable by a Super Admin, or by the project's
+PM for their own project; read-only for Admin and Management.
+
+- **Only people listed here can be picked as assignees** on Delivery's Tasks
+  and Sprints.
+- Add a person (from Admin → People): their role defaults to their title;
+  start and end dates are optional. A person can be listed once per project.
+- The list is grouped: **On the project** · **Starting later** · **no longer
+  on the project** (folded; end date passed). The end date counts as a
+  working day. Someone ending within a week is tagged "ends in N days".
+- **Edit** on a row changes role and dates; **Remove from project** sits
+  inside Edit. To keep a record of who worked on it, set an end date instead.
 
 ## 16. Escalations
 
@@ -472,8 +482,8 @@ Management; only Super Admin and PM edit.
 
 ## 19. My Engagement
 
-Your own assignments only — project, role, intensity, dates, and your total
-current allocation. Needs your account linked to a Person (Admin → People).
+Your own assignments only — project, role and dates, plus how many projects
+you're on right now. Needs your account linked to a Person (Admin → People).
 Not shown to Management.
 
 ## 20. Portfolio
@@ -489,8 +499,6 @@ only** (archived projects appear only under the table's "All" tab).
   Critical or At Risk project with its reasons (high risks, overdue
   milestone, SPI, blocked dependencies, missing PM/contract value). A green
   line says so when there are none.
-- **Overload & Conflicts** (Super Admin/Admin) — people over 100% or with
-  overlapping high-intensity engagements.
 - **Billing & Cash** — built from each project's Milestones & Payments
   (tranche = contract value × payment %):
   - **Contract value bar:** collected · invoiced, awaiting payment ·
@@ -567,7 +575,6 @@ message. Role changes and deactivation take effect on the very next request.
 | **CR amount** | Billable man-days × rate |
 | **Budget Tracker PV / EV** | Cumulative committed / earned story points across **closed** sprints ÷ baseline × contract value |
 | **Budget Tracker margin** | (EV − cumulative actual cost) ÷ EV — EV is contract price, AC is role-rate cost (testing only; replaces the old dollar CPI) |
-| **Overloaded person** | Current total intensity across projects > 100% |
 | **Overlap conflict** | Two+ engagements ≥ 60% on different projects with overlapping dates |
 
 ## 25. Quick answers to "why can't I see X?"

@@ -3,9 +3,7 @@ import clsx from "clsx";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/rbac";
-import { canViewPortfolioOverload } from "@/lib/resourcing-rbac";
-import { computePersonLoad, findOverlapConflicts, intensityForMonth, type EngagementLike } from "@/lib/overload";
-import { formatMoney, formatPct, formatDate, formatShortDate, formatDateTime, formatMonthShortLabel, startOfMonthUTC } from "@/lib/format";
+import { formatMoney, formatPct, formatShortDate, formatDateTime, formatMonthShortLabel } from "@/lib/format";
 import { RAG_COLORS } from "@/lib/rag";
 import type { BillingBucket } from "@/lib/billing-forecast";
 import { ATTENTION_SEVERITY_COLORS } from "@/lib/colors";
@@ -14,7 +12,7 @@ import { SectionHeader } from "@/components/ui/section-header";
 import { InfoTooltip } from "@/components/ui/info-tooltip";
 import { TrendBar } from "@/components/ui/trend-bar";
 import { SpiCpiChart } from "@/components/charts/spi-cpi-chart";
-import { IconLayers, IconClock, IconUsers, IconDownload, IconAlertTriangle, IconDollar, IconCheckCircle } from "@/components/layout/icons";
+import { IconLayers, IconClock, IconDownload, IconAlertTriangle, IconDollar, IconCheckCircle } from "@/components/layout/icons";
 import { PORTFOLIO_PROJECT_INCLUDE, buildPortfolioData, type PortfolioRow, type PortfolioSummary } from "@/lib/portfolio-data";
 import { PortfolioClient } from "./portfolio-table";
 import { RefreshButton } from "@/components/ui/refresh-button";
@@ -32,55 +30,16 @@ export default async function PortfolioPage() {
     redirect("/projects");
   }
 
-  const showOverload = canViewPortfolioOverload(user.role);
-  const currentMonth = startOfMonthUTC(new Date());
   const generatedAt = new Date();
 
-  // `projects` and `people` are independent of each other — fetched
-  // concurrently instead of as two serialized round trips.
-  const [projects, people] = await Promise.all([
-    prisma.project.findMany({
-      where: { deletedAt: null },
-      orderBy: { name: "asc" },
-      include: PORTFOLIO_PROJECT_INCLUDE,
-      relationLoadStrategy: "join",
-    }),
-    showOverload
-      ? prisma.person.findMany({
-          include: { engagements: { include: { project: true, months: { where: { month: currentMonth } } } } },
-        })
-      : Promise.resolve([]),
-  ]);
+  const projects = await prisma.project.findMany({
+    where: { deletedAt: null },
+    orderBy: { name: "asc" },
+    include: PORTFOLIO_PROJECT_INCLUDE,
+    relationLoadStrategy: "join",
+  });
 
   const { rows, summary, upcomingMilestones, trendPoints } = buildPortfolioData(projects);
-
-  const overloadedPeople: { personName: string; totalActivePct: number; breakdown: string }[] = [];
-  const conflictPairs: { personName: string; a: EngagementLike; b: EngagementLike }[] = [];
-
-  if (showOverload) {
-    for (const p of people) {
-      const engagements: EngagementLike[] = p.engagements.map((e) => ({
-        id: e.id,
-        projectId: e.projectId,
-        projectName: e.project.name,
-        roleOnProject: e.roleOnProject,
-        intensityPct: intensityForMonth(e.months, currentMonth),
-        startDate: e.startDate,
-        endDate: e.endDate,
-      }));
-      const load = computePersonLoad(engagements);
-      if (load.isOverloaded) {
-        overloadedPeople.push({
-          personName: p.name,
-          totalActivePct: load.totalActivePct,
-          breakdown: load.activeEngagements.map((e) => `${e.projectName} (${e.intensityPct}%)`).join(", "),
-        });
-      }
-      for (const c of findOverlapConflicts(engagements)) {
-        conflictPairs.push({ personName: p.name, a: c.a, b: c.b });
-      }
-    }
-  }
 
   const attentionRows = rows
     .filter((r) => r.status === "ACTIVE" && (r.rag === "RED" || r.rag === "AMBER"))
@@ -113,48 +72,6 @@ export default async function PortfolioPage() {
         <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50/50 px-4 py-3 text-sm text-emerald-800">
           <IconCheckCircle className="h-4 w-4" />
           No active project is Critical or At Risk.
-        </div>
-      )}
-
-      {/* Overload & Conflicts — resourcing-specific attention, kept distinct from project health */}
-      {showOverload && (overloadedPeople.length > 0 || conflictPairs.length > 0) && (
-        <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
-          <SectionHeader
-            icon={<IconUsers />}
-            iconWrapClass="bg-violet-50 text-violet-600"
-            title={
-              <span className="inline-flex items-center gap-1.5">
-                Overload &amp; Conflicts
-                <InfoTooltip text="Overload: a person's summed intensity across every active engagement exceeds 100% of capacity. Conflict: two of a person's engagements have overlapping date ranges — a separate check from overload, since two low-intensity engagements can still overlap without pushing anyone over capacity." />
-              </span>
-            }
-          />
-          {overloadedPeople.length > 0 && (
-            <div>
-              <p className="text-xs font-medium text-slate-500 mb-1.5">Over threshold (combined active allocation &gt; 100%)</p>
-              <ul className="text-sm text-slate-700 space-y-1">
-                {overloadedPeople.map((o) => (
-                  <li key={o.personName}>
-                    <span className="font-medium text-slate-900">{o.personName}</span> — {o.totalActivePct}% total ({o.breakdown})
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {conflictPairs.length > 0 && (
-            <div>
-              <p className="text-xs font-medium text-slate-500 mb-1.5">High-intensity engagements with overlapping dates (regardless of total)</p>
-              <ul className="text-sm text-slate-700 space-y-1">
-                {conflictPairs.map((c, i) => (
-                  <li key={i}>
-                    <span className="font-medium text-slate-900">{c.personName}</span> — {c.a.roleOnProject} on {c.a.projectName} ({c.a.intensityPct}%,{" "}
-                    {formatDate(c.a.startDate)}–{formatDate(c.a.endDate)}) overlaps {c.b.roleOnProject} on {c.b.projectName} (
-                    {c.b.intensityPct}%, {formatDate(c.b.startDate)}–{formatDate(c.b.endDate)})
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
         </div>
       )}
 
