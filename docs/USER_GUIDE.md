@@ -48,7 +48,7 @@ the whole team: day-to-day engineering tasks stay in Jira; the portal holds
 the governance, delivery, and commercial picture.
 
 - **Checklists** — the standard stage-by-stage governance process (PM,
-  Delivery & QA, DevOps, Creative & XR, plus a Development checklist inside
+  QA & Testing, DevOps, Creative & XR, plus a Development checklist inside
   Delivery).
 - **Milestones & Payments** — what the project delivers to the client, when,
   and how it gets paid.
@@ -198,7 +198,7 @@ Checklist Template when a project is created:
 | Checklist | Stages / categories | Where |
 |---|---|---|
 | **PM** | (Presales) · Governance · Planning · Approvals · Baselines · Closure | Checklist tab |
-| **Delivery & QA** | Architecture · Development · Code Review · Performance · Technical QA · Test Planning · Functional Testing · Device Testing · Regression · UAT | Checklist tab |
+| **QA & Testing** | Test Planning · Functional Testing · Device Testing · Regression · UAT | Checklist tab |
 | **DevOps** | Infrastructure · CI/CD · Security · Monitoring | Checklist tab |
 | **Creative & XR** | Storyboard · 3D · UX · Assets · XR Validation | Checklist tab |
 | **Development** | Development Readiness · Development Execution · Quality Gate · Development Completion | Delivery → Dev Checklist |
@@ -206,29 +206,48 @@ Checklist Template when a project is created:
 The **Presales** stage only exists on projects won from a presales
 opportunity (its items are copied from the deal).
 
-**Each item:** text, **Checkpoint** label (if tagged), owner (from the People
-registry), planned date, actual date, link, notes (hidden at read-limited),
-status: Not Started · In Progress · Completed · At Risk · Delayed · Blocked ·
-Not Applicable. A ⚠ **slipped** flag appears when the actual date passed the
-planned date on an incomplete item.
+Each check lives in one checklist only: PM = governance, planning,
+approvals, money and closure; Development = the dev gate; QA & Testing =
+test planning and test passes; DevOps = environments, pipelines, security
+and operations; Creative & XR = creative direction, 3D, UX, assets and
+on-headset validation. Per-sprint activities (sprint planning, test
+execution, device testing, …) are Ongoing cadence items.
 
+**Each item:** text, **Checkpoint** label (if tagged), status, owner (from
+the People registry), planned date, actual date, link, notes (hidden at
+read-limited). Status: Not Started · In Progress · Completed · At Risk ·
+Delayed · Blocked · Not Applicable.
+
+- **Tiles:** Overall Progress · In Progress · Not Started · **Due this week**
+  (planned within 7 days) · **Overdue** (planned date passed, not done; due
+  today isn't late yet). Click **Overdue** (or the red **Overdue** pill) to
+  show only those items; click again for everything.
+- **Flags under an item:** "N days late" (red) · "Due today" / "Due in N
+  days" (amber, within a week) · "Done N days late" (grey, completed after
+  its planned date). The same overdue rule drives the Dashboard, Portfolio
+  and Reminders.
+- **Completing** an item fills today as its Actual Date when it's empty;
+  reopening a completed item clears it. The date stays editable.
+- **Links** must be web addresses — a bare `drive.google.com/…` gets
+  `https://` added; anything else (e.g. `javascript:`) is refused.
 - **Not Applicable** removes an item from Governance % entirely.
 - **Checkpoint** — an internal checkpoint tag (e.g. "DoR Approved"). It never
   carries payment; see §2.
 - **Ongoing cadence** — recurring activities (weekly CPI/SPI report, monthly
   retro, status meetings, sprint demo, daily standups) sit in their own
-  block above the stages with **Owner** and **Last done**. Update Last done
-  each time it happens. They never count toward Governance %, current stage,
-  or reminders. Any item can be moved in or out of the block from its row
-  menu (•••).
+  block below the stages with **Owner** and **Last done** ("8 days ago").
+  Update Last done each time it happens. They never count toward Governance
+  %, current stage, or reminders. Any item can be moved in or out of the
+  block from its row menu (•••) — moving in asks first.
 - **Stage pills** show completed/tracked per stage and turn green when
   done. The page opens on the **current stage** — the first stage with
   unfinished tracked items.
-- **+ Add Item** adds a custom item to a stage; only custom items can be
-  deleted. Only a Super Admin can reword a template item.
+- **Add** — type into "+ Add a project-specific item to …" at the bottom of
+  a stage. Only custom items can be deleted (it asks first). Only a Super
+  Admin can reword a template item.
 - An **Admin (TPM)** sees an **Override** button instead of edit controls —
-  a typed reason is required and the change is tagged "TPM Override" in the
-  Activity log.
+  status, owner, dates, link and notes, with a typed reason; the change is
+  tagged "TPM Override" in the Activity log.
 
 ## 8. Milestones & Payments
 
@@ -475,7 +494,7 @@ already and don't need a row here.
 - A PM sees and edits every area except the Budget Tracker — nothing to set.
 - Each Client/Guest card shows a one-line summary ("Sees 12 of 16 areas ·
   read-only · all with details hidden"). **Change access** opens the
-  settings, laid out by project tab (Checklist → PM / Delivery & QA / DevOps /
+  settings, laid out by project tab (Checklist → PM / QA & Testing / DevOps /
   Creative & XR, Risk & CR → Risks / Change requests, Delivery → Overview,
   tasks & sprints / Dev checklist / Releases / UAT, Decisions → Decision log /
   Action items, …). Levels: No Access · Read Limited (sensitive detail hidden)

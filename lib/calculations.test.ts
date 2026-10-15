@@ -121,6 +121,14 @@ describe("reminderBand", () => {
     expect(reminderBand(new Date("2026-08-06"), false, today)).toBe("DUE_SOON");
   });
 
+  it("due today is DUE_SOON all day, not OVERDUE once the clock passes midnight", () => {
+    const afternoon = new Date("2026-07-30T15:00:00");
+    expect(reminderBand(new Date("2026-07-30T00:00:00"), false, afternoon)).toBe("DUE_SOON");
+    expect(reminderBand(new Date("2026-07-29T00:00:00"), false, afternoon)).toBe("OVERDUE");
+    expect(reminderBand(new Date("2026-08-06T00:00:00"), false, afternoon)).toBe("DUE_SOON");
+    expect(reminderBand(new Date("2026-08-07T00:00:00"), false, afternoon)).toBeNull();
+  });
+
   it("does not flag a Planned Date more than 7 days out", () => {
     expect(reminderBand(new Date("2026-08-07"), false, today)).toBeNull();
   });

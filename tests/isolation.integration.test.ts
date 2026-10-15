@@ -102,7 +102,7 @@ describe("isolation boundary", () => {
     // Even though itemInB.id is a genuine, valid row, and even if the caller
     // lies and passes projectB.id as the projectId argument, the action must
     // look up the item's REAL project server-side and reject.
-    await expect(updateChecklistItem(itemInB.id, projectB.id, "PM", { status: "COMPLETED" })).rejects.toThrow();
+    await expect(updateChecklistItem(itemInB.id, { status: "COMPLETED" })).rejects.toThrow();
 
     const stillUnchanged = await prisma.checklistItem.findUniqueOrThrow({ where: { id: itemInB.id } });
     expect(stillUnchanged.status).toBe("NOT_STARTED");
@@ -112,7 +112,7 @@ describe("isolation boundary", () => {
     const { updateChecklistItem } = await import("@/app/projects/[projectId]/checklist-actions");
     actAs(pmAUserId);
 
-    await updateChecklistItem(itemInA.id, projectA.id, "PM", { status: "COMPLETED" });
+    await updateChecklistItem(itemInA.id, { status: "COMPLETED" });
 
     const updated = await prisma.checklistItem.findUniqueOrThrow({ where: { id: itemInA.id } });
     expect(updated.status).toBe("COMPLETED");
@@ -152,7 +152,7 @@ describe("isolation boundary", () => {
   it("Admin-only rename: PM-A cannot rename a fixed template item's text, even on their own project", async () => {
     const { updateChecklistItem } = await import("@/app/projects/[projectId]/checklist-actions");
     actAs(pmAUserId);
-    await expect(updateChecklistItem(itemInA.id, projectA.id, "PM", { itemText: "hacked" })).rejects.toThrow();
+    await expect(updateChecklistItem(itemInA.id, { itemText: "hacked" })).rejects.toThrow();
     const stillUnchanged = await prisma.checklistItem.findUniqueOrThrow({ where: { id: itemInA.id } });
     expect(stillUnchanged.itemText).toBe(itemInA.itemText);
   });
@@ -160,7 +160,7 @@ describe("isolation boundary", () => {
   it("sanity check: Admin CAN rename a fixed template item's text", async () => {
     const { updateChecklistItem } = await import("@/app/projects/[projectId]/checklist-actions");
     actAs(adminUserId);
-    await updateChecklistItem(itemInA.id, projectA.id, "PM", { itemText: "[TEST] renamed by admin" });
+    await updateChecklistItem(itemInA.id, { itemText: "[TEST] renamed by admin" });
     const updated = await prisma.checklistItem.findUniqueOrThrow({ where: { id: itemInA.id } });
     expect(updated.itemText).toBe("[TEST] renamed by admin");
   });
@@ -168,7 +168,7 @@ describe("isolation boundary", () => {
   it("PM-A cannot delete a fixed template item — only custom items are deletable", async () => {
     const { deleteChecklistItem } = await import("@/app/projects/[projectId]/checklist-actions");
     actAs(pmAUserId);
-    await expect(deleteChecklistItem(itemInA.id, projectA.id, "PM")).rejects.toThrow();
+    await expect(deleteChecklistItem(itemInA.id)).rejects.toThrow();
     expect(await prisma.checklistItem.findUnique({ where: { id: itemInA.id } })).not.toBeNull();
   });
 
@@ -179,17 +179,17 @@ describe("isolation boundary", () => {
       data: { projectId: projectA.id, type: "PM", order: 997, stage: "Pre-Sales & Initiation", itemText: "[TEST] before rename", isCustom: true },
     });
 
-    await updateChecklistItem(custom.id, projectA.id, "PM", { itemText: "[TEST] after rename" });
+    await updateChecklistItem(custom.id, { itemText: "[TEST] after rename" });
     expect((await prisma.checklistItem.findUniqueOrThrow({ where: { id: custom.id } })).itemText).toBe("[TEST] after rename");
 
-    await deleteChecklistItem(custom.id, projectA.id, "PM");
+    await deleteChecklistItem(custom.id);
     expect(await prisma.checklistItem.findUnique({ where: { id: custom.id } })).toBeNull();
   });
 
   it("guessed-ID attack: PM-A cannot add a checklist item to Project B", async () => {
     const { createChecklistItem } = await import("@/app/projects/[projectId]/checklist-actions");
     actAs(pmAUserId);
-    await expect(createChecklistItem(projectB.id, "PM", "Pre-Sales & Initiation")).rejects.toThrow();
+    await expect(createChecklistItem(projectB.id, "PM", "Governance", "[TEST] should be refused")).rejects.toThrow();
   });
 
   it("guessed-ID attack: PM-A cannot delete a real (custom) ChecklistItem that belongs to Project B", async () => {
@@ -198,7 +198,7 @@ describe("isolation boundary", () => {
       data: { projectId: projectB.id, type: "PM", order: 996, stage: "Pre-Sales & Initiation", itemText: "[TEST] custom in B", isCustom: true },
     });
     actAs(pmAUserId);
-    await expect(deleteChecklistItem(customInB.id, projectB.id, "PM")).rejects.toThrow();
+    await expect(deleteChecklistItem(customInB.id)).rejects.toThrow();
     expect(await prisma.checklistItem.findUnique({ where: { id: customInB.id } })).not.toBeNull();
   });
 

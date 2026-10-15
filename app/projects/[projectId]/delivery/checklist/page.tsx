@@ -25,7 +25,7 @@ export default async function DeliveryChecklistPage({ params }: { params: { proj
       orderBy: { order: "asc" },
       include: { ownerPerson: { select: { id: true, name: true } } },
     }),
-    access === "WRITE" ? prisma.person.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }) : Promise.resolve([]),
+    access === "WRITE" || (user?.role === "TPM" && access === "READ_FULL") ? prisma.person.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }) : Promise.resolve([]),
   ]);
 
   const withOwnerName = items.map((i) => ({ ...i, ownerPersonName: i.ownerPerson?.name ?? null }));

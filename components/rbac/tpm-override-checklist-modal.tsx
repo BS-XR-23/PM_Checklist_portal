@@ -2,31 +2,29 @@
 
 import { useState, useTransition } from "react";
 import { ITEM_STATUSES, type ItemStatus } from "@/lib/constants";
-import type { ChecklistType } from "@/lib/checklist-types";
 import { STATUS_COLORS } from "@/lib/colors";
 import { toDateInputValue } from "@/lib/format";
 import { tpmOverrideChecklistItem } from "@/app/projects/[projectId]/checklist-actions";
 
 export function TpmOverrideChecklistModal({
-  projectId,
-  checklistType,
   item,
+  people,
 }: {
-  projectId: string;
-  checklistType: ChecklistType;
   item: {
     id: string;
     itemText: string;
-    owner: string | null;
+    ownerPersonId: string | null;
     plannedDate: Date | null;
     actualDate: Date | null;
     link: string | null;
     status: string;
     notes: string | null;
   };
+  people: { id: string; name: string }[];
 }) {
   const [open, setOpen] = useState(false);
-  const [owner, setOwner] = useState(item.owner ?? "");
+  const [ownerPersonId, setOwnerPersonId] = useState(item.ownerPersonId ?? "");
+  const [error, setError] = useState<string | null>(null);
   const [plannedDate, setPlannedDate] = useState(toDateInputValue(item.plannedDate) ?? "");
   const [actualDate, setActualDate] = useState(toDateInputValue(item.actualDate) ?? "");
   const [link, setLink] = useState(item.link ?? "");
@@ -63,7 +61,14 @@ export function TpmOverrideChecklistModal({
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Owner</label>
-            <input value={owner} onChange={(e) => setOwner(e.target.value)} className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm" />
+            <select value={ownerPersonId} onChange={(e) => setOwnerPersonId(e.target.value)} className="w-full rounded border border-slate-300 px-2 py-1.5 text-sm">
+              <option value="">— Unassigned —</option>
+              {people.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Status</label>
@@ -109,6 +114,8 @@ export function TpmOverrideChecklistModal({
           />
         </div>
 
+        {error && <p className="text-xs text-rose-600">{error}</p>}
+
         <div className="flex justify-end gap-2 pt-1">
           <button
             onClick={() => setOpen(false)}
@@ -120,14 +127,17 @@ export function TpmOverrideChecklistModal({
           <button
             onClick={() =>
               startTransition(async () => {
-                await tpmOverrideChecklistItem(
-                  item.id,
-                  projectId,
-                  checklistType,
-                  { owner, plannedDate: plannedDate || null, actualDate: actualDate || null, link, status: status as ItemStatus, notes },
-                  reason
-                );
-                setOpen(false);
+                setError(null);
+                try {
+                  await tpmOverrideChecklistItem(
+                    item.id,
+                    { ownerPersonId: ownerPersonId || null, plannedDate: plannedDate || null, actualDate: actualDate || null, link, status: status as ItemStatus, notes },
+                    reason
+                  );
+                  setOpen(false);
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : "Failed to save the override.");
+                }
               })
             }
             disabled={pending || !reason.trim()}

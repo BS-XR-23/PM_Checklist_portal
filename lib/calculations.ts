@@ -489,7 +489,10 @@ export function reminderBand(
   dueSoonDays = 7
 ): ReminderBand {
   if (!plannedDate || isDone) return null;
-  const diffDays = Math.floor((plannedDate.getTime() - today.getTime()) / 86400000);
+  // Calendar days, both sides from midnight — comparing the stored midnight
+  // date against "now" made anything due today read as OVERDUE from 00:01.
+  const midnight = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const diffDays = Math.round((midnight(plannedDate) - midnight(today)) / 86400000);
   if (diffDays < 0) return "OVERDUE";
   if (diffDays <= dueSoonDays) return "DUE_SOON";
   return null;

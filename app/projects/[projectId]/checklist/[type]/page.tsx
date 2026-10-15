@@ -46,7 +46,7 @@ export default async function ChecklistPage({ params }: { params: { projectId: s
         a !== "NONE" ? [c, await prisma.checklistItem.count({ where: { projectId: params.projectId, type: c.key } })] : [c, 0]
       )
     ) as Promise<[(typeof CHECKLIST_TYPES)[number], number][]>,
-    access === "WRITE" ? prisma.person.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }) : Promise.resolve([]),
+    access === "WRITE" || (user?.role === "TPM" && access === "READ_FULL") ? prisma.person.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }) : Promise.resolve([]),
   ]);
 
   const withOwnerName = items.map((i) => ({ ...i, ownerPersonName: i.ownerPerson?.name ?? null }));
@@ -73,9 +73,9 @@ export default async function ChecklistPage({ params }: { params: { projectId: s
           id="checklist-general"
           title="How to fill this in"
           points={[
+            <>Set a <strong>Planned Date</strong> on each item — a late item gets a red &ldquo;N days late&rdquo; flag, and the <strong>Overdue</strong> tile shows just those. Marking it <strong>Completed</strong> fills today as the Actual Date if it&apos;s empty.</>,
             <>Marking an item <strong>Not Applicable</strong> removes it from the completion % entirely — it counts as out of scope, not as incomplete.</>,
-            <>An item with a <strong>Checkpoint</strong> label marks an internal checkpoint (e.g. DoR Approved). Checkpoints don&apos;t carry payment — client-facing milestones and payment tranches live on the <strong>Milestones &amp; Payments</strong> tab.</>,
-            <>A read-limited viewer sees every item&apos;s Notes stripped out — that&apos;s deliberate, not missing data.</>,
+            <>A <strong>Checkpoint</strong> label marks an internal step (e.g. DoR Approved) — no payment. Client milestones and payments live on <strong>Milestones &amp; Payments</strong>.</>,
           ]}
         />
       </div>

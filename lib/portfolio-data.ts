@@ -6,6 +6,7 @@ import { computeProjectHealth, deliveryIndices, deliveryPct, governancePct } fro
 import type { Rag } from "@/lib/rag";
 import { buildBillingForecast, type BillingForecast } from "@/lib/billing-forecast";
 import { isDependencyOverdue } from "@/lib/dependencies";
+import { isChecklistItemOverdue } from "@/lib/checklist";
 
 // The exact `include` this module needs from `prisma.project.findMany` — kept
 // next to the code that consumes it so the two can never drift apart.
@@ -158,7 +159,7 @@ function buildPortfolioRow(
     .sort((a, b) => a.date.getTime() - b.date.getTime());
 
   const incomplete = p.checklistItems.filter((i) => isTrackedChecklistItem(i) && i.status !== "COMPLETED");
-  const overdue = incomplete.filter((i) => i.plannedDate && i.plannedDate < today);
+  const overdue = incomplete.filter((i) => isChecklistItemOverdue(i, today));
 
   const hasMissingData = p.memberships.length === 0 || p.contractValue <= 0;
   // An overdue milestone outranks the next upcoming one here — this field
