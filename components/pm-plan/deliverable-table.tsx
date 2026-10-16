@@ -44,7 +44,7 @@ export function DeliverableTable({ pmPlanId, projectId, rows }: { pmPlanId: stri
               </td>
               <td className="px-3 py-1.5">
                 <button
-                  onClick={() => startTransition(() => deleteDeliverableRow(r.id, projectId))}
+                  onClick={() => window.confirm(`Delete "${r.deliverable || "this row"}"? This can't be undone.`) && startTransition(() => deleteDeliverableRow(r.id, projectId))}
                   disabled={pending}
                   className="text-slate-300 hover:text-red-600 disabled:opacity-50"
                 >

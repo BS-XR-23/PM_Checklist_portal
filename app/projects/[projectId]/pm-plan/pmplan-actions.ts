@@ -5,6 +5,16 @@ import sanitizeHtml from "sanitize-html";
 import { prisma } from "@/lib/prisma";
 import { parseDateInput } from "@/lib/format";
 import { requireModuleWrite, writeAudit } from "@/lib/rbac";
+import { normalizeLink } from "@/lib/checklist";
+import { isPmPlanScalarField, cleanRowUpdate, type PmPlanScalarField, type PmPlanRowKind } from "@/lib/pm-plan-rules";
+
+export type { PmPlanScalarField } from "@/lib/pm-plan-rules";
+
+// Table edits count as plan edits for the header's "Last Updated" — the
+// @updatedAt column only moves when the PMPlan row itself is written.
+async function touchPlan(pmPlanId: string) {
+  await prisma.pMPlan.update({ where: { id: pmPlanId }, data: { updatedAt: new Date() } });
+}
 
 function revalidatePmPlan(projectId: string) {
   revalidatePath(`/projects/${projectId}/pm-plan`);
@@ -16,40 +26,6 @@ async function authorizeByPmPlanId(pmPlanId: string) {
   const user = await requireModuleWrite(pmPlan.projectId, "PM_PLAN");
   return { user, projectId: pmPlan.projectId };
 }
-
-export type PmPlanScalarField =
-  | "preparedBy"
-  | "planDate"
-  | "version"
-  | "rationale"
-  | "charterObjective"
-  | "charterScopeIn"
-  | "charterScopeOut"
-  | "charterSuccessCriteria"
-  | "charterTimeline"
-  | "charterBudget"
-  | "charterAssumptions"
-  | "charterPmAuthority"
-  | "methodApproach"
-  | "methodCadence"
-  | "methodCeremonies"
-  | "methodTools"
-  | "methodRoles"
-  | "methodChangeMgmt"
-  | "testLevels"
-  | "testEnvironments"
-  | "testEntryCriteria"
-  | "testExitCriteria"
-  | "testDefectMgmt"
-  | "testUatProcess"
-  | "testDeliverables"
-  | "deployEnvironments"
-  | "deployReleaseStrategy"
-  | "deploySteps"
-  | "deployRollback"
-  | "deployGoliveChecklist"
-  | "deployMonitoring"
-  | "escalationPath";
 
 // The subset of PmPlanScalarField edited as rich text (RichTextEditor, see
 // components/ui/rich-text-editor.tsx) rather than a plain input — every
@@ -118,10 +94,32 @@ export type PmPlanLinkableField =
   | "deployMonitoring"
   | "escalationPath";
 
+const LINKABLE_FIELDS = new Set<string>([
+  "rationale",
+  "charterScopeIn",
+  "charterScopeOut",
+  "charterSuccessCriteria",
+  "charterTimeline",
+  "methodCeremonies",
+  "methodChangeMgmt",
+  "testEntryCriteria",
+  "testExitCriteria",
+  "testDefectMgmt",
+  "testUatProcess",
+  "testDeliverables",
+  "deploySteps",
+  "deployRollback",
+  "deployGoliveChecklist",
+  "deployMonitoring",
+  "escalationPath",
+] satisfies PmPlanLinkableField[]);
+
 export async function updatePmPlanFieldLink(pmPlanId: string, projectId: string, field: PmPlanLinkableField, url: string) {
   // Guessed-ID fix: authorize against the plan's real project.
   const { user, projectId: realProjectId } = await authorizeByPmPlanId(pmPlanId);
-  const trimmed = url.trim();
+  if (!LINKABLE_FIELDS.has(field)) throw new Error(`"${field}" doesn't take a reference link.`);
+  // http(s) only — the link is rendered as an href for every viewer.
+  const trimmed = normalizeLink(url) ?? "";
 
   if (trimmed === "") {
     await prisma.pmPlanLink.deleteMany({ where: { pmPlanId, field } });
@@ -141,6 +139,9 @@ export async function updatePmPlanFieldLink(pmPlanId: string, projectId: string,
 export async function updatePmPlanField(pmPlanId: string, projectId: string, field: PmPlanScalarField, value: string) {
   // Guessed-ID fix: authorize against the plan's real project.
   const { user, projectId: realProjectId } = await authorizeByPmPlanId(pmPlanId);
+  // The browser picks the field name — only real plan text fields, never
+  // projectId/id (which would move or break the plan).
+  if (!isPmPlanScalarField(field)) throw new Error(`"${field}" isn't a PM Plan field.`);
 
   if (field === "planDate") {
     await prisma.pMPlan.update({ where: { id: pmPlanId }, data: { planDate: parseDateInput(value) } });
@@ -162,6 +163,7 @@ export async function addStakeholderRow(pmPlanId: string, _projectId: string) {
   await prisma.stakeholderRow.create({
     data: { pmPlanId, order: count, stakeholder: "New stakeholder", role: "", responsibility: "", accessRequired: "" },
   });
+  await touchPlan(pmPlanId);
   await writeAudit({ actor: user, projectId: realProjectId, action: "create", entityType: "StakeholderRow", summary: "Added a stakeholder row" });
   revalidatePmPlan(realProjectId);
 }
@@ -181,8 +183,10 @@ export async function updateStakeholderRow(
 ) {
   const existing = await prisma.stakeholderRow.findUniqueOrThrow({ where: { id }, include: { pmPlan: true } });
   const user = await requireModuleWrite(existing.pmPlan.projectId, "PM_PLAN");
-  await prisma.stakeholderRow.update({ where: { id }, data });
-  await writeAudit({ actor: user, projectId: existing.pmPlan.projectId, action: "update", entityType: "StakeholderRow", entityId: id, summary: "Updated a stakeholder row", diff: { before: existing, changes: data } });
+  const clean = cleanRowUpdate("stakeholder" satisfies PmPlanRowKind, data);
+  await prisma.stakeholderRow.update({ where: { id }, data: clean });
+  await touchPlan(existing.pmPlanId);
+  await writeAudit({ actor: user, projectId: existing.pmPlan.projectId, action: "update", entityType: "StakeholderRow", entityId: id, summary: "Updated a stakeholder row", diff: { before: existing, changes: clean } });
   revalidatePmPlan(existing.pmPlan.projectId);
 }
 
@@ -190,6 +194,7 @@ export async function deleteStakeholderRow(id: string, _projectId: string) {
   const existing = await prisma.stakeholderRow.findUniqueOrThrow({ where: { id }, include: { pmPlan: true } });
   const user = await requireModuleWrite(existing.pmPlan.projectId, "PM_PLAN");
   await prisma.stakeholderRow.delete({ where: { id } });
+  await touchPlan(existing.pmPlanId);
   await writeAudit({ actor: user, projectId: existing.pmPlan.projectId, action: "delete", entityType: "StakeholderRow", entityId: id, summary: "Deleted a stakeholder row", diff: { before: existing } });
   revalidatePmPlan(existing.pmPlan.projectId);
 }
@@ -202,6 +207,7 @@ export async function addCommsRow(pmPlanId: string, _projectId: string) {
   await prisma.commsRow.create({
     data: { pmPlanId, order: count, audience: "New audience", frequency: "", channel: "", content: "" },
   });
+  await touchPlan(pmPlanId);
   await writeAudit({ actor: user, projectId: realProjectId, action: "create", entityType: "CommsRow", summary: "Added a communications row" });
   revalidatePmPlan(realProjectId);
 }
@@ -213,8 +219,10 @@ export async function updateCommsRow(
 ) {
   const existing = await prisma.commsRow.findUniqueOrThrow({ where: { id }, include: { pmPlan: true } });
   const user = await requireModuleWrite(existing.pmPlan.projectId, "PM_PLAN");
-  await prisma.commsRow.update({ where: { id }, data });
-  await writeAudit({ actor: user, projectId: existing.pmPlan.projectId, action: "update", entityType: "CommsRow", entityId: id, summary: "Updated a communications row", diff: { before: existing, changes: data } });
+  const clean = cleanRowUpdate("comms" satisfies PmPlanRowKind, data);
+  await prisma.commsRow.update({ where: { id }, data: clean });
+  await touchPlan(existing.pmPlanId);
+  await writeAudit({ actor: user, projectId: existing.pmPlan.projectId, action: "update", entityType: "CommsRow", entityId: id, summary: "Updated a communications row", diff: { before: existing, changes: clean } });
   revalidatePmPlan(existing.pmPlan.projectId);
 }
 
@@ -222,6 +230,7 @@ export async function deleteCommsRow(id: string, _projectId: string) {
   const existing = await prisma.commsRow.findUniqueOrThrow({ where: { id }, include: { pmPlan: true } });
   const user = await requireModuleWrite(existing.pmPlan.projectId, "PM_PLAN");
   await prisma.commsRow.delete({ where: { id } });
+  await touchPlan(existing.pmPlanId);
   await writeAudit({ actor: user, projectId: existing.pmPlan.projectId, action: "delete", entityType: "CommsRow", entityId: id, summary: "Deleted a communications row", diff: { before: existing } });
   revalidatePmPlan(existing.pmPlan.projectId);
 }
@@ -234,6 +243,7 @@ export async function addRaciRow(pmPlanId: string, _projectId: string) {
   await prisma.raciRow.create({
     data: { pmPlanId, order: count, activity: "New activity", pm: "", tl: "", ba: "", leadEng: "", creativeLead: "" },
   });
+  await touchPlan(pmPlanId);
   await writeAudit({ actor: user, projectId: realProjectId, action: "create", entityType: "RaciRow", summary: "Added a RACI row" });
   revalidatePmPlan(realProjectId);
 }
@@ -245,8 +255,10 @@ export async function updateRaciRow(
 ) {
   const existing = await prisma.raciRow.findUniqueOrThrow({ where: { id }, include: { pmPlan: true } });
   const user = await requireModuleWrite(existing.pmPlan.projectId, "PM_PLAN");
-  await prisma.raciRow.update({ where: { id }, data });
-  await writeAudit({ actor: user, projectId: existing.pmPlan.projectId, action: "update", entityType: "RaciRow", entityId: id, summary: "Updated a RACI row", diff: { before: existing, changes: data } });
+  const clean = cleanRowUpdate("raci" satisfies PmPlanRowKind, data);
+  await prisma.raciRow.update({ where: { id }, data: clean });
+  await touchPlan(existing.pmPlanId);
+  await writeAudit({ actor: user, projectId: existing.pmPlan.projectId, action: "update", entityType: "RaciRow", entityId: id, summary: "Updated a RACI row", diff: { before: existing, changes: clean } });
   revalidatePmPlan(existing.pmPlan.projectId);
 }
 
@@ -254,6 +266,7 @@ export async function deleteRaciRow(id: string, _projectId: string) {
   const existing = await prisma.raciRow.findUniqueOrThrow({ where: { id }, include: { pmPlan: true } });
   const user = await requireModuleWrite(existing.pmPlan.projectId, "PM_PLAN");
   await prisma.raciRow.delete({ where: { id } });
+  await touchPlan(existing.pmPlanId);
   await writeAudit({ actor: user, projectId: existing.pmPlan.projectId, action: "delete", entityType: "RaciRow", entityId: id, summary: "Deleted a RACI row", diff: { before: existing } });
   revalidatePmPlan(existing.pmPlan.projectId);
 }
@@ -266,6 +279,7 @@ export async function addTimelineRow(pmPlanId: string, _projectId: string) {
   await prisma.timelineRow.create({
     data: { pmPlanId, order: count, phase: "New phase", start: "", end: "" },
   });
+  await touchPlan(pmPlanId);
   await writeAudit({ actor: user, projectId: realProjectId, action: "create", entityType: "TimelineRow", summary: "Added a timeline row" });
   revalidatePmPlan(realProjectId);
 }
@@ -277,8 +291,10 @@ export async function updateTimelineRow(
 ) {
   const existing = await prisma.timelineRow.findUniqueOrThrow({ where: { id }, include: { pmPlan: true } });
   const user = await requireModuleWrite(existing.pmPlan.projectId, "PM_PLAN");
-  await prisma.timelineRow.update({ where: { id }, data });
-  await writeAudit({ actor: user, projectId: existing.pmPlan.projectId, action: "update", entityType: "TimelineRow", entityId: id, summary: "Updated a timeline row", diff: { before: existing, changes: data } });
+  const clean = cleanRowUpdate("timeline" satisfies PmPlanRowKind, data);
+  await prisma.timelineRow.update({ where: { id }, data: clean });
+  await touchPlan(existing.pmPlanId);
+  await writeAudit({ actor: user, projectId: existing.pmPlan.projectId, action: "update", entityType: "TimelineRow", entityId: id, summary: "Updated a timeline row", diff: { before: existing, changes: clean } });
   revalidatePmPlan(existing.pmPlan.projectId);
 }
 
@@ -286,6 +302,7 @@ export async function deleteTimelineRow(id: string, _projectId: string) {
   const existing = await prisma.timelineRow.findUniqueOrThrow({ where: { id }, include: { pmPlan: true } });
   const user = await requireModuleWrite(existing.pmPlan.projectId, "PM_PLAN");
   await prisma.timelineRow.delete({ where: { id } });
+  await touchPlan(existing.pmPlanId);
   await writeAudit({ actor: user, projectId: existing.pmPlan.projectId, action: "delete", entityType: "TimelineRow", entityId: id, summary: "Deleted a timeline row", diff: { before: existing } });
   revalidatePmPlan(existing.pmPlan.projectId);
 }
@@ -298,6 +315,7 @@ export async function addDeliverableRow(pmPlanId: string, _projectId: string) {
   await prisma.deliverableRow.create({
     data: { pmPlanId, order: count, deliverable: "New deliverable", acceptanceEvidence: "", owner: "", target: "" },
   });
+  await touchPlan(pmPlanId);
   await writeAudit({ actor: user, projectId: realProjectId, action: "create", entityType: "DeliverableRow", summary: "Added a deliverable row" });
   revalidatePmPlan(realProjectId);
 }
@@ -309,8 +327,10 @@ export async function updateDeliverableRow(
 ) {
   const existing = await prisma.deliverableRow.findUniqueOrThrow({ where: { id }, include: { pmPlan: true } });
   const user = await requireModuleWrite(existing.pmPlan.projectId, "PM_PLAN");
-  await prisma.deliverableRow.update({ where: { id }, data });
-  await writeAudit({ actor: user, projectId: existing.pmPlan.projectId, action: "update", entityType: "DeliverableRow", entityId: id, summary: "Updated a deliverable row", diff: { before: existing, changes: data } });
+  const clean = cleanRowUpdate("deliverable" satisfies PmPlanRowKind, data);
+  await prisma.deliverableRow.update({ where: { id }, data: clean });
+  await touchPlan(existing.pmPlanId);
+  await writeAudit({ actor: user, projectId: existing.pmPlan.projectId, action: "update", entityType: "DeliverableRow", entityId: id, summary: "Updated a deliverable row", diff: { before: existing, changes: clean } });
   revalidatePmPlan(existing.pmPlan.projectId);
 }
 
@@ -318,6 +338,7 @@ export async function deleteDeliverableRow(id: string, _projectId: string) {
   const existing = await prisma.deliverableRow.findUniqueOrThrow({ where: { id }, include: { pmPlan: true } });
   const user = await requireModuleWrite(existing.pmPlan.projectId, "PM_PLAN");
   await prisma.deliverableRow.delete({ where: { id } });
+  await touchPlan(existing.pmPlanId);
   await writeAudit({ actor: user, projectId: existing.pmPlan.projectId, action: "delete", entityType: "DeliverableRow", entityId: id, summary: "Deleted a deliverable row", diff: { before: existing } });
   revalidatePmPlan(existing.pmPlan.projectId);
 }
@@ -330,6 +351,7 @@ export async function addResourceRow(pmPlanId: string, _projectId: string) {
   await prisma.resourceRow.create({
     data: { pmPlanId, order: count, role: "New role", allocation: "", responsibility: "", backup: "" },
   });
+  await touchPlan(pmPlanId);
   await writeAudit({ actor: user, projectId: realProjectId, action: "create", entityType: "ResourceRow", summary: "Added a resource row" });
   revalidatePmPlan(realProjectId);
 }
@@ -341,8 +363,10 @@ export async function updateResourceRow(
 ) {
   const existing = await prisma.resourceRow.findUniqueOrThrow({ where: { id }, include: { pmPlan: true } });
   const user = await requireModuleWrite(existing.pmPlan.projectId, "PM_PLAN");
-  await prisma.resourceRow.update({ where: { id }, data });
-  await writeAudit({ actor: user, projectId: existing.pmPlan.projectId, action: "update", entityType: "ResourceRow", entityId: id, summary: "Updated a resource row", diff: { before: existing, changes: data } });
+  const clean = cleanRowUpdate("resource" satisfies PmPlanRowKind, data);
+  await prisma.resourceRow.update({ where: { id }, data: clean });
+  await touchPlan(existing.pmPlanId);
+  await writeAudit({ actor: user, projectId: existing.pmPlan.projectId, action: "update", entityType: "ResourceRow", entityId: id, summary: "Updated a resource row", diff: { before: existing, changes: clean } });
   revalidatePmPlan(existing.pmPlan.projectId);
 }
 
@@ -350,6 +374,7 @@ export async function deleteResourceRow(id: string, _projectId: string) {
   const existing = await prisma.resourceRow.findUniqueOrThrow({ where: { id }, include: { pmPlan: true } });
   const user = await requireModuleWrite(existing.pmPlan.projectId, "PM_PLAN");
   await prisma.resourceRow.delete({ where: { id } });
+  await touchPlan(existing.pmPlanId);
   await writeAudit({ actor: user, projectId: existing.pmPlan.projectId, action: "delete", entityType: "ResourceRow", entityId: id, summary: "Deleted a resource row", diff: { before: existing } });
   revalidatePmPlan(existing.pmPlan.projectId);
 }
@@ -372,6 +397,7 @@ export async function addGateRow(pmPlanId: string, _projectId: string) {
   await prisma.gateRow.create({
     data: { pmPlanId, order: count, gate: "New gate", requiredEvidence: "", exitCondition: "" },
   });
+  await touchPlan(pmPlanId);
   await writeAudit({ actor: user, projectId: realProjectId, action: "create", entityType: "GateRow", summary: "Added a gate row" });
   revalidatePmPlan(realProjectId);
 }
@@ -387,6 +413,7 @@ export async function seedDefaultGateRows(pmPlanId: string, _projectId: string) 
   await prisma.gateRow.createMany({
     data: DEFAULT_GATES.map((g, i) => ({ pmPlanId, order: i, ...g })),
   });
+  await touchPlan(pmPlanId);
   await writeAudit({ actor: user, projectId: realProjectId, action: "create", entityType: "GateRow", summary: "Loaded the standard G0-G6 PMO gates" });
   revalidatePmPlan(realProjectId);
 }
@@ -398,8 +425,10 @@ export async function updateGateRow(
 ) {
   const existing = await prisma.gateRow.findUniqueOrThrow({ where: { id }, include: { pmPlan: true } });
   const user = await requireModuleWrite(existing.pmPlan.projectId, "PM_PLAN");
-  await prisma.gateRow.update({ where: { id }, data });
-  await writeAudit({ actor: user, projectId: existing.pmPlan.projectId, action: "update", entityType: "GateRow", entityId: id, summary: "Updated a gate row", diff: { before: existing, changes: data } });
+  const clean = cleanRowUpdate("gate" satisfies PmPlanRowKind, data);
+  await prisma.gateRow.update({ where: { id }, data: clean });
+  await touchPlan(existing.pmPlanId);
+  await writeAudit({ actor: user, projectId: existing.pmPlan.projectId, action: "update", entityType: "GateRow", entityId: id, summary: "Updated a gate row", diff: { before: existing, changes: clean } });
   revalidatePmPlan(existing.pmPlan.projectId);
 }
 
@@ -407,6 +436,7 @@ export async function deleteGateRow(id: string, _projectId: string) {
   const existing = await prisma.gateRow.findUniqueOrThrow({ where: { id }, include: { pmPlan: true } });
   const user = await requireModuleWrite(existing.pmPlan.projectId, "PM_PLAN");
   await prisma.gateRow.delete({ where: { id } });
+  await touchPlan(existing.pmPlanId);
   await writeAudit({ actor: user, projectId: existing.pmPlan.projectId, action: "delete", entityType: "GateRow", entityId: id, summary: "Deleted a gate row", diff: { before: existing } });
   revalidatePmPlan(existing.pmPlan.projectId);
 }

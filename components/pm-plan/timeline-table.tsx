@@ -4,6 +4,7 @@ import { useTransition } from "react";
 import { InlineText, InlineDate, InlineSelect } from "@/components/ui/inline-edit";
 import { STATUS_COLORS } from "@/lib/colors";
 import { addTimelineRow, updateTimelineRow, deleteTimelineRow } from "@/app/projects/[projectId]/pm-plan/pmplan-actions";
+import { TIMELINE_STATUSES } from "@/lib/pm-plan-rules";
 
 export type TimelineRowData = {
   id: string;
@@ -13,7 +14,6 @@ export type TimelineRowData = {
   status: string;
 };
 
-const TIMELINE_STATUSES = ["Not Started", "In Progress", "Completed"] as const;
 
 export function TimelineTable({ pmPlanId, projectId, rows }: { pmPlanId: string; projectId: string; rows: TimelineRowData[] }) {
   const [pending, startTransition] = useTransition();
@@ -52,7 +52,7 @@ export function TimelineTable({ pmPlanId, projectId, rows }: { pmPlanId: string;
               </td>
               <td className="px-3 py-1.5">
                 <button
-                  onClick={() => startTransition(() => deleteTimelineRow(r.id, projectId))}
+                  onClick={() => window.confirm(`Delete "${r.phase || "this row"}"? This can't be undone.`) && startTransition(() => deleteTimelineRow(r.id, projectId))}
                   disabled={pending}
                   className="text-slate-300 hover:text-red-600 disabled:opacity-50"
                 >

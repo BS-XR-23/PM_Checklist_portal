@@ -6,9 +6,11 @@ import { STATUS_COLORS } from "@/lib/colors";
 import type { ItemStatus } from "@/lib/constants";
 import { StatTile } from "@/components/ui/stat-tile";
 import { PageGuide } from "@/components/ui/page-guide";
-import { IconLayers, IconCheckCircle, IconClock, IconCircle, IconClipboardList } from "@/components/layout/icons";
+import { IconLayers, IconCheckCircle, IconClock, IconCircle } from "@/components/layout/icons";
+import { statusFromCounts, stakeholderProgress, commsProgress, timelineProgress, deliverableProgress, resourceProgress, gateProgress } from "@/lib/pm-plan-rules";
+import { isDependencyOverdue } from "@/lib/dependencies";
 import { PlanHeaderMeta } from "@/components/pm-plan/plan-header-meta";
-import { PmPlanSections, type PmPlanSectionData, type PmPlanSectionStatus } from "@/components/pm-plan/pm-plan-sections";
+import { PmPlanSections, type PmPlanSectionData } from "@/components/pm-plan/pm-plan-sections";
 import { PlanField } from "@/components/pm-plan/plan-field";
 import { RichTextView } from "@/components/ui/rich-text-view";
 import { FieldLinkView } from "@/components/pm-plan/field-link-editor";
@@ -22,16 +24,6 @@ import { GateTable } from "@/components/pm-plan/gate-table";
 import { GanttChart } from "@/components/charts/gantt-chart";
 import type { PmPlanLinkableField } from "./pmplan-actions";
 
-// filled/total -> a status band, reused by every section below: 0 filled is
-// Not Started, all filled is Completed, anything between is In Progress. A
-// single-field or single-list section (total 1) has no partial state, so it
-// only ever lands on Not Started or Completed.
-function statusFromCounts(filled: number, total: number): PmPlanSectionStatus {
-  if (filled <= 0) return "NOT_STARTED";
-  if (filled >= total) return "COMPLETED";
-  return "IN_PROGRESS";
-}
-
 function milestoneStatusLabel(status: string): string {
   return STATUS_COLORS[status as ItemStatus]?.label ?? status;
 }
@@ -39,6 +31,9 @@ function milestoneStatusLabel(status: string): string {
 export default async function PmPlanPage({ params }: { params: { projectId: string } }) {
   const access = await requireModuleAccess(params.projectId, "PM_PLAN", "READ_LIMITED");
   const canWrite = access === "WRITE";
+  // Budget is money — hidden from read-limited viewers, same as every other
+  // financial field (the export follows the same rule).
+  const showMoney = access !== "READ_LIMITED";
 
   // Risk & Dependency data is sourced live from the Risk Register and
   // Dependencies tabs (RiskItem/DependencyItem, keyed by projectId) rather
@@ -110,7 +105,7 @@ export default async function PmPlanPage({ params }: { params: { projectId: stri
     pmPlan.charterScopeOut,
     pmPlan.charterSuccessCriteria,
     pmPlan.charterTimeline,
-    pmPlan.charterBudget,
+    ...(showMoney ? [pmPlan.charterBudget] : []),
     pmPlan.charterAssumptions,
     pmPlan.charterPmAuthority,
   ];
@@ -133,7 +128,16 @@ export default async function PmPlanPage({ params }: { params: { projectId: stri
     pmPlan.deployMonitoring,
   ];
   const filledCount = (fields: (string | null)[]) => fields.filter((f) => f && f.trim() !== "").length;
-  const commsFilled = (pmPlan.commsRows.length > 0 ? 1 : 0) + (pmPlan.escalationPath ? 1 : 0);
+  // "Has a row" isn't "done": every new project starts with template
+  // stakeholder/comms/RACI rows, and seven Not Started gates aren't a
+  // finished gate section (lib/pm-plan-rules.ts).
+  const stakeholderProg = stakeholderProgress(pmPlan.stakeholders);
+  const commsProg = commsProgress(pmPlan.commsRows, pmPlan.escalationPath);
+  const timelineProg = timelineProgress(pmPlan.timelineRows);
+  const deliverableProg = deliverableProgress(pmPlan.deliverableRows);
+  const resourceProg = resourceProgress(pmPlan.resourceRows);
+  const gateProg = gateProgress(pmPlan.gateRows);
+  const overdueDeps = dependencies.filter((d) => isDependencyOverdue(d)).length;
 
   const timelineGanttRows = pmPlan.timelineRows
     .map((t) => ({ id: t.id, label: t.phase, start: parseDateInput(t.start), end: parseDateInput(t.end), status: t.status }))
@@ -175,8 +179,8 @@ export default async function PmPlanPage({ params }: { params: { projectId: stri
     title: "Stakeholders & Access",
     hint: "Add/remove rows per the actual project org chart. Define access levels per system.",
     required: true,
-    status: statusFromCounts(pmPlan.stakeholders.length, 1),
-    itemCountLabel: `${pmPlan.stakeholders.length} ${pmPlan.stakeholders.length === 1 ? "stakeholder" : "stakeholders"}`,
+    status: stakeholderProg.status,
+    itemCountLabel: stakeholderProg.label,
     view: (
       <ReadOnlyTable
         columns={["Stakeholder", "Linked Person", "Role", "Responsibility", "Access Required", "Influence", "Interest", "Last Updated"]}
@@ -210,7 +214,7 @@ export default async function PmPlanPage({ params }: { params: { projectId: stri
         <ReadOnlyField label="Scope (Out)" value={pmPlan.charterScopeOut} link={link("charterScopeOut")} rich />
         <ReadOnlyField label="Success Criteria" value={pmPlan.charterSuccessCriteria} link={link("charterSuccessCriteria")} rich />
         <ReadOnlyField label="Timeline" value={pmPlan.charterTimeline} link={link("charterTimeline")} />
-        <ReadOnlyField label="Budget" value={pmPlan.charterBudget} />
+        {showMoney && <ReadOnlyField label="Budget" value={pmPlan.charterBudget} />}
         <ReadOnlyField label="Assumptions & Constraints" value={pmPlan.charterAssumptions} rich />
         <ReadOnlyField label="PM Authority" value={pmPlan.charterPmAuthority} rich />
       </div>
@@ -273,8 +277,8 @@ export default async function PmPlanPage({ params }: { params: { projectId: stri
     number: sections.length + 1,
     title: "Scope & Deliverables Baseline",
     hint: "The contractual acceptance baseline: what gets delivered, and what evidence proves it's done.",
-    itemCountLabel: `${pmPlan.deliverableRows.length} ${pmPlan.deliverableRows.length === 1 ? "deliverable" : "deliverables"}`,
-    status: statusFromCounts(pmPlan.deliverableRows.length, 1),
+    itemCountLabel: deliverableProg.label,
+    status: deliverableProg.status,
     view: (
       <ReadOnlyTable
         columns={["Deliverable", "Acceptance Evidence", "Owner", "Target"]}
@@ -290,7 +294,7 @@ export default async function PmPlanPage({ params }: { params: { projectId: stri
     sections.push({
       id: "milestone",
       number: sections.length + 1,
-      title: "Milestone",
+      title: "Milestones",
       hint: "Sourced live from the Milestones & Payments tab — the project's client-facing delivery commitments. Edit them there.",
       itemCountLabel: `${milestones.length} ${milestones.length === 1 ? "milestone" : "milestones"}`,
       // "Completed" means every milestone is actually baselined (date +
@@ -322,8 +326,8 @@ export default async function PmPlanPage({ params }: { params: { projectId: stri
     number: sections.length + 1,
     title: "Timeline",
     hint: "Project phases with their own start/end range — independent of the Milestone section above.",
-    itemCountLabel: `${pmPlan.timelineRows.length} ${pmPlan.timelineRows.length === 1 ? "phase" : "phases"}`,
-    status: statusFromCounts(pmPlan.timelineRows.length, 1),
+    itemCountLabel: timelineProg.label,
+    status: timelineProg.status,
     view: (
       <div className="space-y-4">
         <GanttChart rows={timelineGanttRows} />
@@ -394,8 +398,8 @@ export default async function PmPlanPage({ params }: { params: { projectId: stri
     number: sections.length + 1,
     title: "Resource & Responsibility Plan",
     hint: "Static role-level staffing baseline. For live per-person allocation, see the Resourcing and Team tabs.",
-    itemCountLabel: `${pmPlan.resourceRows.length} ${pmPlan.resourceRows.length === 1 ? "role" : "roles"}`,
-    status: statusFromCounts(pmPlan.resourceRows.length, 1),
+    itemCountLabel: resourceProg.label,
+    status: resourceProg.status,
     view: (
       <ReadOnlyTable
         columns={["Role", "Allocation", "Primary Responsibility", "Backup / Escalation"]}
@@ -580,8 +584,8 @@ export default async function PmPlanPage({ params }: { params: { projectId: stri
     number: sections.length + 1,
     title: "Communications Plan",
     hint: "Include an escalation path: who to contact and how, for urgent issues.",
-    status: statusFromCounts(commsFilled, 2),
-    itemCountLabel: `${pmPlan.commsRows.length} ${pmPlan.commsRows.length === 1 ? "row" : "rows"}`,
+    status: commsProg.status,
+    itemCountLabel: commsProg.label,
     view: (
       <div className="space-y-4">
         <ReadOnlyTable
@@ -637,10 +641,11 @@ export default async function PmPlanPage({ params }: { params: { projectId: stri
       number: sections.length + 1,
       title: "Dependency Management",
       hint: "Sourced live from the Dependencies tab. Edit entries on the Dependencies tab.",
-      itemCountLabel: `${dependencies.length} ${dependencies.length === 1 ? "item" : "items"}`,
-      status: statusFromCounts(
-        dependencies.filter((d) => d.responsible?.trim() && d.expectedDate).length,
-        Math.max(dependencies.length, 1)
+      itemCountLabel: `${dependencies.length} ${dependencies.length === 1 ? "item" : "items"}${overdueDeps ? ` · ${overdueDeps} overdue` : ""}`,
+      // Every dependency owned and dated — but while any is overdue the plan
+      // for it isn't holding, so the section can't read as Completed.
+      status: ((st) => (st === "COMPLETED" && overdueDeps > 0 ? "IN_PROGRESS" : st))(
+        statusFromCounts(dependencies.filter((d) => d.responsible?.trim() && d.expectedDate).length, Math.max(dependencies.length, 1))
       ),
       view: (
         <div className="space-y-3">
@@ -672,8 +677,8 @@ export default async function PmPlanPage({ params }: { params: { projectId: stri
     number: sections.length + 1,
     title: "PMO Health & Control Gates",
     hint: "Formal stage-gate sign-off checklist (G0-G6). Distinct from the Checklist tab's delivery work items.",
-    itemCountLabel: `${pmPlan.gateRows.length} ${pmPlan.gateRows.length === 1 ? "gate" : "gates"}`,
-    status: statusFromCounts(pmPlan.gateRows.length, 1),
+    itemCountLabel: gateProg.label,
+    status: gateProg.status,
     view: (
       <ReadOnlyTable
         columns={["Gate", "Required Evidence", "Exit Condition", "Status"]}
@@ -686,17 +691,6 @@ export default async function PmPlanPage({ params }: { params: { projectId: stri
   const completedCount = sections.filter((s) => s.status === "COMPLETED").length;
   const inProgressCount = sections.filter((s) => s.status === "IN_PROGRESS").length;
   const notStartedCount = sections.filter((s) => s.status === "NOT_STARTED").length;
-  const dataRows =
-    pmPlan.stakeholders.length +
-    pmPlan.commsRows.length +
-    pmPlan.raciRows.length +
-    risks.length +
-    dependencies.length +
-    milestones.length +
-    pmPlan.deliverableRows.length +
-    pmPlan.timelineRows.length +
-    pmPlan.resourceRows.length +
-    pmPlan.gateRows.length;
 
   return (
     <div className="space-y-6">
@@ -746,11 +740,6 @@ export default async function PmPlanPage({ params }: { params: { projectId: stri
       </div>
 
       <PmPlanSections sections={sections} canWrite={canWrite} />
-
-      <p className="flex items-center gap-1.5 text-xs text-slate-400">
-        <IconClipboardList className="h-3.5 w-3.5" />
-        Generated from the BS23 PMP_Template.docx — {dataRows} data rows across Stakeholders, Communications, RACI, Risks, Dependencies, Milestones, Deliverables, Timeline, Resources, and Gates.
-      </p>
     </div>
   );
 }

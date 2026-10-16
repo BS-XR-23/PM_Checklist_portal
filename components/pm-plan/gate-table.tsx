@@ -4,6 +4,7 @@ import { useTransition } from "react";
 import clsx from "clsx";
 import { InlineText, InlineSelect } from "@/components/ui/inline-edit";
 import { addGateRow, updateGateRow, deleteGateRow, seedDefaultGateRows } from "@/app/projects/[projectId]/pm-plan/pmplan-actions";
+import { GATE_STATUSES } from "@/lib/pm-plan-rules";
 
 export type GateRowData = {
   id: string;
@@ -13,7 +14,6 @@ export type GateRowData = {
   status: string;
 };
 
-const GATE_STATUSES = ["Not Started", "In Progress", "Approved"] as const;
 
 const STATUS_STYLE: Record<string, string> = {
   "Not Started": "bg-slate-100 text-slate-500",
@@ -82,7 +82,7 @@ export function GateTable({ pmPlanId, projectId, rows }: { pmPlanId: string; pro
               </td>
               <td className="px-3 py-1.5">
                 <button
-                  onClick={() => startTransition(() => deleteGateRow(r.id, projectId))}
+                  onClick={() => window.confirm(`Delete "${r.gate || "this row"}"? This can't be undone.`) && startTransition(() => deleteGateRow(r.id, projectId))}
                   disabled={pending}
                   className="text-slate-300 hover:text-red-600 disabled:opacity-50"
                 >

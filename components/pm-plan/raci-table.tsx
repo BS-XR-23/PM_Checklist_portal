@@ -46,7 +46,7 @@ export function RaciTable({ pmPlanId, projectId, rows }: { pmPlanId: string; pro
               </td>
               <td className="px-3 py-1.5">
                 <button
-                  onClick={() => startTransition(() => deleteRaciRow(r.id, projectId))}
+                  onClick={() => window.confirm(`Delete "${r.activity || "this row"}"? This can't be undone.`) && startTransition(() => deleteRaciRow(r.id, projectId))}
                   disabled={pending}
                   className="text-slate-300 hover:text-red-600 disabled:opacity-50"
                 >

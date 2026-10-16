@@ -30,12 +30,22 @@ export async function GET(_req: NextRequest, { params }: { params: { projectId: 
 
   const pmPlan = await prisma.pMPlan.findUnique({
     where: { projectId: params.projectId },
-    include: { stakeholders: true, commsRows: true, raciRows: true, deliverableRows: true, timelineRows: true, resourceRows: true, gateRows: true },
+    include: {
+      stakeholders: { include: { person: { select: { name: true } } } },
+      commsRows: true,
+      raciRows: true,
+      deliverableRows: true,
+      timelineRows: true,
+      resourceRows: true,
+      gateRows: true,
+    },
   });
   if (!pmPlan) return new NextResponse("PM Plan not found", { status: 404 });
 
   const [risks, dependencies, milestones] = await Promise.all([
-    canSeeRisks ? prisma.riskItem.findMany({ where: { projectId: params.projectId }, orderBy: { order: "asc" } }) : Promise.resolve([]),
+    canSeeRisks
+      ? prisma.riskItem.findMany({ where: { projectId: params.projectId }, orderBy: { order: "asc" }, include: { ownerPerson: { select: { name: true } } } })
+      : Promise.resolve([]),
     canSeeDeps ? prisma.dependencyItem.findMany({ where: { projectId: params.projectId }, orderBy: { order: "asc" } }) : Promise.resolve([]),
     canSeeMilestones
       ? prisma.milestone.findMany({
@@ -59,6 +69,8 @@ export async function GET(_req: NextRequest, { params }: { params: { projectId: 
     timeline: pmPlan.timelineRows,
     resources: pmPlan.resourceRows,
     gates: pmPlan.gateRows,
+    // Same rule as the page: read-limited viewers don't get money.
+    showMoney: access !== "READ_LIMITED",
   });
 
   const filename = `PM_Plan_${project.name.replace(/[^a-z0-9]+/gi, "_")}.docx`;

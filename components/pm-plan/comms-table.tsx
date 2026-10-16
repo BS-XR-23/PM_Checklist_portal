@@ -64,7 +64,7 @@ export function CommsTable({
               <td className="px-3 py-1.5 text-xs text-slate-500 whitespace-nowrap">{formatShortDate(r.updatedAt)}</td>
               <td className="px-3 py-1.5">
                 <button
-                  onClick={() => startTransition(() => deleteCommsRow(r.id, projectId))}
+                  onClick={() => window.confirm(`Delete "${r.audience || "this row"}"? This can't be undone.`) && startTransition(() => deleteCommsRow(r.id, projectId))}
                   disabled={pending}
                   className="text-slate-300 hover:text-red-600 disabled:opacity-50"
                 >

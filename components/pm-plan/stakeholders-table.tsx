@@ -83,7 +83,7 @@ export function StakeholdersTable({
               <td className="px-3 py-1.5 text-xs text-slate-500 whitespace-nowrap">{formatShortDate(r.updatedAt)}</td>
               <td className="px-3 py-1.5">
                 <button
-                  onClick={() => startTransition(() => deleteStakeholderRow(r.id, projectId))}
+                  onClick={() => window.confirm(`Delete "${r.stakeholder || "this row"}"? This can't be undone.`) && startTransition(() => deleteStakeholderRow(r.id, projectId))}
                   disabled={pending}
                   className="text-slate-300 hover:text-red-600 disabled:opacity-50"
                 >

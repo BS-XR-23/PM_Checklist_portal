@@ -2,13 +2,16 @@
 
 import { useState, useTransition } from "react";
 import { IconExternalLink } from "@/components/layout/icons";
+import { safeHref } from "@/lib/checklist";
 
 /** Read-only reference-link chip for a field's view mode — renders nothing when there's no link, so an unused field stays uncluttered. */
 export function FieldLinkView({ url }: { url: string | null | undefined }) {
-  if (!url) return null;
+  // Only http(s) — a stored javascript: link must never become a live href.
+  const href = safeHref(url ?? null);
+  if (!href) return null;
   return (
     <a
-      href={url}
+      href={href}
       target="_blank"
       rel="noopener noreferrer"
       className="mt-1 inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 hover:underline"
@@ -23,10 +26,19 @@ export function FieldLinkEditor({ url, onSave }: { url: string | null | undefine
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(url ?? "");
   const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
 
   const commit = () => {
     const trimmed = draft.trim();
-    if (trimmed !== (url ?? "")) startTransition(() => onSave(trimmed));
+    if (trimmed !== (url ?? ""))
+      startTransition(async () => {
+        setError(null);
+        try {
+          await onSave(trimmed);
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Couldn't save the link.");
+        }
+      });
     setEditing(false);
   };
 
@@ -54,10 +66,11 @@ export function FieldLinkEditor({ url, onSave }: { url: string | null | undefine
     );
   }
 
+  const href = safeHref(url ?? null);
   if (url) {
     return (
       <div className="mt-1 flex items-center gap-2">
-        <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 hover:underline">
+        <a href={href ?? undefined} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 hover:underline">
           <IconExternalLink className="h-3 w-3" /> Reference link
         </a>
         <button type="button" onClick={() => setEditing(true)} className="text-xs text-slate-400 hover:text-slate-600">
@@ -67,6 +80,17 @@ export function FieldLinkEditor({ url, onSave }: { url: string | null | undefine
           Remove
         </button>
       </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <p className="mt-1 text-xs text-rose-600">
+        {error}{" "}
+        <button type="button" onClick={() => setEditing(true)} className="font-medium underline">
+          Edit link
+        </button>
+      </p>
     );
   }
 

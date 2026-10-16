@@ -44,7 +44,7 @@ export function ResourceTable({ pmPlanId, projectId, rows }: { pmPlanId: string;
               </td>
               <td className="px-3 py-1.5">
                 <button
-                  onClick={() => startTransition(() => deleteResourceRow(r.id, projectId))}
+                  onClick={() => window.confirm(`Delete "${r.role || "this row"}"? This can't be undone.`) && startTransition(() => deleteResourceRow(r.id, projectId))}
                   disabled={pending}
                   className="text-slate-300 hover:text-red-600 disabled:opacity-50"
                 >

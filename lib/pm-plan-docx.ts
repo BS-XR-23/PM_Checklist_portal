@@ -50,19 +50,20 @@ const TEMPLATE_PATH = path.join(process.cwd(), "templates", "pmp-plan-template.d
 export type PmPlanExportData = {
   project: Project;
   pmPlan: PMPlan;
-  stakeholders: StakeholderRow[];
+  stakeholders: (StakeholderRow & { person?: { name: string } | null })[];
   comms: CommsRow[];
   raci: RaciRow[];
-  risks: RiskItem[];
+  risks: (RiskItem & { ownerPerson?: { name: string } | null })[];
   dependencies: DependencyItem[];
   milestones: (Milestone & { ownerPerson: { name: string } | null })[];
   deliverables: DeliverableRow[];
   timeline: TimelineRow[];
   resources: ResourceRow[];
   gates: GateRow[];
+  showMoney: boolean;
 };
 
-export function renderPmPlanDocx({ project, pmPlan, stakeholders, comms, raci, risks, dependencies, milestones, deliverables, timeline, resources, gates }: PmPlanExportData): Buffer {
+export function renderPmPlanDocx({ project, pmPlan, stakeholders, comms, raci, risks, dependencies, milestones, deliverables, timeline, resources, gates, showMoney }: PmPlanExportData): Buffer {
   const content = fs.readFileSync(TEMPLATE_PATH, "binary");
   const zip = new PizZip(content);
   const doc = new Docxtemplater(zip, {
@@ -83,7 +84,7 @@ export function renderPmPlanDocx({ project, pmPlan, stakeholders, comms, raci, r
     charter_scope_out: pmPlan.charterScopeOut ? htmlToPlainText(pmPlan.charterScopeOut) : "",
     charter_success_criteria: pmPlan.charterSuccessCriteria ? htmlToPlainText(pmPlan.charterSuccessCriteria) : "",
     charter_timeline: pmPlan.charterTimeline ?? "",
-    charter_budget: pmPlan.charterBudget ?? "",
+    charter_budget: showMoney ? (pmPlan.charterBudget ?? "") : "",
     charter_assumptions: pmPlan.charterAssumptions ? htmlToPlainText(pmPlan.charterAssumptions) : "",
     charter_pm_authority: pmPlan.charterPmAuthority ? htmlToPlainText(pmPlan.charterPmAuthority) : "",
 
@@ -113,7 +114,12 @@ export function renderPmPlanDocx({ project, pmPlan, stakeholders, comms, raci, r
 
     stakeholders: stakeholders
       .sort((a, b) => a.order - b.order)
-      .map((s) => ({ stakeholder: s.stakeholder, role: s.role, responsibility: s.responsibility, accessRequired: s.accessRequired })),
+      .map((s) => ({
+        stakeholder: s.person?.name ? `${s.stakeholder} — ${s.person.name}` : s.stakeholder,
+        role: s.role,
+        responsibility: s.responsibility,
+        accessRequired: s.accessRequired,
+      })),
     comms: comms
       .sort((a, b) => a.order - b.order)
       .map((c) => ({ audience: c.audience, frequency: c.frequency, channel: c.channel, content: c.content })),
@@ -130,7 +136,7 @@ export function renderPmPlanDocx({ project, pmPlan, stakeholders, comms, raci, r
         impact: r.impact,
         score: String(riskScore(r.probability, r.impact)),
         response: r.mitigation ?? "",
-        owner: r.owner ?? "",
+        owner: r.ownerPerson?.name ?? r.owner ?? "",
         status: r.status,
       })),
     dependencies: dependencies

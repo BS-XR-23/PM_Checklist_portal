@@ -447,11 +447,10 @@ a separate portal. It never affects project Health.
 
 ## 13. PM Plan
 
-One plan per project, matching BS23's `PMP_Template.docx`, in 15 sections
-(each shows Completed / In Progress / Not Started by how much is filled in):
+One plan per project, matching BS23's `PMP_Template.docx`, in 15 sections:
 
 1. Rationale · 2. Stakeholders & Access (with influence/interest) ·
-3. Charter · 4. Scope & Deliverables Baseline · 5. **Milestone** (read-only —
+3. Charter · 4. Scope & Deliverables Baseline · 5. **Milestones** (read-only —
 from Milestones & Payments) · 6. Timeline (phases with start/end) ·
 7. Methodology · 8. Resource & Responsibility Plan · 9. **Risk & Issue
 Management** (read-only — from the Risk Register) · 10. Test Plan ·
@@ -459,8 +458,29 @@ Management** (read-only — from the Risk Register) · 10. Test Plan ·
 Matrix · 14. **Dependency Management** (read-only — from Dependencies) ·
 15. **PMO Health & Control Gates** (G0–G6, editable here).
 
+Each section shows Completed / In Progress / Not Started — how much is really
+filled in, not whether a row exists (every new project starts with template
+stakeholder, communications and RACI rows):
+
+| Section | Completed when |
+|---|---|
+| Text sections (Charter, Methodology, Test, Deployment) | Every field filled |
+| Stakeholders | Every row linked to a real person |
+| Scope & Deliverables | Every deliverable has acceptance evidence and a target |
+| Timeline | Every phase has a real name (not "New phase") and both dates |
+| Resource plan | Every role has an allocation |
+| Communications | An escalation path, and at least one row aimed at a person |
+| Milestones | Every milestone has a date and an owner |
+| Risks | Every item has an owner and a mitigation |
+| Dependencies | Every item has a responsible party and a date — and none overdue (the count shows "· N overdue") |
+| Gates | Every gate **Approved** ("0/7 approved") |
+
 Read-only sections link to their source tab. Long text fields are rich text
-and can carry a reference link. **Export .docx** regenerates the Word plan.
+and can carry a reference link (web addresses only). **Budget** is hidden
+from read-limited viewers, on the page and in the export. Deleting a table
+row asks first. Table edits update **Last Updated**. **Export .docx**
+regenerates the Word plan, with risk owners and each stakeholder's linked
+person.
 
 ## 14. Decisions & Action Items
 

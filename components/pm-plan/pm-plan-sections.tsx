@@ -32,8 +32,11 @@ export function PmPlanSections({ sections, canWrite }: { sections: PmPlanSection
   const [expandedId, setExpandedId] = useState<string | null>(sections[0]?.id ?? null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const sectionRefs = useRef(new Map<string, HTMLElement>());
+  // Set once the user opens a section themselves — see the scroll effect below.
+  const userPicked = useRef(false);
 
   const toggle = (id: string) => {
+    userPicked.current = true;
     setExpandedId((cur) => (cur === id ? null : id));
     setEditingId(null);
   };
@@ -42,8 +45,10 @@ export function PmPlanSections({ sections, canWrite }: { sections: PmPlanSection
   // fold (e.g. via the nav) collapses whichever was open above it with no
   // other visual change in the viewport — scroll it into view so that
   // doesn't look like the click did nothing.
+  // Not on first render, though: the first section starts expanded, and
+  // scrolling to it on load jumped the page past the plan header and tiles.
   useEffect(() => {
-    if (!expandedId) return;
+    if (!expandedId || !userPicked.current) return;
     sectionRefs.current.get(expandedId)?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [expandedId]);
 
@@ -57,6 +62,7 @@ export function PmPlanSections({ sections, canWrite }: { sections: PmPlanSection
               <button
                 type="button"
                 onClick={() => {
+                  userPicked.current = true;
                   setExpandedId(s.id);
                   setEditingId(null);
                 }}
