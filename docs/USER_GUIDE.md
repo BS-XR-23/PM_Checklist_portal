@@ -611,13 +611,31 @@ and stale presales opportunities. Overdue first, then soonest.
 
 ## 22. Admin tools
 
-- **Users** — Super Admin edits (name, email, role, reset password,
-  activate/deactivate, delete when safe, CSV/XLSX import); Admin and PM view
-  read-only. You can't change your own role or deactivate yourself.
-- **People** — the registry every owner field picks from: name, title,
-  email, phone, linked portal account, **rate role** and **competency**
-  (figures visible to Super Admin only). Also manages the role rate card and
-  competency multipliers. Super Admin edits; Admin, Management, PM read.
+- **Users** — Super Admin edits; Admin and PM view read-only.
+  - Name and email change behind **Edit name & email**; emails must be
+    valid and unique. **Reset password** asks first, then shows a temporary
+    password once.
+  - **Role** asks first and lists what follows: lowering someone's role
+    lowers their project role too (a PM made Guest becomes Guest on every
+    project, with the default Guest access). A project role can never be
+    higher than the person's global role.
+  - You can't change your own role or deactivate yourself, and the last
+    active Super Admin can't be demoted.
+  - **Staff not linked to a Person** counts staff accounts (Super Admin,
+    Admin, Management, PM) with no People record — clients and guests don't
+    need one.
+- **People** — the registry every owner field picks from: name and title,
+  email and phone, linked portal account, **rate role** and **competency**
+  (figures visible to Super Admin only — the numbers never leave the server
+  for anyone else). Also manages the role rate card and competency
+  multipliers. Super Admin edits; Admin, Management, PM read.
+  - An unlinked person with a matching account (same email, else the only
+    same-name account) shows **Link to …?** — one click links them.
+  - **Delete** asks first and says what goes with it (engagements, owned
+    items lose their owner). Someone with logged sprint hours can't be
+    deleted — those hours are cost history.
+  - Deleting a rate role or competency asks first and says how many people
+    use it.
 - **Checklist Template** — the master items new projects (and presales
   opportunities) are seeded from; editing affects **future** projects only.
   Per item: text, **checkpoint** label, and the **↻ recurring** toggle.
@@ -628,7 +646,8 @@ and stale presales opportunities. Overdue first, then soonest.
 ## 23. Login & account
 
 Email + password. Wrong password and deactivated account show the same
-message. Role changes and deactivation take effect on the very next request.
+message. Role changes and deactivation take effect on the very next request,
+including the project roles that follow a role change.
 
 ## 24. Cheat sheet: how the numbers are calculated
 

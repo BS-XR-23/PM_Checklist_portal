@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/rbac";
 import { canManagePersonRegistry, canViewPersonRegistry } from "@/lib/resourcing-rbac";
 import { isCurrentlyActive } from "@/lib/overload";
+import { suggestUserForPerson } from "@/lib/user-rules";
 import { AppShell } from "@/components/layout/app-shell";
 import { IconUsers, IconUserCheck, IconFolder, IconDollar, IconBadge } from "@/components/layout/icons";
 import { StatTile } from "@/components/ui/stat-tile";
@@ -17,6 +18,10 @@ import { CompetencyRow } from "./competency-row";
 
 export const dynamic = "force-dynamic";
 
+function toSuggestion(s: ReturnType<typeof suggestUserForPerson<{ id: string; name: string; email: string }>>) {
+  return s ? { userId: s.user.id, label: `${s.user.name} (${s.user.email})`, by: s.by } : null;
+}
+
 export default async function AdminPeoplePage() {
   const currentUser = await requireUser();
   if (!canViewPersonRegistry(currentUser.role)) redirect("/projects");
@@ -28,15 +33,38 @@ export default async function AdminPeoplePage() {
   const [people, users, roleRates, competencies] = await Promise.all([
     prisma.person.findMany({
       orderBy: { name: "asc" },
-      include: { user: true, roleRate: true, engagements: { include: { project: true } } },
+      include: {
+        // Only what the page shows — never the whole User row: it carries
+        // the password hash, and everything here is sent to the browser.
+        user: { select: { id: true, name: true, email: true } },
+        engagements: { include: { project: { select: { name: true } } } },
+        _count: {
+          select: {
+            sprintAllocations: true,
+            engagements: true,
+            checklistOwners: true,
+            riskOwners: true,
+            actionItemOwner: true,
+            wbsTasks: true,
+            milestoneOwner: true,
+          },
+        },
+      },
     }),
-    prisma.user.findMany({ orderBy: { name: "asc" } }),
-    prisma.roleRate.findMany({ orderBy: { roleName: "asc" } }),
-    prisma.competency.findMany({ orderBy: { level: "asc" } }),
+    prisma.user.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, email: true, isActive: true } }),
+    prisma.roleRate.findMany({ orderBy: { roleName: "asc" }, include: { _count: { select: { people: true } } } }),
+    prisma.competency.findMany({ orderBy: { level: "asc" }, include: { _count: { select: { people: true } } } }),
   ]);
 
   const linkedUserIds = new Set(people.filter((p) => p.userId).map((p) => p.userId as string));
-  const linkableUsers = users.filter((u) => !linkedUserIds.has(u.id));
+  const linkableUsers = users.filter((u) => !linkedUserIds.has(u.id)).map(({ id, name, email }) => ({ id, name, email }));
+  // Rates and multipliers are Super Admin-only: strip the numbers here, not
+  // just in the UI, since the rows are serialized to the browser.
+  const visibleRoleRates = roleRates.map((r) => ({ id: r.id, roleName: r.roleName, manDayRate: canEdit ? r.manDayRate : null, peopleCount: r._count.people }));
+  const visibleCompetencies = competencies.map((c) => ({ id: c.id, level: c.level, multiplier: canEdit ? c.multiplier : null, peopleCount: c._count.people }));
+  const rateOptions = roleRates.map((r) => ({ id: r.id, roleName: r.roleName }));
+  const competencyOptions = competencies.map((c) => ({ id: c.id, level: c.level }));
+  const activeUnlinkedUsers = users.filter((u) => u.isActive && !linkedUserIds.has(u.id));
 
   const rows = people.map((p) => {
     const active = p.engagements.filter((e) => isCurrentlyActive(e));
@@ -59,13 +87,22 @@ export default async function AdminPeoplePage() {
       // was producing an unbroken line that forced the table wider than the
       // viewport.
       engagements: active.map((e) => ({ projectName: e.project.name, roleOnProject: e.roleOnProject })),
+      // A likely portal account for an unlinked person (same email, else the
+      // only same-name account) — offered as a one-click link, never applied
+      // on its own.
+      suggestion: canEdit && !p.userId ? toSuggestion(suggestUserForPerson(p, activeUnlinkedUsers)) : null,
+      deleteImpact: {
+        sprintAllocations: p._count.sprintAllocations,
+        engagements: p._count.engagements,
+        ownedItems: p._count.checklistOwners + p._count.riskOwners + p._count.actionItemOwner + p._count.wbsTasks + p._count.milestoneOwner,
+      },
     };
   });
 
   const totalPeople = people.length;
   const onProject = rows.filter((r) => r.engagements.length > 0).length;
   const linkedAccountCount = linkedUserIds.size;
-  const avgRate = roleRates.length > 0 ? roleRates.reduce((sum, r) => sum + r.manDayRate, 0) / roleRates.length : 0;
+  const avgRate = canEdit && roleRates.length > 0 ? roleRates.reduce((sum, r) => sum + r.manDayRate, 0) / roleRates.length : 0;
 
   const statCards = (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -109,12 +146,12 @@ export default async function AdminPeoplePage() {
             <thead>
               <tr className="text-left font-semibold text-slate-500 bg-slate-50">
                 <th className="px-3 py-2">Role</th>
-                <th className="px-3 py-2 w-16 whitespace-nowrap">Rate</th>
+                <th className="px-3 py-2 w-20 whitespace-nowrap">Rate</th>
                 {canEdit && <th className="px-3 py-2 w-6" />}
               </tr>
             </thead>
             <tbody>
-              {roleRates.map((r) => (
+              {visibleRoleRates.map((r) => (
                 <RoleRateRow key={r.id} roleRate={r} canEdit={canEdit} />
               ))}
             </tbody>
@@ -139,7 +176,7 @@ export default async function AdminPeoplePage() {
               </tr>
             </thead>
             <tbody>
-              {competencies.map((c) => (
+              {visibleCompetencies.map((c) => (
                 <CompetencyRow key={c.id} competency={c} canEdit={canEdit} />
               ))}
             </tbody>
@@ -176,10 +213,10 @@ export default async function AdminPeoplePage() {
       <main className="p-4 sm:p-6">
         <PeopleDirectory
           statCards={statCards}
-          addPersonForm={canEdit ? <CreatePersonForm linkableUsers={linkableUsers} roleRates={roleRates} competencies={competencies} /> : null}
+          addPersonForm={canEdit ? <CreatePersonForm linkableUsers={linkableUsers} roleRates={rateOptions} competencies={competencyOptions} /> : null}
           rows={rows}
-          roleRates={roleRates}
-          competencies={competencies}
+          roleRates={rateOptions}
+          competencies={competencyOptions}
           sidebarBottom={sidebarBottom}
           canEdit={canEdit}
         />

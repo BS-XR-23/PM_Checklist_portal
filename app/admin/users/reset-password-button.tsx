@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { resetUserPassword } from "./user-actions";
 
-export function ResetPasswordButton({ userId }: { userId: string }) {
+export function ResetPasswordButton({ userId, email }: { userId: string; email: string }) {
   const [tempPassword, setTempPassword] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -22,7 +22,8 @@ export function ResetPasswordButton({ userId }: { userId: string }) {
   return (
     <div>
       <button
-        onClick={() =>
+        onClick={() => {
+          if (!window.confirm(`Reset the password for ${email}? Their current password stops working right away, and you'll get a temporary one to send them.`)) return;
           startTransition(async () => {
             setError(null);
             try {
@@ -31,8 +32,8 @@ export function ResetPasswordButton({ userId }: { userId: string }) {
             } catch (err) {
               setError(err instanceof Error ? err.message : "Failed to reset password.");
             }
-          })
-        }
+          });
+        }}
         disabled={pending}
         className="text-xs font-medium text-blue-600 hover:text-blue-800 hover:underline disabled:opacity-50"
       >

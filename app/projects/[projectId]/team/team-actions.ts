@@ -11,6 +11,8 @@ import {
   ACCESS_PRESETS,
 } from "@/lib/rbac";
 import type { Role, ModuleName, AccessLevel } from "@prisma/client";
+import { membershipRoleAllowed } from "@/lib/user-rules";
+import { ROLE_LABELS } from "@/lib/constants";
 
 const ASSIGNABLE_ROLES: Role[] = ["PM", "CLIENT", "LIMITED"];
 
@@ -34,6 +36,16 @@ export async function addProjectMember(projectId: string, email: string, role: R
   const targetUser = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
   if (!targetUser) {
     throw new Error(`No user with email ${email}. Create the user first (Admin > Users).`);
+  }
+  // A project role can't exceed the person's global role (a global Guest
+  // can't be a project PM) — Super Admin/Admin/Management already see every
+  // project and never take a membership.
+  if (!membershipRoleAllowed(targetUser.role, role)) {
+    throw new Error(
+      ["ADMIN", "TPM", "PROGRAM_MANAGER"].includes(targetUser.role)
+        ? `${targetUser.email} is ${ROLE_LABELS[targetUser.role]} and already sees every project.`
+        : `${targetUser.email} is a ${ROLE_LABELS[targetUser.role]} globally, so they can't be ${ROLE_LABELS[role]} on a project. Change their role on Users first.`
+    );
   }
 
   const membership = await prisma.projectMembership.create({

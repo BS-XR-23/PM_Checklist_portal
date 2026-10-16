@@ -68,7 +68,10 @@ export function PeopleDirectory({
   const pageRows = filtered.slice((clampedPage - 1) * pageSize, clampedPage * pageSize);
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-[1fr_280px] gap-6 items-start">
+    // The rates/competencies column only sits beside the list on very wide
+    // screens; below that it drops underneath so the people table gets the
+    // full width instead of scrolling sideways.
+    <div className="grid grid-cols-1 2xl:grid-cols-[1fr_280px] gap-6 items-start">
       <div className="space-y-4 min-w-0">
         {statCards}
         {addPersonForm}
@@ -76,37 +79,64 @@ export function PeopleDirectory({
         <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
           <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3.5 border-b border-slate-100">
             <SectionHeader icon={<IconUsers />} iconWrapClass="bg-blue-50 text-blue-600" title="People List" className="" />
-            <div className="relative">
-              <IconSearch className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-              <input
-                type="text"
-                value={search}
+            <div className="flex flex-wrap items-center gap-2">
+              <IconFilter className="h-3.5 w-3.5 text-slate-400" />
+              <select
+                value={filter}
                 onChange={(e) => {
-                  setSearch(e.target.value);
+                  setFilter(e.target.value as EngagementFilter);
                   setPage(1);
                 }}
-                placeholder="Search people…"
-                className="w-64 rounded-md border border-slate-300 pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
-              />
+                aria-label="Engagement"
+                className="rounded-md border border-slate-300 px-2.5 py-2 text-sm"
+              >
+                <option value="all">All engagement</option>
+                <option value="on-project">On a project</option>
+                <option value="bench">Bench (no current project)</option>
+              </select>
+              <select
+                value={accountFilter}
+                onChange={(e) => {
+                  setAccountFilter(e.target.value as AccountFilter);
+                  setPage(1);
+                }}
+                aria-label="Portal account"
+                className="rounded-md border border-slate-300 px-2.5 py-2 text-sm"
+              >
+                <option value="all">All portal accounts</option>
+                <option value="linked">Linked to a user</option>
+                <option value="unlinked">Not linked</option>
+              </select>
+              <div className="relative">
+                <IconSearch className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(e) => {
+                    setSearch(e.target.value);
+                    setPage(1);
+                  }}
+                  placeholder="Search people…"
+                  className="w-56 rounded-md border border-slate-300 pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
+                />
+              </div>
             </div>
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[1300px]">
+            <table className="w-full text-sm min-w-[980px]">
               <thead>
                 <tr className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-100 bg-slate-50">
-                  <th className="px-4 py-3 w-40">
+                  <th className="px-4 py-3 w-52">
                     <button type="button" onClick={() => setSortAsc((v) => !v)} className="inline-flex items-center gap-1 hover:text-slate-700">
                       Name <span className="text-[10px]">{sortAsc ? "▲" : "▼"}</span>
                     </button>
                   </th>
-                  <th className="px-4 py-3 w-36">Title</th>
-                  <th className="px-4 py-3 w-52">Email</th>
-                  <th className="px-4 py-3 w-24">Phone</th>
+                  <th className="px-4 py-3 w-56">Contact</th>
                   <th className="px-4 py-3 w-40">Portal Account</th>
-                  <th className="px-4 py-3 w-36">Rate Role</th>
-                  <th className="px-4 py-3 w-36">Competency</th>
-                  <th className="px-4 py-3 min-w-[200px]">Engagement</th>
+                  <th className="px-4 py-3 w-32">Rate Role</th>
+                  <th className="px-4 py-3 w-28">Competency</th>
+                  <th className="px-4 py-3 min-w-[180px]">Engagement</th>
                   {canEdit && <th className="px-4 py-3 w-12" />}
                 </tr>
               </thead>
@@ -117,7 +147,7 @@ export function PeopleDirectory({
               </tbody>
             </table>
             {filtered.length === 0 && (
-              <p className="text-sm text-slate-400 p-4">{rows.length === 0 ? "No people in the registry yet." : `No people match "${search}".`}</p>
+              <p className="text-sm text-slate-400 p-4">{rows.length === 0 ? "No people in the registry yet." : "No people match the search or filters."}</p>
             )}
           </div>
 
@@ -182,35 +212,8 @@ export function PeopleDirectory({
         </p>
       </div>
 
-      <div className="space-y-4">
-        <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-2.5">
-          <SectionHeader icon={<IconFilter />} iconWrapClass="bg-slate-100 text-slate-500" title="Quick Filters" className="" />
-          <select
-            value={filter}
-            onChange={(e) => {
-              setFilter(e.target.value as EngagementFilter);
-              setPage(1);
-            }}
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-          >
-            <option value="all">All Engagement</option>
-            <option value="on-project">On Project</option>
-            <option value="bench">Bench (no current project)</option>
-          </select>
-          <select
-            value={accountFilter}
-            onChange={(e) => {
-              setAccountFilter(e.target.value as AccountFilter);
-              setPage(1);
-            }}
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-          >
-            <option value="all">All Portal Accounts</option>
-            <option value="linked">Linked to a User</option>
-            <option value="unlinked">Not linked</option>
-          </select>
-        </div>
-
+      {/* Side by side under the list; stacked in the right-hand column on very wide screens. */}
+      <div className="grid gap-4 items-start md:grid-cols-2 2xl:grid-cols-1">
         {sidebarBottom}
       </div>
     </div>

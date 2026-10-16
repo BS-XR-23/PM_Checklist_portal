@@ -3,6 +3,7 @@ import type { Role } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/rbac";
 import { ROLE_LABELS } from "@/lib/constants";
+import { needsPersonLink } from "@/lib/user-rules";
 import { AppShell } from "@/components/layout/app-shell";
 import { IconShield, IconIdCard, IconChart, IconUsers, IconUser, IconLayers, IconClock, IconAlertCircle } from "@/components/layout/icons";
 import { UsersPageClient } from "./users-page-client";
@@ -136,7 +137,8 @@ export default async function AdminUsersPage() {
   const totalUsers = users.length;
   const activeUsers = users.filter((u) => u.isActive).length;
   const inactiveUsers = totalUsers - activeUsers;
-  const unlinkedUsers = users.filter((u) => !u.person).length;
+  // Staff only — clients and guests don't need a People record.
+  const unlinkedUsers = users.filter((u) => u.isActive && !u.person && needsPersonLink(u.role)).length;
 
   const sidebar = (
     <>
@@ -145,7 +147,7 @@ export default async function AdminUsersPage() {
         <OverviewRow icon={<IconUsers />} iconWrapClass="bg-blue-50 text-blue-600" label="Total Users" value={totalUsers} />
         <OverviewRow icon={<IconUser />} iconWrapClass="bg-emerald-50 text-emerald-600" label="Active Users" value={activeUsers} />
         <OverviewRow icon={<IconClock />} iconWrapClass="bg-slate-100 text-slate-500" label="Archived Users" value={inactiveUsers} />
-        <OverviewRow icon={<IconAlertCircle />} iconWrapClass="bg-amber-50 text-amber-600" label="Not Linked to a Person" value={unlinkedUsers} />
+        <OverviewRow icon={<IconAlertCircle />} iconWrapClass="bg-amber-50 text-amber-600" label="Staff not linked to a Person" value={unlinkedUsers} />
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">

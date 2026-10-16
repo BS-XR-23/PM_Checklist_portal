@@ -5,7 +5,8 @@ import bcrypt from "bcryptjs";
 import { randomBytes } from "crypto";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireUser, writeAudit } from "@/lib/rbac";
+import { requireUser, writeAudit, DEFAULT_CLIENT_PERMISSIONS, DEFAULT_LIMITED_PERMISSIONS } from "@/lib/rbac";
+import { normalizeEmail, isValidEmail, membershipRoleAfterGlobalChange } from "@/lib/user-rules";
 import { isCurrentlyActive } from "@/lib/overload";
 import { ROLE_LABELS } from "@/lib/constants";
 import type { Role } from "@prisma/client";
@@ -32,14 +33,17 @@ async function requireAdmin() {
 
 export async function createUser(email: string, name: string, role: Role): Promise<{ tempPassword: string }> {
   const admin = await requireAdmin();
+  if (!ALL_ROLES.includes(role)) throw new Error(`Unknown role "${role}".`);
+  const cleanName = name.trim();
+  if (!cleanName) throw new Error("Name is required.");
 
-  const normalizedEmail = email.toLowerCase().trim();
+  const normalizedEmail = normalizeEmail(email);
   const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
   if (existing) throw new Error(`A user with email ${normalizedEmail} already exists.`);
 
   const tempPassword = randomBytes(9).toString("base64url");
   const passwordHash = await bcrypt.hash(tempPassword, 10);
-  const created = await prisma.user.create({ data: { email: normalizedEmail, name, passwordHash, role } });
+  const created = await prisma.user.create({ data: { email: normalizedEmail, name: cleanName, passwordHash, role } });
 
   await writeAudit({ actor: admin, action: "create", entityType: "User", entityId: created.id, summary: `Created user ${normalizedEmail} with role ${role}` });
 
@@ -86,6 +90,7 @@ export async function importUsersCsv(formData: FormData): Promise<{
   created: { email: string; tempPassword: string }[];
   skippedDuplicateCount: number;
   unmatchedRoleCount: number;
+  invalidEmailCount: number;
 }> {
   const admin = await requireAdmin();
 
@@ -102,9 +107,14 @@ export async function importUsersCsv(formData: FormData): Promise<{
   const created: { email: string; tempPassword: string }[] = [];
   let skippedDuplicateCount = 0;
   let unmatchedRoleCount = 0;
+  let invalidEmailCount = 0;
 
   for (const row of rows) {
-    const email = row.email.toLowerCase();
+    const email = row.email.trim().toLowerCase();
+    if (!isValidEmail(email)) {
+      invalidEmailCount++;
+      continue;
+    }
     if (existingEmails.has(email) || seenEmailsInBatch.has(email)) {
       skippedDuplicateCount++;
       continue;
@@ -131,7 +141,7 @@ export async function importUsersCsv(formData: FormData): Promise<{
     });
   }
   revalidatePath("/admin/users");
-  return { created, skippedDuplicateCount, unmatchedRoleCount };
+  return { created, skippedDuplicateCount, unmatchedRoleCount, invalidEmailCount };
 }
 
 export async function changePassword(currentPassword: string, newPassword: string) {
@@ -171,9 +181,10 @@ export async function updateUserProfile(userId: string, data: Partial<{ name: st
   const admin = await requireAdmin();
   const existing = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
 
+  if (data.name !== undefined && !data.name.trim()) throw new Error("Name can't be blank.");
   let email: string | undefined;
   if (data.email !== undefined) {
-    email = data.email.toLowerCase().trim();
+    email = normalizeEmail(data.email);
     if (email !== existing.email) {
       const collision = await prisma.user.findUnique({ where: { email } });
       if (collision) throw new Error(`A user with email ${email} already exists.`);
@@ -183,7 +194,7 @@ export async function updateUserProfile(userId: string, data: Partial<{ name: st
   await prisma.user.update({
     where: { id: userId },
     data: {
-      ...(data.name !== undefined ? { name: data.name } : {}),
+      ...(data.name !== undefined ? { name: data.name.trim() } : {}),
       ...(email !== undefined ? { email } : {}),
     },
   });
@@ -315,19 +326,64 @@ export async function deleteUser(userId: string) {
   revalidatePath("/admin/users");
 }
 
+async function assertNotLastActiveAdmin(userId: string, nextRole: Role) {
+  const target = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
+  if (target.role !== "ADMIN" || nextRole === "ADMIN" || !target.isActive) return;
+  const activeAdmins = await prisma.user.count({ where: { role: "ADMIN", isActive: true } });
+  if (activeAdmins <= 1) throw new Error("This is the only active Super Admin — make someone else Super Admin first.");
+}
+
+/**
+ * Read-only preview for the role-change confirmation: which project
+ * memberships will follow the new role down (PM → Guest turns their project
+ * PM memberships into Guest with the default Guest access).
+ */
+export async function getRoleChangeImpact(userId: string, nextRole: Role): Promise<{ projects: { name: string; from: Role; to: Role }[] }> {
+  await requireAdmin();
+  const memberships = await prisma.projectMembership.findMany({ where: { userId }, include: { project: { select: { name: true } } } });
+  const projects = memberships.flatMap((m) => {
+    const to = membershipRoleAfterGlobalChange(nextRole, m.role);
+    return to ? [{ name: m.project.name, from: m.role, to }] : [];
+  });
+  return { projects };
+}
+
 export async function updateUserRole(userId: string, role: Role) {
   const admin = await requireAdmin();
+  if (!ALL_ROLES.includes(role)) throw new Error(`Unknown role "${role}".`);
+  if (userId === admin.id) throw new Error("You can't change your own role.");
+  await assertNotLastActiveAdmin(userId, role);
 
   const existing = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
-  await prisma.user.update({ where: { id: userId }, data: { role } });
+  const memberships = await prisma.projectMembership.findMany({ where: { userId }, include: { project: { select: { name: true } } } });
+  // Memberships follow the global role down, so a demoted PM can't keep
+  // editing their projects through a membership that still says PM. Each
+  // changed membership restarts from the new role's default access.
+  const following = memberships.flatMap((m) => {
+    const to = membershipRoleAfterGlobalChange(role, m.role);
+    return to ? [{ membership: m, to }] : [];
+  });
+  const defaultsFor = (r: Role) => (r === "CLIENT" ? DEFAULT_CLIENT_PERMISSIONS : r === "LIMITED" ? DEFAULT_LIMITED_PERMISSIONS : []);
+
+  await prisma.$transaction([
+    prisma.user.update({ where: { id: userId }, data: { role } }),
+    ...following.flatMap(({ membership, to }) => [
+      prisma.modulePermission.deleteMany({ where: { membershipId: membership.id } }),
+      prisma.projectMembership.update({ where: { id: membership.id }, data: { role: to } }),
+      prisma.modulePermission.createMany({ data: defaultsFor(to).map((p) => ({ membershipId: membership.id, module: p.module, access: p.access })) }),
+    ]),
+  ]);
 
   await writeAudit({
     actor: admin,
     action: "role_change",
     entityType: "User",
     entityId: userId,
-    summary: `Changed ${existing.email}'s role from ${existing.role} to ${role}`,
+    summary:
+      `Changed ${existing.email}'s role from ${existing.role} to ${role}` +
+      (following.length ? `; project role also changed on ${following.map((f) => f.membership.project.name).join(", ")}` : ""),
   });
 
   revalidatePath("/admin/users");
+  for (const { membership } of following) revalidatePath(`/projects/${membership.projectId}/team`);
 }

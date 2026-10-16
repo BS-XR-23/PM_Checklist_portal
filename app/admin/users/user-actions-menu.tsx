@@ -5,7 +5,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import type { Role } from "@prisma/client";
 import { ROLE_LABELS } from "@/lib/constants";
-import { setUserActive, updateUserRole, getDeactivationImpact, getDeletionEligibility, deleteUser } from "./user-actions";
+import { setUserActive, updateUserRole, getDeactivationImpact, getDeletionEligibility, deleteUser, getRoleChangeImpact } from "./user-actions";
 
 const ALL_ROLES: Role[] = ["ADMIN", "TPM", "PROGRAM_MANAGER", "CLIENT", "PM", "LIMITED"];
 const PANEL_WIDTH = 288; // matches w-72
@@ -14,7 +14,8 @@ const EST_MAX_HEIGHT = 340; // rough upper bound across all panel states, for th
 
 type DeactivationImpact = Awaited<ReturnType<typeof getDeactivationImpact>>;
 type DeletionEligibility = Awaited<ReturnType<typeof getDeletionEligibility>>;
-type Panel = "NONE" | "DEACTIVATE_IMPACT" | "DELETE_CHECK";
+type Panel = "NONE" | "DEACTIVATE_IMPACT" | "DELETE_CHECK" | "ROLE_CONFIRM";
+type RoleImpact = Awaited<ReturnType<typeof getRoleChangeImpact>>;
 
 function ImpactLines({ impact }: { impact: DeactivationImpact }) {
   const lines: string[] = [];
@@ -84,6 +85,8 @@ export function UserActionsMenu({
   const [eligibility, setEligibility] = useState<DeletionEligibility | null>(null);
   const [deletePending, startDeleteTransition] = useTransition();
   const [confirmEmail, setConfirmEmail] = useState("");
+  const [nextRole, setNextRole] = useState<Role | null>(null);
+  const [roleImpact, setRoleImpact] = useState<RoleImpact | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   function closeMenu() {
@@ -92,6 +95,8 @@ export function UserActionsMenu({
     setImpact(null);
     setEligibility(null);
     setConfirmEmail("");
+    setNextRole(null);
+    setRoleImpact(null);
     setError(null);
   }
 
@@ -138,7 +143,50 @@ export function UserActionsMenu({
                 ...(coords.openUp ? { bottom: window.innerHeight - coords.anchorTop + GAP } : { top: coords.anchorBottom + GAP }),
               }}
             >
-          {panel === "DEACTIVATE_IMPACT" && impact ? (
+          {panel === "ROLE_CONFIRM" && nextRole && roleImpact ? (
+            <div className="space-y-2 px-1 py-1">
+              <p className="text-xs font-medium text-slate-700">
+                Change {email} from {ROLE_LABELS[currentRole]} to {ROLE_LABELS[nextRole]}?
+              </p>
+              {roleImpact.projects.length > 0 ? (
+                <>
+                  <p className="text-xs text-slate-600">Their project role changes too, and access resets to the {ROLE_LABELS[nextRole]} default on:</p>
+                  <ul className="text-xs text-slate-600 space-y-0.5 list-disc pl-4">
+                    {roleImpact.projects.map((p) => (
+                      <li key={p.name}>
+                        {p.name} ({ROLE_LABELS[p.from]} → {ROLE_LABELS[p.to]})
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              ) : (
+                <p className="text-xs text-slate-400">No project memberships change.</p>
+              )}
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="button"
+                  disabled={rolePending}
+                  onClick={() =>
+                    startRoleTransition(async () => {
+                      setError(null);
+                      try {
+                        await updateUserRole(userId, nextRole);
+                        closeMenu();
+                      } catch (err) {
+                        setError(err instanceof Error ? err.message : "Failed to change role.");
+                      }
+                    })
+                  }
+                  className="flex-1 rounded bg-slate-900 text-white text-xs font-medium px-2 py-1.5 hover:bg-slate-800 disabled:opacity-50"
+                >
+                  {rolePending ? "Changing…" : "Change role"}
+                </button>
+                <button type="button" onClick={() => setPanel("NONE")} className="rounded border border-slate-300 text-xs px-2 py-1.5 text-slate-600 hover:bg-slate-50">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : panel === "DEACTIVATE_IMPACT" && impact ? (
             <div className="space-y-2 px-1 py-1">
               <p className="text-xs font-medium text-slate-700">Deactivating won&apos;t automatically remove:</p>
               <ImpactLines impact={impact} />
@@ -229,10 +277,22 @@ export function UserActionsMenu({
               </Link>
               <label className="block px-1 pb-1 pt-1.5 text-xs font-medium text-slate-500 border-t border-slate-100 mt-1">Role</label>
               <select
-                defaultValue={currentRole}
+                value={currentRole}
                 disabled={isSelf || rolePending}
                 title={isSelf ? "You can't change your own role" : undefined}
-                onChange={(e) => startRoleTransition(() => updateUserRole(userId, e.target.value as Role))}
+                onChange={(e) => {
+                  const picked = e.target.value as Role;
+                  startRoleTransition(async () => {
+                    setError(null);
+                    try {
+                      setRoleImpact(await getRoleChangeImpact(userId, picked));
+                      setNextRole(picked);
+                      setPanel("ROLE_CONFIRM");
+                    } catch (err) {
+                      setError(err instanceof Error ? err.message : "Failed to check the role change.");
+                    }
+                  });
+                }}
                 className="mb-2 w-full rounded border border-slate-300 px-2 py-1 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {ALL_ROLES.map((r) => (

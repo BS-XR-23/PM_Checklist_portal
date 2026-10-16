@@ -36,7 +36,8 @@ export function ImportUsersButton() {
               <p className="text-xs text-slate-600">
                 Created {result.created.length} {result.created.length === 1 ? "user" : "users"}
                 {result.skippedDuplicateCount > 0 && ` — skipped ${result.skippedDuplicateCount} with an email already in use`}
-                {result.unmatchedRoleCount > 0 && ` — ${result.unmatchedRoleCount} had a Role that didn't match, defaulted to Guest`}.
+                {result.unmatchedRoleCount > 0 && ` — ${result.unmatchedRoleCount} had a Role that didn't match, defaulted to Guest`}
+                {result.invalidEmailCount > 0 && ` — skipped ${result.invalidEmailCount} with an invalid email`}.
               </p>
               {result.created.length > 0 && (
                 <>

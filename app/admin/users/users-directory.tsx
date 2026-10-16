@@ -5,6 +5,7 @@ import { useState } from "react";
 import type { Role } from "@prisma/client";
 import type { ReactNode } from "react";
 import { initials } from "@/lib/format";
+import { needsPersonLink } from "@/lib/user-rules";
 import { ResetPasswordButton } from "./reset-password-button";
 import { UserActiveToggle } from "./user-active-toggle";
 import { UserActionsMenu } from "./user-actions-menu";
@@ -76,71 +77,79 @@ export function RoleGroupSection({
               </tr>
             </thead>
             <tbody>
-              {group.users.map((u) => {
-                const isSelf = u.id === currentUserId;
-                return (
-                  <tr key={u.id} className="border-t border-slate-100">
-                    <td className="px-4 py-3.5">
-                      <div className="flex items-center gap-2.5">
-                        <span
-                          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white ${group.avatarClass}`}
-                        >
-                          {initials(u.name)}
-                        </span>
-                        <div className="min-w-0 flex-1 font-medium text-slate-800">
-                          {canEdit ? <UserProfileField userId={u.id} field="name" value={u.name} /> : u.name}
-                        </div>
-                        {isSelf && (
-                          <span className="shrink-0 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
-                            You
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3.5 text-slate-500">
-                      {canEdit ? <UserProfileField userId={u.id} field="email" value={u.email} /> : u.email}
-                    </td>
-                    <td className="px-4 py-3.5">
-                      {u.personName ? (
-                        <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
-                          {u.personName}
-                        </span>
-                      ) : (
-                        <span
-                          className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700"
-                          title="No linked Person record — can't be picked as an Owner (Checklist/Risk/Action items) or staffed on a project."
-                        >
-                          Not linked
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3.5">{canEdit ? <ResetPasswordButton userId={u.id} /> : <span className="text-slate-300">—</span>}</td>
-                    <td className="px-4 py-3.5">
-                      <UserActiveToggle isActive={u.isActive} />
-                      {!u.isActive && u.deletionBlocked && (
-                        <p className="mt-1 text-[11px] text-slate-400 max-w-[10rem]">
-                          {u.deletionBlocked.auditLogCount + u.deletionBlocked.escalationCount + u.deletionBlocked.presalesProjectCount > 0
-                            ? "Has history — can't be deleted"
-                            : "No activity — can be deleted"}
-                        </p>
-                      )}
-                    </td>
-                    <td className="px-4 py-3.5">
-                      {canEdit ? (
-                        <UserActionsMenu userId={u.id} email={u.email} currentRole={u.role} isActive={u.isActive} isSelf={isSelf} />
-                      ) : (
-                        <Link href={`/admin/users/${u.id}/access`} className="text-xs font-medium text-blue-600 hover:text-blue-800 hover:underline">
-                          View access
-                        </Link>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
+              {group.users.map((u) => (
+                <UserRowView key={u.id} u={u} isSelf={u.id === currentUserId} canEdit={canEdit} avatarClass={group.avatarClass} />
+              ))}
             </tbody>
           </table>
         </div>
       )}
     </div>
+  );
+}
+
+function UserRowView({ u, isSelf, canEdit, avatarClass }: { u: UserRow; isSelf: boolean; canEdit: boolean; avatarClass: string }) {
+  // Name/email stay plain text until "Edit" — always-live text boxes meant a
+  // stray keystroke could change someone's login email.
+  const [editing, setEditing] = useState(false);
+
+  return (
+    <tr className="border-t border-slate-100">
+      <td className="px-4 py-3.5">
+        <div className="flex items-center gap-2.5">
+          <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white ${avatarClass}`}>
+            {initials(u.name)}
+          </span>
+          <div className="min-w-0 flex-1 font-medium text-slate-800">
+            {editing ? <UserProfileField userId={u.id} field="name" value={u.name} /> : u.name}
+          </div>
+          {isSelf && <span className="shrink-0 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">You</span>}
+        </div>
+      </td>
+      <td className="px-4 py-3.5 text-slate-500">
+        {editing ? <UserProfileField userId={u.id} field="email" value={u.email} /> : <span className="break-all">{u.email}</span>}
+        {canEdit && (
+          <button type="button" onClick={() => setEditing((v) => !v)} className="mt-0.5 block text-[11px] font-medium text-blue-600 hover:underline">
+            {editing ? "Done" : "Edit name & email"}
+          </button>
+        )}
+      </td>
+      <td className="px-4 py-3.5">
+        {u.personName ? (
+          <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">{u.personName}</span>
+        ) : !needsPersonLink(u.role) ? (
+          <span className="text-slate-300" title="Clients and guests don't need a People record.">
+            —
+          </span>
+        ) : (
+          <span
+            className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700"
+            title="No linked Person record — can't be picked as an Owner (Checklist/Risk/Action items) or staffed on a project. Link it on People."
+          >
+            Not linked
+          </span>
+        )}
+      </td>
+      <td className="px-4 py-3.5">{canEdit ? <ResetPasswordButton userId={u.id} email={u.email} /> : <span className="text-slate-300">—</span>}</td>
+      <td className="px-4 py-3.5">
+        <UserActiveToggle isActive={u.isActive} />
+        {!u.isActive && u.deletionBlocked && (
+          <p className="mt-1 text-[11px] text-slate-400 max-w-[10rem]">
+            {u.deletionBlocked.auditLogCount + u.deletionBlocked.escalationCount + u.deletionBlocked.presalesProjectCount > 0
+              ? "Has history — can't be deleted"
+              : "No activity — can be deleted"}
+          </p>
+        )}
+      </td>
+      <td className="px-4 py-3.5">
+        {canEdit ? (
+          <UserActionsMenu userId={u.id} email={u.email} currentRole={u.role} isActive={u.isActive} isSelf={isSelf} />
+        ) : (
+          <Link href={`/admin/users/${u.id}/access`} className="text-xs font-medium text-blue-600 hover:text-blue-800 hover:underline">
+            View access
+          </Link>
+        )}
+      </td>
+    </tr>
   );
 }

@@ -5,6 +5,16 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUser, writeAudit } from "@/lib/rbac";
 import { canManagePersonRegistry } from "@/lib/resourcing-rbac";
+import { normalizeEmail, isValidEmail } from "@/lib/user-rules";
+
+/** Blank → null; otherwise a valid, normalized email that no other Person already uses. */
+async function checkedPersonEmail(raw: string | undefined, exceptPersonId?: string): Promise<string | null> {
+  if (!raw?.trim()) return null;
+  const email = normalizeEmail(raw);
+  const clash = await prisma.person.findFirst({ where: { email: { equals: email, mode: "insensitive" }, ...(exceptPersonId ? { id: { not: exceptPersonId } } : {}) } });
+  if (clash) throw new Error(`${clash.name} already uses ${email}.`);
+  return email;
+}
 
 async function requirePersonAdmin() {
   const user = await requireUser();
@@ -28,12 +38,13 @@ export async function createPerson(input: {
     const existingLink = await prisma.person.findUnique({ where: { userId: input.userId } });
     if (existingLink) throw new Error("That portal account is already linked to another Person record.");
   }
+  const email = await checkedPersonEmail(input.email);
 
   const created = await prisma.person.create({
     data: {
       name: input.name.trim(),
       title: input.title?.trim() || null,
-      email: input.email?.trim() || null,
+      email,
       phone: input.phone?.trim() || null,
       userId: input.userId || null,
       roleRateId: input.roleRateId || null,
@@ -64,13 +75,15 @@ export async function updatePerson(
     const existingLink = await prisma.person.findUnique({ where: { userId: input.userId } });
     if (existingLink && existingLink.id !== personId) throw new Error("That portal account is already linked to another Person record.");
   }
+  if (input.name !== undefined && !input.name.trim()) throw new Error("Name can't be blank.");
+  const email = input.email !== undefined ? await checkedPersonEmail(input.email, personId) : undefined;
 
   await prisma.person.update({
     where: { id: personId },
     data: {
       ...(input.name !== undefined ? { name: input.name.trim() } : {}),
       ...(input.title !== undefined ? { title: input.title.trim() || null } : {}),
-      ...(input.email !== undefined ? { email: input.email.trim() || null } : {}),
+      ...(email !== undefined ? { email } : {}),
       ...(input.phone !== undefined ? { phone: input.phone.trim() || null } : {}),
       ...(input.userId !== undefined ? { userId: input.userId || null } : {}),
       ...(input.roleRateId !== undefined ? { roleRateId: input.roleRateId || null } : {}),
@@ -80,6 +93,7 @@ export async function updatePerson(
 
   await writeAudit({ actor: admin, action: "update", entityType: "Person", entityId: personId, summary: `Updated Person "${existing.name}"` });
   revalidatePath("/admin/people");
+  revalidatePath("/admin/users");
 }
 
 type ImportRow = { name: string; title: string; email: string; phone: string; rateRole: string; competency: string };
@@ -117,7 +131,7 @@ function parseImportRows(buffer: ArrayBuffer): ImportRow[] {
 }
 
 /** CSV/XLSX bulk import — matches Rate Role/Competency by name (case-insensitive), skips rows whose email already exists. */
-export async function importPeopleCsv(formData: FormData): Promise<{ importedCount: number; skippedDuplicateCount: number; unmatchedRoleCount: number; unmatchedCompetencyCount: number }> {
+export async function importPeopleCsv(formData: FormData): Promise<{ importedCount: number; skippedDuplicateCount: number; unmatchedRoleCount: number; unmatchedCompetencyCount: number; invalidEmailCount: number }> {
   const admin = await requirePersonAdmin();
 
   const file = formData.get("file");
@@ -139,9 +153,14 @@ export async function importPeopleCsv(formData: FormData): Promise<{ importedCou
   let skippedDuplicateCount = 0;
   let unmatchedRoleCount = 0;
   let unmatchedCompetencyCount = 0;
+  let invalidEmailCount = 0;
   const seenEmailsInBatch = new Set<string>();
 
   for (const row of rows) {
+    if (row.email && !isValidEmail(row.email)) {
+      invalidEmailCount++;
+      row.email = "";
+    }
     const emailKey = row.email.toLowerCase();
     if (row.email && (existingEmails.has(emailKey) || seenEmailsInBatch.has(emailKey))) {
       skippedDuplicateCount++;
@@ -158,7 +177,7 @@ export async function importPeopleCsv(formData: FormData): Promise<{ importedCou
       data: {
         name: row.name,
         title: row.title || null,
-        email: row.email || null,
+        email: row.email ? row.email.toLowerCase() : null,
         phone: row.phone || null,
         roleRateId: roleRateId ?? null,
         competencyId: competencyId ?? null,
@@ -169,12 +188,19 @@ export async function importPeopleCsv(formData: FormData): Promise<{ importedCou
 
   await writeAudit({ actor: admin, action: "create", entityType: "Person", entityId: "bulk-import", summary: `Imported ${importedCount} people from a file` });
   revalidatePath("/admin/people");
-  return { importedCount, skippedDuplicateCount, unmatchedRoleCount, unmatchedCompetencyCount };
+  return { importedCount, skippedDuplicateCount, unmatchedRoleCount, unmatchedCompetencyCount, invalidEmailCount };
 }
 
 export async function deletePerson(personId: string) {
   const admin = await requirePersonAdmin();
-  const existing = await prisma.person.findUniqueOrThrow({ where: { id: personId } });
+  const existing = await prisma.person.findUniqueOrThrow({ where: { id: personId }, include: { _count: { select: { sprintAllocations: true } } } });
+  // Deleting a Person cascades to their SprintAllocation rows — the logged
+  // hours sprint actuals and cost are built from. Refuse rather than quietly
+  // rewrite closed sprints; engagements and owned items are fine to drop
+  // (the UI confirms with their counts first).
+  if (existing._count.sprintAllocations > 0) {
+    throw new Error(`${existing.name} has hours logged on ${existing._count.sprintAllocations} sprint(s), so they can't be deleted.`);
+  }
 
   await prisma.person.delete({ where: { id: personId } });
 

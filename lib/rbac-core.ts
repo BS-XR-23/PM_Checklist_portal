@@ -44,7 +44,11 @@ export function computeModuleAccess(userRole: Role, membership: MembershipLike, 
   if (userRole === "PROGRAM_MANAGER") return module === "DECISION_LOG" || module === "ACTION_ITEMS" ? "NONE" : "READ_FULL";
 
   if (!membership) return "NONE";
-  if (membership.role === "PM") return "WRITE";
+  // A project PM membership writes only while the person is still a PM
+  // globally — demoting someone to Client/Guest must cut their write access
+  // even if a membership row still says PM (it then grants only whatever
+  // explicit per-module rows it has, normally none).
+  if (membership.role === "PM") return userRole === "PM" ? "WRITE" : (membership.permissions.find((p) => p.module === module)?.access ?? "NONE");
 
   // CLIENT / LIMITED: explicit per-module override only, secure-by-default.
   const perm = membership.permissions.find((p) => p.module === module);

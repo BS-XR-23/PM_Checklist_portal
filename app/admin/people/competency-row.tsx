@@ -4,7 +4,7 @@ import { useTransition } from "react";
 import { InlineText, InlineNumber } from "@/components/ui/inline-edit";
 import { updateCompetency, deleteCompetency } from "./competency-actions";
 
-export type CompetencyRowData = { id: string; level: string; multiplier: number };
+export type CompetencyRowData = { id: string; level: string; multiplier: number | null; peopleCount: number };
 
 export function CompetencyRow({ competency, canEdit }: { competency: CompetencyRowData; canEdit: boolean }) {
   const [pending, startTransition] = useTransition();
@@ -24,7 +24,10 @@ export function CompetencyRow({ competency, canEdit }: { competency: CompetencyR
       {canEdit && (
         <td className="px-3 py-2">
           <button
-            onClick={() => startTransition(() => deleteCompetency(competency.id))}
+            onClick={() => {
+              const msg = `Delete "${competency.level}"?` + (competency.peopleCount ? ` ${competency.peopleCount} ${competency.peopleCount === 1 ? "person uses" : "people use"} it and will lose their competency (new task assignments use no multiplier).` : "");
+              if (window.confirm(msg)) startTransition(() => deleteCompetency(competency.id));
+            }}
             disabled={pending}
             title="Delete competency"
             className="text-slate-300 hover:text-red-600 disabled:opacity-50"

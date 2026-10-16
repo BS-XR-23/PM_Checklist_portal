@@ -4,7 +4,7 @@ import { useTransition } from "react";
 import { InlineText, InlineNumber } from "@/components/ui/inline-edit";
 import { updateRoleRate, deleteRoleRate } from "./role-rate-actions";
 
-export type RoleRateRowData = { id: string; roleName: string; manDayRate: number };
+export type RoleRateRowData = { id: string; roleName: string; manDayRate: number | null; peopleCount: number };
 
 export function RoleRateRow({ roleRate, canEdit }: { roleRate: RoleRateRowData; canEdit: boolean }) {
   const [pending, startTransition] = useTransition();
@@ -24,7 +24,10 @@ export function RoleRateRow({ roleRate, canEdit }: { roleRate: RoleRateRowData; 
       {canEdit && (
         <td className="px-3 py-2">
           <button
-            onClick={() => startTransition(() => deleteRoleRate(roleRate.id))}
+            onClick={() => {
+              const msg = `Delete "${roleRate.roleName}"?` + (roleRate.peopleCount ? ` ${roleRate.peopleCount} ${roleRate.peopleCount === 1 ? "person uses" : "people use"} it and will drop to no rate (Budget Tracker prices them at 0).` : "");
+              if (window.confirm(msg)) startTransition(() => deleteRoleRate(roleRate.id));
+            }}
             disabled={pending}
             title="Delete role rate"
             className="text-slate-300 hover:text-red-600 disabled:opacity-50"

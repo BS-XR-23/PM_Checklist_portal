@@ -39,11 +39,12 @@ export function ImportPeopleButton() {
               formData.set("file", file);
               startTransition(async () => {
                 try {
-                  const { importedCount, skippedDuplicateCount, unmatchedRoleCount, unmatchedCompetencyCount } = await importPeopleCsv(formData);
+                  const { importedCount, skippedDuplicateCount, unmatchedRoleCount, unmatchedCompetencyCount, invalidEmailCount } = await importPeopleCsv(formData);
                   const issues: string[] = [];
                   if (skippedDuplicateCount > 0) issues.push(`skipped ${skippedDuplicateCount} with an email already in the registry`);
                   if (unmatchedRoleCount > 0) issues.push(`${unmatchedRoleCount} had a Rate Role that didn't match an existing one`);
                   if (unmatchedCompetencyCount > 0) issues.push(`${unmatchedCompetencyCount} had a Competency that didn't match an existing one`);
+                  if (invalidEmailCount > 0) issues.push(`${invalidEmailCount} had an invalid email (imported without one)`);
                   setNotice(
                     issues.length > 0
                       ? `Added ${importedCount} — ${issues.join("; ")}.`

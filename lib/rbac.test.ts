@@ -83,6 +83,13 @@ describe("computeModuleAccess — role x module matrix", () => {
     expect(computeModuleAccess("PM", membership("PM"), "BUDGET_TRACKER")).toBe("NONE");
   });
 
+  it("a PM membership stops writing once the person's global role drops below PM", () => {
+    for (const role of ["CLIENT", "LIMITED"] as Role[]) {
+      expect(computeModuleAccess(role, membership("PM"), "PM_CHECKLIST")).toBe("NONE");
+      expect(computeModuleAccess(role, membership("PM", [{ module: "MILESTONES", access: "READ_LIMITED" }]), "MILESTONES")).toBe("READ_LIMITED");
+    }
+  });
+
   it("Budget Tracker is Admin-only regardless of role, membership, or per-user permission overrides", () => {
     expect(computeModuleAccess("ADMIN", null, "BUDGET_TRACKER")).toBe("WRITE");
     expect(computeModuleAccess("TPM", null, "BUDGET_TRACKER")).toBe("NONE");

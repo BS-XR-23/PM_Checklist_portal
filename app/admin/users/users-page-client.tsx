@@ -119,8 +119,8 @@ export function UsersPageClient({
 
         {canEdit && (
           <p className="text-xs text-slate-400 mt-4">
-            Assigning a user to a specific project (PM / CLIENT / LIMITED) happens on that project&apos;s Team tab,
-            not here — role here is the global role only.
+            Adding a user to a project happens on that project&apos;s Team tab. Their project role can&apos;t be higher than
+            the global role set here, and lowering the global role lowers their project roles too.
           </p>
         )}
       </main>
