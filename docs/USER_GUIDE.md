@@ -166,7 +166,7 @@ status strip (health without reasons), Governance and Delivery % only.
     **reasons** (e.g. "3 open high risks"). Reasons only for viewers who
     can see risks and money. See §24 for the rule.
   - **Stage** — the current PM checklist stage, e.g. "Planning · Stage 2
-    of 5".
+    of 6".
   - **Current sprint** — the running sprint's points earned of committed
     and days left (or the next draft sprint and its planned dates).
   - **Next milestone** — the next milestone due **today or later**, any
@@ -197,7 +197,7 @@ Checklist Template when a project is created:
 
 | Checklist | Stages / categories | Where |
 |---|---|---|
-| **PM** | (Presales) · Governance · Planning · Approvals · Baselines · Closure | Checklist tab |
+| **PM** | (Presales) · Initiation · Planning · Kickoff · Development · Release · Closing | Checklist tab |
 | **QA & Testing** | Test Planning · Functional Testing · Device Testing · Regression · UAT | Checklist tab |
 | **DevOps** | Infrastructure · CI/CD · Security · Monitoring | Checklist tab |
 | **Creative & XR** | Storyboard · 3D · UX · Assets · XR Validation | Checklist tab |
@@ -206,7 +206,8 @@ Checklist Template when a project is created:
 The **Presales** stage only exists on projects won from a presales
 opportunity (its items are copied from the deal).
 
-Each check lives in one checklist only: PM = governance, planning,
+The PM stages follow the project lifecycle, in the same order as the QMS
+checklist. Each check lives in one checklist only: PM = governance, planning,
 approvals, money and closure; Development = the dev gate; QA & Testing =
 test planning and test passes; DevOps = environments, pipelines, security
 and operations; Creative & XR = creative direction, 3D, UX, assets and

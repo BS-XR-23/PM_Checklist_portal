@@ -236,6 +236,9 @@ model ChecklistItem {
   // current stage, and overdue reminders, and shown in its own "Ongoing
   // cadence" block where actualDate reads as "last done".
   isRecurring   Boolean   @default(false)
+  // QMS acceptance criteria this item answers (Q1-Q45, docs/QMS_PLAN.md).
+  // Copied from the template; the QMS view derives its status from these.
+  qmsRefs       String[]  @default([])
 
   // Optional links into the Delivery restructure's data model — a checklist
   // item may (not must) evidence a Milestone/WbsTask/Sprint without
@@ -257,13 +260,14 @@ model ChecklistItem {
 /// relation back to Project/ChecklistItem: editing or deleting a row here
 /// only affects projects created afterward, never existing ones.
 model ChecklistTemplateItem {
-  id            String  @id @default(cuid())
+  id            String   @id @default(cuid())
   type          String // "PM" | "DEVOPS" -- see ChecklistType in lib/constants.ts
   order         Int
   stage         String
   itemText      String
   milestoneName String?
-  isRecurring   Boolean @default(false) // copied to ChecklistItem.isRecurring at project creation
+  isRecurring   Boolean  @default(false) // copied to ChecklistItem.isRecurring at project creation
+  qmsRefs       String[] @default([]) // copied to ChecklistItem.qmsRefs at project creation
 
   @@unique([type, order])
 }

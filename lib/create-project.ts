@@ -56,6 +56,7 @@ export async function createProject(input: {
         // project on the Milestones & Payments tab (docs/FIX_PLAN.md, Phase 3).
         milestoneName: item.milestoneName,
         isRecurring: item.isRecurring,
+        qmsRefs: item.qmsRefs,
       }));
 
       await tx.checklistItem.createMany({ data: checklistItems });

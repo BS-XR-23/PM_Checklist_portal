@@ -35,7 +35,7 @@ export const CHECKLIST_TYPES: ChecklistTypeConfig[] = [
   {
     key: "PM",
     label: "PM Checklist",
-    description: "Governance, planning, approvals, and closure.",
+    description: "Initiation, planning, kickoff, development, release, and closing.",
     routeSegment: "pm",
     moduleName: "PM_CHECKLIST",
     stageOrder: PM_STAGES,

@@ -6,9 +6,12 @@ export type ChecklistSeedItem = {
   // Ongoing cadence (weekly report, per-sprint testing, ...) rather than a
   // one-off step — see isTrackedChecklistItem. Optional: false when omitted.
   isRecurring?: boolean;
+  // QMS acceptance criteria this item answers (Q1-Q45, see docs/QMS_PLAN.md).
+  // Q33 and Q34 read from the CR log, so no item carries them.
+  qmsRefs?: string[];
 };
 
-// The checklist template as of the 20261015120000_checklist_template_review
+// The checklist template as of the 20261106120000_qms_pm_lifecycle_template
 // migration, which writes exactly these rows into ChecklistTemplateItem (and
 // reconciles existing projects' copies) — kept here so a from-scratch
 // environment (scripts/seed-checklist-template.ts against an empty DB)
@@ -23,55 +26,66 @@ export type ChecklistSeedItem = {
 // environments, pipelines, security, operations; Creative & XR = creative
 // direction, 3D, UX, assets and on-headset validation.
 
-const seed = (stage: string, itemText: string, opts: { checkpoint?: string; recurring?: boolean } = {}) => ({
+const seed = (stage: string, itemText: string, opts: { checkpoint?: string; recurring?: boolean; qms?: string[] } = {}) => ({
   stage,
   itemText,
   milestoneName: opts.checkpoint ?? null,
   ...(opts.recurring ? { isRecurring: true } : {}),
+  ...(opts.qms ? { qmsRefs: opts.qms } : {}),
 });
 
 function numbered(items: Omit<ChecklistSeedItem, "order">[]): ChecklistSeedItem[] {
   return items.map((item, i) => ({ order: i + 1, ...item }));
 }
 
+// Follows the project lifecycle, the same order as the QMS checklist and
+// PM_Checklist_Tracker.xlsx. Development's recurring items sit in the
+// Ongoing cadence block; "Confirm development is complete" is its one tracked
+// item, so currentStage() reads Development instead of skipping to Release.
 export const PM_CHECKLIST_SEED: ChecklistSeedItem[] = numbered([
-  seed("Governance", "Collect RFP, Proposal, and Contract/PO copies"),
-  seed("Governance", "Send project initiation email to assigned PM"),
-  seed("Governance", "Confirm client-approved platforms and performance expectations", { checkpoint: "Platforms Confirmed" }),
-  seed("Governance", "Confirm data privacy and compliance requirements with the client (GDPR/HIPAA, data residency, consent)"),
-  seed("Governance", "Create MS Teams channel and SharePoint space for the project"),
-  seed("Governance", "Onboard the team: tool and environment access, NDAs signed"),
-  seed("Governance", "Record and share sprint review demo with client and stakeholders", { recurring: true }),
-  seed("Governance", "Update CPI/SPI report weekly; escalate if beyond defined threshold", { recurring: true }),
-  seed("Governance", "Hold sprint retrospective (minimum monthly)", { recurring: true }),
-  seed("Governance", "Hold project status update meeting (minimum monthly, twice preferred)", { recurring: true }),
+  seed("Initiation", "Collect RFP, Proposal, Contract/PO, initiation email and pre-sales documents in the project repository", { qms: ["Q2"] }),
+  seed("Initiation", "Confirm client-approved platforms and performance expectations", { checkpoint: "Platforms Confirmed" }),
+  seed("Initiation", "Confirm data privacy and compliance requirements with the client (GDPR/HIPAA, data residency, consent)"),
+  seed("Initiation", "Create MS Teams channel and SharePoint space for the project", { qms: ["Q1"] }),
+  seed("Initiation", "Onboard the team: tool and environment access, NDAs signed"),
+  seed("Initiation", "Set up the agile board in the PM tool", { qms: ["Q3"] }),
   seed("Planning", "Complete and approve Definition of Ready (DoR): requirement, design, backend/3rd-party API, performance/security requirement, target platform", { checkpoint: "DoR Approved" }),
-  seed("Planning", "Draft Project Management Plan", { checkpoint: "PMP Approved" }),
+  seed("Planning", "Prepare the Project Management Plan", { checkpoint: "PMP Approved", qms: ["Q4"] }),
   seed("Planning", "Conduct initial risk identification workshop; populate the Risk Register with top risks, severity, and mitigation owners"),
-  seed("Planning", "Define fixed-budget contingency/buffer percentage in the PM Plan"),
-  seed("Planning", "Define CR pricing basis (man-day rate used for paid change requests)"),
-  seed("Planning", "Define budget/schedule overrun escalation thresholds (e.g., CPI/SPI trigger points requiring leadership review)"),
-  seed("Planning", "Development estimation of Epics in story points, notify manager if estimate exceeds sales quote"),
-  seed("Planning", "Build WBS Level 1 (Epics, tabular format, sourced from proposal/RFP/contract) and load into PM tool"),
-  seed("Planning", "Set up WBS ID <-> SRS traceability (Product Backlog)"),
-  seed("Planning", "Upload final pre-development documents to the project repository"),
-  seed("Planning", "Hold project kickoff meeting with client present; celebrate with team/client/sales", { checkpoint: "Kickoff Complete" }),
-  seed("Planning", "Hold backlog refinement / release planning meeting; add signed CRs to WBS", { recurring: true }),
-  seed("Planning", "Hold sprint planning meeting; send SRS Sprint PDF to client", { recurring: true }),
-  seed("Approvals", "Share SRS with the client (request sign-off/acknowledgement; do not block on it)."),
-  seed("Approvals", "Submit and obtain platform/app-store certification (Meta Quest Store, Apple Vision Pro, SteamVR)", { checkpoint: "Store Approved" }),
-  seed("Approvals", "Obtain UAT sign-off from client", { checkpoint: "UAT Signed Off" }),
-  seed("Baselines", "Confirm Feature Definition Sheet and scope boundaries with client"),
-  seed("Baselines", "Map each milestone (~1 month cadence) to a payment tranche and confirm the payment terms with the client", { checkpoint: "Payment Schedule Approved" }),
-  seed("Closure", "Send completion & release report to stakeholders; raise invoice per payment schedule"),
-  seed("Closure", "Send Project Closure Report; obtain formal completion certificate", { checkpoint: "Project Closed" }),
-  seed("Closure", "Conduct customer satisfaction survey"),
-  seed("Closure", "Deliver knowledge transfer package: domain video/doc plus technical documentation/video"),
-  seed("Closure", "Hand over credentials, accounts and infrastructure ownership to the client"),
-  seed("Closure", "Hold a lessons-learned session; record what to repeat and what to change"),
-  seed("Closure", "Revoke client and team access; archive the repos, PM tool and SharePoint space"),
-  seed("Closure", "Activate support/AMC terms per contract (after full payment)"),
-  seed("Closure", "Evaluate opportunity to transition from fixed-price to time & material model"),
+  seed("Planning", "Define budget controls in the PM Plan: contingency %, CR rate, CPI/SPI thresholds"),
+  seed("Planning", "Estimate Epics in story points (1 SP = 1 man-day) and set the delivery timeline", { qms: ["Q5", "Q6"] }),
+  seed("Planning", "Notify the line manager of any major deviation between sales and development estimates", { qms: ["Q8"] }),
+  seed("Planning", "Build the WBS: Epics with IDs and estimates in tabular format, traceable to the SRS, loaded into the PM tool", { qms: ["Q9", "Q10", "Q11"] }),
+  seed("Planning", "Prepare the product backlog, milestone and release plan", { qms: ["Q7"] }),
+  seed("Planning", "Confirm Feature Definition Sheet and scope boundaries with client"),
+  seed("Planning", "Share the SRS or sprint backlog version with the client", { qms: ["Q12"] }),
+  seed("Planning", "Get client sign-off or acknowledgement of the SRS (don't block on it)", { qms: ["Q13"] }),
+  seed("Kickoff", "Map each milestone (~1 month cadence) to a payment tranche and confirm the payment terms with the client", { checkpoint: "Payment Schedule Approved" }),
+  seed("Kickoff", "Hold project kickoff meeting with client present; celebrate with team/client/sales", { checkpoint: "Kickoff Complete", qms: ["Q14"] }),
+  seed("Kickoff", "Upload final pre-development documents to the project repository", { qms: ["Q15"] }),
+  seed("Development", "Confirm development is complete; break down any partial WBS items and get client confirmation"),
+  seed("Development", "Hold backlog refinement with team, TL and client; confirm priorities", { recurring: true, qms: ["Q16", "Q17"] }),
+  seed("Development", "Hold sprint planning meeting; send SRS Sprint PDF to client", { recurring: true, qms: ["Q19"] }),
+  seed("Development", "Get client acknowledgement of the sprint requirements and task list", { recurring: true, qms: ["Q18", "Q20"] }),
+  seed("Development", "Daily scrum file created and maintained; PM clock entries up to date", { recurring: true, qms: ["Q21", "Q22", "Q23"] }),
+  seed("Development", "Hold sprint review with the client or send the update; share the demo; list bugs and improvements with estimates; update Done items in WBS", { recurring: true, qms: ["Q25", "Q26", "Q27"] }),
+  seed("Development", "Hold the retrospective and plan improvement tasks (minimum monthly)", { recurring: true, qms: ["Q28", "Q29"] }),
+  seed("Development", "Upload the weekly status report with CPI/SPI to ERP; escalate beyond the threshold", { recurring: true, qms: ["Q24", "Q30", "Q31"] }),
+  seed("Development", "Hold project status update meeting (minimum monthly, twice preferred)", { recurring: true, qms: ["Q32"] }),
+  seed("Release", "Submit and obtain platform/app-store certification (Meta Quest Store, Apple Vision Pro, SteamVR)", { checkpoint: "Store Approved" }),
+  seed("Release", "Obtain UAT sign-off from client", { checkpoint: "UAT Signed Off", qms: ["Q38"] }),
+  seed("Release", "Send the completion and release report to stakeholders", { qms: ["Q35"] }),
+  seed("Release", "Raise the invoice per the payment schedule"),
+  seed("Release", "Hold the release ceremony with the client", { qms: ["Q40"] }),
+  seed("Closing", "Send the Project Closure Report", { checkpoint: "Project Closed", qms: ["Q41"] }),
+  seed("Closing", "Obtain the formal completion certificate", { qms: ["Q43"] }),
+  seed("Closing", "Celebrate completion with the client; publish internally and externally if there is no NDA", { qms: ["Q42"] }),
+  seed("Closing", "Conduct customer satisfaction survey", { qms: ["Q44"] }),
+  seed("Closing", "Deliver domain KT (video and short document) and upload it to the project repository", { qms: ["Q45"] }),
+  seed("Closing", "Hand over credentials and infrastructure; revoke access; archive repos, PM tool and SharePoint"),
+  seed("Closing", "Hold a lessons-learned session; record what to repeat and what to change"),
+  seed("Closing", "Agree any maintenance; activate support/AMC per contract after full payment"),
+  seed("Closing", "Evaluate opportunity to transition from fixed-price to time & material model"),
 ]);
 
 // QA & Testing (key DELIVERY_QA — the key, route and module name predate the
@@ -93,7 +107,7 @@ export const DELIVERY_QA_CHECKLIST_SEED: ChecklistSeedItem[] = numbered([
 ]);
 
 export const DEVOPS_CHECKLIST_SEED: ChecklistSeedItem[] = numbered([
-  seed("Infrastructure", "Create a Git repository AND set up asset version control for large files.", { checkpoint: "Repos Ready" }),
+  seed("Infrastructure", "Create a Git repository AND set up asset version control for large files.", { checkpoint: "Repos Ready", qms: ["Q3"] }),
   seed("Infrastructure", "Provision cloud infrastructure as code (Terraform/Bicep/ARM)"),
   seed("Infrastructure", "Set up Dev / Staging / Production environments"),
   seed("Infrastructure", "Containerize services (Docker) and set up registry"),
@@ -105,17 +119,17 @@ export const DEVOPS_CHECKLIST_SEED: ChecklistSeedItem[] = numbered([
   seed("CI/CD", "Build CD pipeline (auto-deploy to Dev/Staging, gated Prod)"),
   seed("CI/CD", "Set up automated integration/regression test stage"),
   seed("CI/CD", "Deploy release candidate to UAT; run and pass smoke test"),
-  seed("CI/CD", "Schedule and execute production deployment; run smoke test and post-deploy verification in production", { checkpoint: "Go-Live" }),
+  seed("CI/CD", "Schedule and execute production deployment; run smoke test and post-deploy verification in production", { checkpoint: "Go-Live", qms: ["Q39"] }),
   seed("Security", "Configure secrets management (Key Vault / Vault / SSM)"),
   seed("Security", "Store app-signing keys and store/console credentials in the team vault"),
   seed("Security", "Set up access control / least-privilege IAM roles"),
-  seed("Security", "Run SAST/DAST, dependency and mobile security scans (e.g. ZAP, MobSF)"),
+  seed("Security", "Run SAST/DAST, dependency and mobile security scans (e.g. ZAP, MobSF) and record the result", { qms: ["Q36"] }),
   seed("Monitoring", "Set up monitoring, logging & alerting (App Insights/Datadog/Grafana)"),
   seed("Monitoring", "Set up cloud cost monitoring and budget alerts"),
   seed("Monitoring", "Configure autoscaling & load balancing"),
   seed("Monitoring", "Define backup & disaster recovery plan"),
   seed("Monitoring", "Run load/performance testing pre-launch"),
-  seed("Monitoring", "Define release & rollback runbook", { checkpoint: "Release Process Approved" }),
+  seed("Monitoring", "Define the release and rollback runbook and deployment checklist", { checkpoint: "Release Process Approved", qms: ["Q37"] }),
   seed("Monitoring", "Set up incident response process & on-call rotation"),
 ]);
 
@@ -138,15 +152,14 @@ export const PM_STAGES = [
   // project; ChecklistTable and currentStage() both already skip stages
   // with 0 rows, so this is inert everywhere else.
   "Presales",
-  "Governance",
+  // The project lifecycle, matching the QMS checklist (docs/QMS_PLAN.md). "Gate"
+  // still means only PM Plan's G0-G6 stage-gate framework.
+  "Initiation",
   "Planning",
-  "Approvals",
-  "Baselines",
-  // A "Gates" stage used to sit here holding just two unrelated items
-  // (kickoff -> now Planning, store certification -> now Approvals). Removed
-  // so "gate" means only PM Plan's G0-G6 stage-gate framework — see the
-  // 20261014150000 migration and docs/FIX_PLAN.md Phase 4.
-  "Closure",
+  "Kickoff",
+  "Development",
+  "Release",
+  "Closing",
 ] as const;
 
 // Reassigned from a wider 5-category list (Infrastructure/CI-CD/Security/
@@ -177,7 +190,7 @@ export const DEV_STAGES = ["Development Readiness", "Development Execution", "Qu
 // removed so nothing is ticked in two places.
 export const DEV_CHECKLIST_SEED: ChecklistSeedItem[] = numbered([
   seed("Development Readiness", "Technical approach approved"),
-  seed("Development Readiness", "Architecture available"),
+  seed("Development Readiness", "Architecture document written and linked"),
   seed("Development Readiness", "Required APIs/services available"),
   seed("Development Readiness", "Required assets available"),
   seed("Development Execution", "Development completed against requirements"),
@@ -199,8 +212,8 @@ export const DEV_CHECKLIST_SEED: ChecklistSeedItem[] = numbered([
   seed("Quality Gate", "Release candidate validated"),
   seed("Development Completion", "Feature acceptance completed"),
   seed("Development Completion", "Known issues recorded on the release (Delivery → Releases)"),
-  seed("Development Completion", "Technical documentation completed"),
-  seed("Development Completion", "Technical handover completed"),
+  seed("Development Completion", "README and technical documentation written and in the repository", { qms: ["Q45"] }),
+  seed("Development Completion", "Technical handover done, with maintenance video recorded", { qms: ["Q45"] }),
   seed("Development Completion", "Sprint acceptance completed", { recurring: true }),
 ]);
 
