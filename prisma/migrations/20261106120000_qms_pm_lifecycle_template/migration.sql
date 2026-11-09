@@ -25,7 +25,7 @@ CREATE TEMP TABLE _qms_pm_map (
 INSERT INTO _qms_pm_map (rank, match, stage, new_text, refs, unsplit_refs, recurring, active_only, merge_duplicate) VALUES
   (10,  'Collect RFP%',                                   'Initiation',  'Collect RFP, Proposal, Contract/PO, initiation email and pre-sales documents in the project repository', ARRAY['Q2'], ARRAY['Q2'], false, true, false),
   (11,  'Send project initiation email%',                 'Initiation',  NULL, ARRAY[]::TEXT[], ARRAY[]::TEXT[], false, false, true),
-  (20,  'Confirm client-approved platforms%',             'Initiation',  NULL, ARRAY[]::TEXT[], ARRAY[]::TEXT[], false, false, false),
+  (20,  'Confirm client-approved platforms%',             'Initiation',  'Confirm client-approved platforms and performance expectations', ARRAY[]::TEXT[], ARRAY[]::TEXT[], false, false, false),
   (30,  'Confirm data privacy%',                          'Initiation',  NULL, ARRAY[]::TEXT[], ARRAY[]::TEXT[], false, false, false),
   (40,  'Create MS Teams%',                               'Initiation',  NULL, ARRAY['Q1'], ARRAY['Q1'], false, false, false),
   (50,  'Onboard the team%',                              'Initiation',  NULL, ARRAY[]::TEXT[], ARRAY[]::TEXT[], false, false, false),
@@ -41,7 +41,7 @@ INSERT INTO _qms_pm_map (rank, match, stage, new_text, refs, unsplit_refs, recur
   (150, 'Confirm Feature Definition Sheet%',              'Planning',    NULL, ARRAY[]::TEXT[], ARRAY[]::TEXT[], false, false, false),
   (160, 'Share SRS%',                                     'Planning',    'Share the SRS or sprint backlog version with the client', ARRAY['Q12'], ARRAY['Q12','Q13'], false, true, false),
   (180, 'Map each milestone%',                            'Kickoff',     NULL, ARRAY[]::TEXT[], ARRAY[]::TEXT[], false, false, false),
-  (181, 'Review and confirm payment terms%',              'Kickoff',     NULL, ARRAY[]::TEXT[], ARRAY[]::TEXT[], false, false, false),
+  (181, 'Review and confirm payment terms%',              'Kickoff',     NULL, ARRAY[]::TEXT[], ARRAY[]::TEXT[], false, false, true),
   (190, 'Hold project kickoff meeting%',                  'Kickoff',     NULL, ARRAY['Q14'], ARRAY['Q14'], false, false, false),
   (200, 'Upload final pre-development%',                  'Kickoff',     NULL, ARRAY['Q15'], ARRAY['Q15'], false, false, false),
   (220, 'Hold backlog refinement%',                       'Development', 'Hold backlog refinement with team, TL and client; confirm priorities', ARRAY['Q16','Q17'], ARRAY['Q7','Q16','Q17'], true, true, false),
@@ -111,6 +111,8 @@ WHERE "type" = 'PM' AND "stage" IN ('Governance', 'Baselines', 'Approvals', 'Clo
 CREATE TEMP TABLE _qms_pm_new (rank INT, stage TEXT, item_text TEXT, refs TEXT[], recurring BOOLEAN);
 INSERT INTO _qms_pm_new (rank, stage, item_text, refs, recurring) VALUES
   (60,  'Initiation',  'Set up the agile board in the PM tool', ARRAY['Q3'], false),
+  -- In the template since 2026-09-09 but never copied to projects created before then.
+  (90,  'Planning',    'Conduct initial risk identification workshop; populate the Risk Register with top risks, severity, and mitigation owners', ARRAY[]::TEXT[], false),
   (120, 'Planning',    'Notify the line manager of any major deviation between sales and development estimates', ARRAY['Q8'], false),
   (140, 'Planning',    'Prepare the product backlog, milestone and release plan', ARRAY['Q7'], false),
   (170, 'Planning',    'Get client sign-off or acknowledgement of the SRS (don''t block on it)', ARRAY['Q13'], false),

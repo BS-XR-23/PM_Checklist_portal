@@ -1,6 +1,6 @@
 # QMS Integration Plan
 
-**Status:** approved (2026-11-06): lifecycle stages, the 43-item PM list and hiding QMS Audit from CLIENT and LIMITED. Phases 1-3 are built on branch `feature/qms-phase-1` and tested on staging. Nothing is on production yet.
+**Status:** approved (2026-11-06): lifecycle stages, the 43-item PM list and hiding QMS Audit from CLIENT and LIMITED. Phases 1-3 are built on branch `feature/qms-phase-1`, tested on staging, and dry-run on a copy of the production data (§9). Nothing is on production yet.
 
 **Sources compared:**
 
@@ -266,7 +266,17 @@ Estimates are rough working days.
 
 **The code** is on branch `feature/qms-phase-1`, with its migrations in `prisma/migrations/20261106120000_qms_pm_lifecycle_template` and `20261106130000_checklist_occurrences_and_cr_evidence`. They have been applied to the staging database, whose settings are in the git-ignored `.env.staging`, and has not been applied to production. On staging, the integration tests pass once their timeout allows for remote latency (`--testTimeout=90000 --hookTimeout=120000`).
 
-**Before production:** the database in `.env` still has the older template. The reconciliation of existing projects has been tested only on simulated projects, so dry-run it on a copy of the real checklist data first. The four pending migrations then apply in order. The RLS migration is untracked, so it needs committing as well. Its own notes say it doesn't affect the app, but it should still be proven on staging first.
+**Dry run on real data (2026-11-09).** A read-only snapshot of the production database (1 project, 104 checklist items, last migration `20261014150000`) was loaded into a local in-memory Postgres, and the four pending migrations were run on it in order. All four run cleanly. No item with progress was lost or changed, custom items and the milestone payment are untouched, every other table keeps its row count, RLS is on for every table, and the project's checklist items cover all 43 non-CR criteria. The dry run found three gaps in the QMS migration, now fixed in it:
+
+- the platforms item still had its pre-review wording "(Quest/Vision Pro/WebXR/AR/PCVR)", so it matched no template item. It is now reworded;
+- "Review and confirm payment terms and schedule" had been completed, so it stayed as a template-less item the PM couldn't delete. Like the other merged items, it is now marked custom;
+- the risk workshop item, in the template since 2026-09-09, had never been copied to this project. It is now added after the PM Plan.
+
+The QMS Audit tab for that project then shows 3 criteria done, 10 with evidence missing (mostly completed items without a link, or N/A without a reason), 3 in progress, 27 not started and 2 N/A (no change requests).
+
+**Left as found (not QMS).** Some older template changes never reached this project: QA lacks the performance-budget item, and some DevOps and Creative items keep older wording. Dev also keeps 9 retired items that had progress, which the PM can't delete because they aren't custom. None of these items carries a QMS reference. They need a separate template-sync migration if wanted.
+
+**Before production:** take a backup, then apply the four pending migrations in order with `prisma migrate deploy`.
 
 ## 10. Left unchanged for now
 
