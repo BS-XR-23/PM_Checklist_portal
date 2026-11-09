@@ -235,11 +235,19 @@ Delayed · Blocked · Not Applicable.
 - **Checkpoint** — an internal checkpoint tag (e.g. "DoR Approved"). It never
   carries payment; see §2.
 - **Ongoing cadence** — recurring activities (weekly CPI/SPI report, monthly
-  retro, status meetings, sprint demo, daily standups) sit in their own
-  block below the stages with **Owner** and **Last done** ("8 days ago").
-  Update Last done each time it happens. They never count toward Governance
-  %, current stage, or reminders. Any item can be moved in or out of the
-  block from its row menu (•••) — moving in asks first.
+  retro, status meetings, sprint demo, daily scrum) sit in their own block
+  below the stages with **Owner**, **Last done** ("8 days ago") and
+  **Evidence**. Click **Log** each time one happens: date, evidence link
+  (required) and optional notes. The running sprint is filled in for you, and
+  **N logs** opens the history. Last done follows the newest log. How often is
+  guidance only: nothing is flagged as overdue. They never count toward
+  Governance %, current stage, or reminders. Any item can be moved in or out of
+  the block, or marked Not Applicable, from its row menu (•••) — moving in asks
+  first.
+- **QMS badge** — the item feeds the QMS Audit tab; hover to see which criterion
+  and what evidence is expected. A completed item missing its owner, actual date
+  or link shows **Not counted yet**. **QMS items only** filters the list. Not
+  shown to Client or Limited viewers.
 - **Stage pills** show completed/tracked per stage and turn green when
   done. The page opens on the **current stage** — the first stage with
   unfinished tracked items.
@@ -249,6 +257,34 @@ Delayed · Blocked · Not Applicable.
 - An **Admin (TPM)** sees an **Override** button instead of edit controls —
   status, owner, dates, link and notes, with a typed reason; the change is
   tagged "TPM Override" in the Activity log.
+
+### QMS Audit
+Checklist tab → **QMS Audit**. The QMS Audit Checklist (Fixed Budget) for this
+project: 45 acceptance criteria by stage and topic, with the QMS process steps as
+expandable guidance. **It fills itself in and nothing is edited here**: each row
+links to the item or CR that answers it, so that's where you make changes.
+
+| Status | When |
+|---|---|
+| Not started | The item hasn't started; a recurring item has no log yet |
+| In progress | The item is started, or only some of a criterion's items are done |
+| Evidence missing | Completed, but owner, actual date or link is empty; or N/A with no reason in its notes |
+| Done | Completed with owner, actual date and link; a recurring item has at least one log |
+| N/A | Not Applicable with a reason in its notes; left out of the percentage |
+
+- A criterion answered by several items is Done only when all of them are. "Upload
+  KT and TD", for example, needs the PM's domain KT and two Development checklist
+  items.
+- The two change request criteria read from the **CR Log**. They're N/A until a CR
+  is agreed (Approved, In Progress or Completed). Then every agreed CR needs client
+  sign-off and a CR document link, and WBS Updated = Yes.
+- One recurring log counts as Done, and there's no time limit. The tab shows how
+  many logs exist and the latest date, so check the count at audit.
+- Nobody validates the evidence: the portal checks that a link is a web address,
+  not what it contains.
+- **Export .xlsx** downloads the QMS sheet's columns and row order, filled in.
+- Visible to Super Admin, TPM, Program Manager and PM; hidden from Client and
+  Limited, on the page and the export.
 
 ## 8. Milestones & Payments
 
@@ -323,8 +359,10 @@ In Progress) first, then Completed; Rejected folded away.
 - **Add** from the one-line box (title, type, estimated man-days); it starts
   Proposed and is dated today. **Edit** opens every field; **Delete** asks
   first — set Rejected instead to keep a record.
-- **Read Limited** viewers don't see rate, amount, Paid CR value or Notes
-  (page and export).
+- **Edit** also holds the **CR document link** (with the customer's approval,
+  which QMS needs) and the **Timeline effect**.
+- **Read Limited** viewers don't see rate, amount, Paid CR value, Notes or the
+  CR document link (page and export).
 
 ## 10. Dependencies
 

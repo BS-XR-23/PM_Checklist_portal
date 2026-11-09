@@ -17,7 +17,9 @@ import type { ChecklistType } from "@/lib/checklist-types";
 import { formatPct, formatDate, toDateInputValue, initials } from "@/lib/format";
 import { currentStage } from "@/lib/calculations";
 import { summarizeChecklist, checklistFlag, isChecklistItemOverdue, lastDoneLabel, safeHref, type ChecklistFlag } from "@/lib/checklist";
-import { updateChecklistItem, createChecklistItem, deleteChecklistItem } from "@/app/projects/[projectId]/checklist-actions";
+import { canViewQms, missingQmsEvidence, qmsItemStatus } from "@/lib/qms";
+import { QMS_CRITERION_BY_ID } from "@/lib/qms-criteria";
+import { updateChecklistItem, createChecklistItem, deleteChecklistItem, logChecklistOccurrence, deleteChecklistOccurrence } from "@/app/projects/[projectId]/checklist-actions";
 import { TpmOverrideChecklistModal } from "@/components/rbac/tpm-override-checklist-modal";
 import { PersonPicker } from "@/components/resourcing/person-picker";
 import type { AccessLevel, Role } from "@prisma/client";
@@ -38,6 +40,17 @@ export type ChecklistTableItem = {
   notes: string | null; // null when stripped by READ_LIMITED access
   isCustom: boolean;
   isRecurring: boolean;
+  qmsRefs: string[];
+  occurrences: ChecklistOccurrenceRow[];
+};
+
+export type ChecklistOccurrenceRow = {
+  id: string;
+  date: Date;
+  link: string;
+  notes: string | null; // null when stripped by READ_LIMITED access
+  recordedByName: string | null;
+  sprintName: string | null;
 };
 
 const PAGE_SIZES = [10, 25, 50] as const;
@@ -72,6 +85,7 @@ export function ChecklistTable({
   const canWrite = access === "WRITE";
   const notesHidden = access === "READ_LIMITED";
   const canOverride = viewerRole === "TPM" && access === "READ_FULL";
+  const showQms = canViewQms(viewerRole);
   const today = new Date();
 
   // Recurring cadence items (weekly report, monthly retro, ...) are never
@@ -100,13 +114,20 @@ export function ChecklistTable({
   // instead of always Stage 1. "All" (everything stacked) is one click away.
   const firstIncomplete = currentStage(items, stageOrder);
   const [activeStage, setActiveStage] = useState<string>(groups.length > 1 && firstIncomplete ? firstIncomplete : ALL);
+  const [qmsOnly, setQmsOnly] = useState(false);
+  const hasQmsItems = showQms && items.some((i) => i.qmsRefs.length > 0);
+  const keepRow = (r: ChecklistTableItem) => !qmsOnly || r.qmsRefs.length > 0;
 
-  const visibleGroups =
+  const visibleGroups = (
     activeStage === ALL
       ? groups
       : activeStage === OVERDUE
         ? groups.map((g) => ({ ...g, rows: g.rows.filter((r) => isChecklistItemOverdue(r, today)) })).filter((g) => g.rows.length > 0)
-        : groups.filter((g) => g.stage === activeStage);
+        : groups.filter((g) => g.stage === activeStage)
+  )
+    .map((g) => ({ ...g, rows: g.rows.filter(keepRow) }))
+    .filter((g) => g.rows.length > 0);
+  const visibleRecurring = recurringItems.filter(keepRow);
 
   const pctOf = (n: number) => formatPct(summary.applicable ? n / summary.applicable : 0);
 
@@ -150,7 +171,7 @@ export function ChecklistTable({
         </button>
       </div>
 
-      {(groups.length > 1 || summary.overdue > 0) && (
+      {(groups.length > 1 || summary.overdue > 0 || hasQmsItems) && (
         <div className="flex flex-wrap gap-1.5">
           <StagePill label={`All (${stagedItems.length})`} active={activeStage === ALL} onClick={() => setActiveStage(ALL)} />
           {groups.length > 1 &&
@@ -172,6 +193,7 @@ export function ChecklistTable({
           {summary.overdue > 0 && (
             <StagePill label={`Overdue (${summary.overdue})`} active={activeStage === OVERDUE} danger onClick={() => setActiveStage(OVERDUE)} />
           )}
+          {hasQmsItems && <StagePill label="QMS items only" active={qmsOnly} onClick={() => setQmsOnly((v) => !v)} />}
         </div>
       )}
 
@@ -192,9 +214,18 @@ export function ChecklistTable({
             people={people}
             showMilestone={showMilestone}
             showActions={showActions}
+            showQms={showQms}
             today={today}
           />
         ))}
+        {qmsOnly && activeStage !== OVERDUE && visibleGroups.length === 0 && (
+          <div className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-8 text-center text-sm text-slate-500">
+            No QMS items in this stage.{" "}
+            <button type="button" onClick={() => setActiveStage(ALL)} className="font-medium text-indigo-600 hover:underline">
+              Show all stages
+            </button>
+          </div>
+        )}
         {activeStage === OVERDUE && visibleGroups.length === 0 && (
           <div className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-8 text-center text-sm text-slate-500">
             Nothing is overdue any more.{" "}
@@ -205,8 +236,8 @@ export function ChecklistTable({
         )}
       </div>
 
-      {recurringItems.length > 0 && (
-        <CadenceBlock rows={recurringItems} canWrite={canWrite} people={people} today={today} />
+      {visibleRecurring.length > 0 && (
+        <CadenceBlock rows={visibleRecurring} canWrite={canWrite} notesHidden={notesHidden} showQms={showQms} people={people} today={today} />
       )}
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-1">
@@ -235,6 +266,7 @@ function StageGroupCard({
   people,
   showMilestone,
   showActions,
+  showQms,
   today,
 }: {
   stage: string;
@@ -251,6 +283,7 @@ function StageGroupCard({
   people: { id: string; name: string }[];
   showMilestone: boolean;
   showActions: boolean;
+  showQms: boolean;
   today: Date;
 }) {
   const [collapsed, setCollapsed] = useState(false);
@@ -315,6 +348,7 @@ function StageGroupCard({
                     people={people}
                     showMilestone={showMilestone}
                     showActions={showActions}
+                    showQms={showQms}
                     today={today}
                   />
                 ))}
@@ -597,6 +631,7 @@ function ChecklistItemRow({
   people,
   showMilestone,
   showActions,
+  showQms,
   today,
 }: {
   item: ChecklistTableItem;
@@ -611,9 +646,11 @@ function ChecklistItemRow({
   people: { id: string; name: string }[];
   showMilestone: boolean;
   showActions: boolean;
+  showQms: boolean;
   today: Date;
 }) {
   const flag = checklistFlag(item, today);
+  const linkedToQms = showQms && item.qmsRefs.length > 0;
   // A PM may reword an item they added themselves; rewording a fixed
   // template item's text is Admin-only (enforced server-side too).
   const canEditText = item.isCustom ? canWrite : viewerRole === "ADMIN";
@@ -633,7 +670,7 @@ function ChecklistItemRow({
                 {item.itemText}
               </p>
             )}
-            {(flag || item.isCustom || (showMilestone && item.milestoneName)) && (
+            {(flag || item.isCustom || linkedToQms || (showMilestone && item.milestoneName)) && (
               <div className="mt-1 flex flex-wrap items-center gap-1.5">
                 {flag && (
                   <span className={clsx("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium", FLAG_CLASS[flag.tone])}>
@@ -649,6 +686,7 @@ function ChecklistItemRow({
                     Checkpoint: {item.milestoneName}
                   </span>
                 )}
+                {linkedToQms && <QmsBadge item={item} />}
                 {item.isCustom && (
                   <span className="inline-flex items-center rounded-full bg-slate-100 text-slate-500 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide">Custom</span>
                 )}
@@ -757,20 +795,48 @@ function ChecklistItemRow({
   );
 }
 
+/** Shows which QMS criteria an item answers, and warns when a completed item doesn't count yet. */
+function QmsBadge({ item }: { item: ChecklistTableItem }) {
+  const criteria = item.qmsRefs.flatMap((ref) => (QMS_CRITERION_BY_ID[ref] ? [QMS_CRITERION_BY_ID[ref]] : []));
+  const title = criteria.map((c) => `QMS: ${c.text}\nExpected evidence: ${c.evidence}`).join("\n\n");
+  const status = qmsItemStatus({ ...item, ownerName: item.ownerPersonName ?? item.owner });
+  const missing =
+    status !== "EVIDENCE_MISSING"
+      ? null
+      : item.status === "NOT_APPLICABLE"
+        ? "add a reason in notes"
+        : `add ${missingQmsEvidence({ ...item, ownerName: item.ownerPersonName ?? item.owner }).join(", ")}`;
+
+  return (
+    <>
+      <span title={title} className="inline-flex cursor-help items-center rounded-full bg-teal-50 px-2 py-0.5 text-[11px] font-medium text-teal-700">
+        QMS
+      </span>
+      {missing && <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800">Not counted yet: {missing}</span>}
+    </>
+  );
+}
+
 /**
  * Ongoing cadence activities — recurring work (weekly CPI/SPI report, monthly
  * retro, status meetings) that's never "done", so it sits outside the stage
- * groups and doesn't count toward completion % or current stage. Actual Date
- * reads as "Last done" here: update it each time the activity happens.
+ * groups and doesn't count toward completion % or current stage. Each time one
+ * happens the owner logs it with a link; "Last done" follows the newest log, and
+ * those logs are what QMS reads. How often is guidance only: nothing is flagged
+ * as overdue here.
  */
 function CadenceBlock({
   rows,
   canWrite,
+  notesHidden,
+  showQms,
   people,
   today,
 }: {
   rows: ChecklistTableItem[];
   canWrite: boolean;
+  notesHidden: boolean;
+  showQms: boolean;
   people: { id: string; name: string }[];
   today: Date;
 }) {
@@ -779,65 +845,227 @@ function CadenceBlock({
       <div className="px-4 py-3 border-b border-slate-100">
         <p className="text-sm font-semibold text-slate-900">Ongoing cadence</p>
         <p className="text-xs text-slate-500">
-          Recurring activities — not counted in completion % or stage progress. Set <strong>Last done</strong> each time one happens.
+          Recurring activities — not counted in completion % or stage progress. Use <strong>Log</strong> each time one happens, with a link to the evidence.
         </p>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full text-sm min-w-[640px]">
+        <table className="w-full text-sm min-w-[760px]">
           <thead>
             <tr className="text-left text-xs font-medium text-slate-500 bg-slate-50">
               <th className="px-3 py-2.5">Activity</th>
               <th className="px-3 py-2.5 w-52">Owner</th>
-              <th className="px-3 py-2.5 w-64">Last done</th>
-              {canWrite && <th className="px-3 py-2.5 w-14" />}
+              <th className="px-3 py-2.5 w-44">Last done</th>
+              <th className="px-3 py-2.5 w-40">Evidence</th>
+              <th className="px-2 py-2.5 w-10">Notes</th>
+              {canWrite && <th className="px-2 py-2.5 w-10" />}
             </tr>
           </thead>
           <tbody>
             {rows.map((item) => (
-              <tr key={item.id} className="border-t border-slate-100 align-top">
-                <td className="px-3 py-2.5 text-slate-800">{item.itemText}</td>
-                <td className="px-3 py-2.5">
-                  {canWrite ? (
-                    <div className="min-w-[160px]">
-                      <PersonPicker
-                        personId={item.ownerPersonId}
-                        legacyText={item.owner}
-                        people={people}
-                        onSave={(personId) => updateChecklistItem(item.id, { ownerPersonId: personId })}
-                      />
-                    </div>
-                  ) : (
-                    <span className="text-slate-600">{item.ownerPersonName ?? item.owner ?? "—"}</span>
-                  )}
-                </td>
-                <td className="px-3 py-2.5">
-                  <div className="flex items-center gap-2">
-                    {canWrite ? (
-                      <InlineDate value={toDateInputValue(item.actualDate)} onSave={(v) => updateChecklistItem(item.id, { actualDate: v })} />
-                    ) : (
-                      <span className="text-slate-600">{formatDate(item.actualDate)}</span>
-                    )}
-                    <span className="text-xs text-slate-500 whitespace-nowrap">{item.actualDate ? lastDoneLabel(item.actualDate, today) : "never logged"}</span>
-                  </div>
-                </td>
-                {canWrite && (
-                  <td className="px-3 py-2.5">
-                    <RowActionsMenu
-                      actions={[
-                        {
-                          label: "Move back to its stage",
-                          pendingLabel: "Moving...",
-                          onClick: () => updateChecklistItem(item.id, { isRecurring: false }),
-                        },
-                      ]}
-                    />
-                  </td>
-                )}
-              </tr>
+              <CadenceRow key={item.id} item={item} canWrite={canWrite} notesHidden={notesHidden} showQms={showQms} people={people} today={today} />
             ))}
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+function CadenceRow({
+  item,
+  canWrite,
+  notesHidden,
+  showQms,
+  people,
+  today,
+}: {
+  item: ChecklistTableItem;
+  canWrite: boolean;
+  notesHidden: boolean;
+  showQms: boolean;
+  people: { id: string; name: string }[];
+  today: Date;
+}) {
+  const [panel, setPanel] = useState<"none" | "log" | "history">("none");
+  const logCount = item.occurrences.length;
+  const notApplicable = item.status === "NOT_APPLICABLE";
+  const columns = canWrite ? 6 : 5;
+  const togglePanel = (next: "log" | "history") => setPanel((p) => (p === next ? "none" : next));
+
+  return (
+    <>
+      <tr className="border-t border-slate-100 align-top">
+        <td className="px-3 py-2.5 text-slate-800">
+          {item.itemText}
+          {(notApplicable || (showQms && item.qmsRefs.length > 0)) && (
+            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+              {notApplicable && <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">Not applicable</span>}
+              {showQms && item.qmsRefs.length > 0 && <QmsBadge item={item} />}
+            </div>
+          )}
+        </td>
+        <td className="px-3 py-2.5">
+          {canWrite ? (
+            <div className="min-w-[160px]">
+              <PersonPicker personId={item.ownerPersonId} legacyText={item.owner} people={people} onSave={(personId) => updateChecklistItem(item.id, { ownerPersonId: personId })} />
+            </div>
+          ) : (
+            <span className="text-slate-600">{item.ownerPersonName ?? item.owner ?? "—"}</span>
+          )}
+        </td>
+        <td className="px-3 py-2.5">
+          <p className="text-slate-600">{item.actualDate ? formatDate(item.actualDate) : "—"}</p>
+          <p className="text-xs text-slate-500 whitespace-nowrap">{item.actualDate ? lastDoneLabel(item.actualDate, today) : "never logged"}</p>
+        </td>
+        <td className="px-3 py-2.5">
+          <div className="flex flex-wrap items-center gap-2">
+            {canWrite && !notApplicable && (
+              <button type="button" onClick={() => togglePanel("log")} className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50">
+                Log
+              </button>
+            )}
+            {logCount > 0 ? (
+              <button type="button" onClick={() => togglePanel("history")} className="text-xs font-medium text-indigo-600 hover:underline">
+                {logCount} log{logCount === 1 ? "" : "s"}
+              </button>
+            ) : (
+              !canWrite && <span className="text-xs text-slate-400">No logs</span>
+            )}
+          </div>
+        </td>
+        <td className="px-2 py-2.5">
+          {!notesHidden && <NotesCell icon={<IconFileText className="h-3.5 w-3.5 shrink-0" />} value={item.notes} canWrite={canWrite} iconOnly onSave={(v) => updateChecklistItem(item.id, { notes: v })} />}
+        </td>
+        {canWrite && (
+          <td className="px-2 py-2.5">
+            <RowActionsMenu
+              actions={[
+                notApplicable
+                  ? {
+                      label: "Mark as applicable",
+                      pendingLabel: "Saving...",
+                      onClick: () => updateChecklistItem(item.id, { status: "NOT_STARTED" }),
+                    }
+                  : {
+                      label: "Mark Not Applicable",
+                      pendingLabel: "Saving...",
+                      confirmMessage: `Mark "${item.itemText.slice(0, 60)}" Not Applicable? Add the reason in its notes, or it won't count for QMS.`,
+                      onClick: () => updateChecklistItem(item.id, { status: "NOT_APPLICABLE" }),
+                    },
+                {
+                  label: "Move back to its stage",
+                  pendingLabel: "Moving...",
+                  onClick: () => updateChecklistItem(item.id, { isRecurring: false }),
+                },
+              ]}
+            />
+          </td>
+        )}
+      </tr>
+      {panel === "log" && (
+        <tr className="bg-slate-50/60">
+          <td colSpan={columns} className="px-3 py-3">
+            <LogOccurrenceForm itemId={item.id} today={today} onDone={() => setPanel("none")} />
+          </td>
+        </tr>
+      )}
+      {panel === "history" && (
+        <tr className="bg-slate-50/60">
+          <td colSpan={columns} className="px-3 py-3">
+            <OccurrenceHistory occurrences={item.occurrences} canWrite={canWrite} />
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
+function LogOccurrenceForm({ itemId, today, onDone }: { itemId: string; today: Date; onDone: () => void }) {
+  const [date, setDate] = useState(toDateInputValue(today) ?? "");
+  const [link, setLink] = useState("");
+  const [notes, setNotes] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+  const inputClass = "rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400";
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    startTransition(async () => {
+      try {
+        await logChecklistOccurrence(itemId, { date, link, notes });
+        onDone();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Couldn't save the log.");
+      }
+    });
+  };
+
+  return (
+    <form onSubmit={submit} className="flex flex-wrap items-end gap-2">
+      <label className="block">
+        <span className="mb-0.5 block text-[11px] text-slate-500">Date it happened</span>
+        <input type="date" required value={date} disabled={pending} onChange={(e) => setDate(e.target.value)} className={inputClass} />
+      </label>
+      <label className="block min-w-[260px] flex-1">
+        <span className="mb-0.5 block text-[11px] text-slate-500">Evidence link</span>
+        <input required value={link} disabled={pending} placeholder="https://…" onChange={(e) => setLink(e.target.value)} className={clsx(inputClass, "w-full")} />
+      </label>
+      <label className="block min-w-[200px] flex-1">
+        <span className="mb-0.5 block text-[11px] text-slate-500">Notes (optional)</span>
+        <input value={notes} disabled={pending} onChange={(e) => setNotes(e.target.value)} className={clsx(inputClass, "w-full")} />
+      </label>
+      <button type="submit" disabled={pending} className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50">
+        {pending ? "Saving..." : "Save log"}
+      </button>
+      {error && <p className="basis-full text-xs text-rose-600">{error}</p>}
+    </form>
+  );
+}
+
+function OccurrenceHistory({ occurrences, canWrite }: { occurrences: ChecklistOccurrenceRow[]; canWrite: boolean }) {
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  const remove = (o: ChecklistOccurrenceRow) => {
+    if (!window.confirm(`Remove the log from ${formatDate(o.date)}? This can't be undone.`)) return;
+    setError(null);
+    startTransition(async () => {
+      try {
+        await deleteChecklistOccurrence(o.id);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Couldn't remove the log.");
+      }
+    });
+  };
+
+  return (
+    <div className={clsx(pending && "opacity-60")}>
+      <ul className="space-y-1.5">
+        {occurrences.map((o) => {
+          const href = safeHref(o.link);
+          return (
+            <li key={o.id} className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-slate-600">
+              <span className="font-medium text-slate-800">{formatDate(o.date)}</span>
+              {o.sprintName && <span>{o.sprintName}</span>}
+              {href && (
+                <a href={href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-medium text-indigo-600 hover:underline">
+                  <IconExternalLink className="h-3 w-3" />
+                  Open evidence
+                </a>
+              )}
+              {o.recordedByName && <span className="text-slate-500">by {o.recordedByName}</span>}
+              {o.notes && <span className="text-slate-500">{o.notes}</span>}
+              {canWrite && (
+                <button type="button" disabled={pending} onClick={() => remove(o)} className="font-medium text-rose-600 hover:text-rose-700">
+                  Remove
+                </button>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      {error && <p className="mt-1 text-xs text-rose-600">{error}</p>}
     </div>
   );
 }

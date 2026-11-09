@@ -3,9 +3,11 @@ import { prisma } from "@/lib/prisma";
 import { ChecklistTable } from "@/components/checklist/checklist-table";
 import { SubNav } from "@/components/ui/sub-nav";
 import { PageGuide } from "@/components/ui/page-guide";
-import { CHECKLIST_TYPES, CHECKLIST_TYPE_BY_ROUTE } from "@/lib/checklist-types";
-import { requireModuleAccess, getModuleAccess, getCurrentUser } from "@/lib/rbac";
-import type { AccessLevel } from "@prisma/client";
+import { CHECKLIST_TYPE_BY_ROUTE } from "@/lib/checklist-types";
+import { checklistSubNavOptions } from "@/lib/checklist-nav";
+import { loadChecklistItems } from "@/lib/checklist-items";
+import { requireModuleAccess, getCurrentUser } from "@/lib/rbac";
+import { canViewQms } from "@/lib/qms";
 
 // Retired route segments — "engineering" and "qa" were two separate
 // checklist types/tabs until they merged into "delivery-qa" (see
@@ -24,41 +26,13 @@ export default async function ChecklistPage({ params }: { params: { projectId: s
   // real home instead of rendering it under this tab's chrome.
   if (!active.inGeneralChecklistNav) redirect(`/projects/${params.projectId}/delivery/checklist`);
 
-  const generalTypes = CHECKLIST_TYPES.filter((c) => c.inGeneralChecklistNav);
-  const [access, otherAccess, user] = await Promise.all([
-    requireModuleAccess(params.projectId, active.moduleName, "READ_LIMITED"),
-    Promise.all(
-      generalTypes.filter((c) => c.key !== active.key).map(
-        async (c) => [c, await getModuleAccess(params.projectId, c.moduleName)] as [typeof c, AccessLevel]
-      )
-    ),
-    getCurrentUser(),
-  ]);
+  const [access, user] = await Promise.all([requireModuleAccess(params.projectId, active.moduleName, "READ_LIMITED"), getCurrentUser()]);
 
-  const [items, otherCounts, people] = await Promise.all([
-    prisma.checklistItem.findMany({
-      where: { projectId: params.projectId, type: active.key },
-      orderBy: { order: "asc" },
-      include: { ownerPerson: { select: { id: true, name: true } } },
-    }),
-    Promise.all(
-      otherAccess.map(async ([c, a]) =>
-        a !== "NONE" ? [c, await prisma.checklistItem.count({ where: { projectId: params.projectId, type: c.key } })] : [c, 0]
-      )
-    ) as Promise<[(typeof CHECKLIST_TYPES)[number], number][]>,
+  const [visibleItems, subNavOptions, people] = await Promise.all([
+    loadChecklistItems(params.projectId, active.key, access),
+    checklistSubNavOptions(params.projectId),
     access === "WRITE" || (user?.role === "TPM" && access === "READ_FULL") ? prisma.person.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }) : Promise.resolve([]),
   ]);
-
-  const withOwnerName = items.map((i) => ({ ...i, ownerPersonName: i.ownerPerson?.name ?? null }));
-  const visibleItems = access === "READ_LIMITED" ? withOwnerName.map((i) => ({ ...i, notes: null })) : withOwnerName;
-
-  const countByKey = new Map(otherCounts.map(([c, count]) => [c.key, count]));
-  const accessByKey = new Map(otherAccess.map(([c, a]) => [c.key, a]));
-  const subNavOptions = generalTypes.filter((c) => c.key === active.key || accessByKey.get(c.key) !== "NONE").map((c) => ({
-    href: `/checklist/${c.routeSegment}`,
-    label: c.label,
-    count: c.key === active.key ? items.length : (countByKey.get(c.key) ?? 0),
-  }));
 
   return (
     <div>
@@ -76,6 +50,10 @@ export default async function ChecklistPage({ params }: { params: { projectId: s
             <>Set a <strong>Planned Date</strong> on each item — a late item gets a red &ldquo;N days late&rdquo; flag, and the <strong>Overdue</strong> tile shows just those. Marking it <strong>Completed</strong> fills today as the Actual Date if it&apos;s empty.</>,
             <>Marking an item <strong>Not Applicable</strong> removes it from the completion % entirely — it counts as out of scope, not as incomplete.</>,
             <>A <strong>Checkpoint</strong> label marks an internal step (e.g. DoR Approved) — no payment. Client milestones and payments live on <strong>Milestones &amp; Payments</strong>.</>,
+            <>In Ongoing cadence, use <strong>Log</strong> each time an activity happens, with a link to the evidence.</>,
+            ...(user && canViewQms(user.role)
+              ? [<>An item with a <strong>QMS</strong> badge feeds the QMS Audit tab. It counts as done once it&apos;s Completed with an owner, actual date and link.</>]
+              : []),
           ]}
         />
       </div>

@@ -251,8 +251,28 @@ model ChecklistItem {
   sprint      Sprint?    @relation(fields: [sprintId], references: [id], onDelete: SetNull)
 
   milestonePayment MilestonePayment?
+  occurrences      ChecklistOccurrence[]
 
   @@unique([projectId, type, order])
+}
+
+/// One time a recurring checklist item happened, with its evidence. A single
+/// "last done" date can't show an auditor every sprint, so each occurrence keeps
+/// its own link. The item's actualDate follows the latest one.
+model ChecklistOccurrence {
+  id              String        @id @default(cuid())
+  checklistItemId String
+  checklistItem   ChecklistItem @relation(fields: [checklistItemId], references: [id], onDelete: Cascade)
+  date            DateTime
+  link            String
+  notes           String?
+  // The sprint running on that date, when there is one.
+  sprintId        String?
+  sprint          Sprint?       @relation(fields: [sprintId], references: [id], onDelete: SetNull)
+  recordedByName  String?
+  createdAt       DateTime      @default(now())
+
+  @@index([checklistItemId])
 }
 
 /// The editable master checklist — lib/create-project.ts copies this into a
@@ -390,6 +410,10 @@ model ChangeRequest {
   wbsUpdated      String    @default("No")
   status          String    @default("Proposed")
   notes           String?
+  // The CR document with the customer's approval (QMS evidence).
+  documentLink    String?
+  // How this CR moves the timeline, as communicated to the client.
+  timelineImpact  String?
 
   @@unique([projectId, crCode])
 }
@@ -530,6 +554,7 @@ model Sprint {
   checklistItems ChecklistItem[]
   milestones     MilestoneSprint[]
   releases       ReleaseSprint[]
+  occurrences    ChecklistOccurrence[]
 
   @@index([projectId])
 }

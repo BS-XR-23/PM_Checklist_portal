@@ -49,7 +49,7 @@ export default async function ProjectLayout({
     visibleTabs.push({
       href: `/checklist/${CHECKLIST_TYPE_BY_KEY.PM.routeSegment}`,
       label: "Checklist",
-      matchHrefs: generalChecklistTypes.filter((c) => c.key !== "PM").map((c) => `/checklist/${c.routeSegment}`),
+      matchHrefs: [...generalChecklistTypes.filter((c) => c.key !== "PM").map((c) => `/checklist/${c.routeSegment}`), "/checklist/qms"],
     });
   }
   if (moduleAccess.MILESTONES !== "NONE") visibleTabs.push({ href: "/milestones", label: "Milestones & Payments" });

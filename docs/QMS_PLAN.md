@@ -1,6 +1,6 @@
 # QMS Integration Plan
 
-**Status:** approved (2026-11-06): lifecycle stages, the 43-item PM list and hiding QMS Audit from CLIENT and LIMITED. Phase 1 is in progress.
+**Status:** approved (2026-11-06): lifecycle stages, the 43-item PM list and hiding QMS Audit from CLIENT and LIMITED. Phases 1-3 are built on branch `feature/qms-phase-1` and tested on staging. Nothing is on production yet.
 
 **Sources compared:**
 
@@ -66,7 +66,7 @@ The portal does not flag recurring work as overdue and applies no time limits.
 
 **CR criteria read from the CR log**
 
-- A project with no CRs shows N/A.
+- A project with no agreed CRs shows N/A.
 - Q33 is Done when every Approved, In Progress or Completed CR has a client sign-off and a document link.
 - Q34 is Done when every such CR has WBS Updated set to Yes.
 
@@ -220,7 +220,7 @@ Every criterion has one source. Expected evidence appears on the item's QMS badg
 
 | Change | Where |
 |---|---|
-| Criteria and process steps as a constant | New `lib/qms-criteria.ts` |
+| Criteria and process steps, in the sheet's row order | New `lib/qms-criteria.ts` |
 | Status rules as pure functions with unit tests | New `lib/qms.ts` |
 | `qmsRefs String[]` on template and project items | `ChecklistTemplateItem`, `ChecklistItem` |
 | Recurring log: date, sprint, link, notes, recorded by | New `ChecklistOccurrence` model |
@@ -264,9 +264,9 @@ Estimates are rough working days.
 | 2 | Recurring log with history; CR document link and timeline effect | 2 days |
 | 3 | `lib/qms.ts`, QMS Audit sub-tab, Excel export | 2–3 days |
 
-**Phase 1 code** is on branch `feature/qms-phase-1`, with its migration in `prisma/migrations/20261106120000_qms_pm_lifecycle_template`. It has been applied to the staging database, whose settings are in the git-ignored `.env.staging`, and has not been applied to production. On staging, the integration tests pass once their timeout allows for remote latency (`--testTimeout=90000 --hookTimeout=120000`).
+**The code** is on branch `feature/qms-phase-1`, with its migrations in `prisma/migrations/20261106120000_qms_pm_lifecycle_template` and `20261106130000_checklist_occurrences_and_cr_evidence`. They have been applied to the staging database, whose settings are in the git-ignored `.env.staging`, and has not been applied to production. On staging, the integration tests pass once their timeout allows for remote latency (`--testTimeout=90000 --hookTimeout=120000`).
 
-**Before production:** the database in `.env` still has the older template. The reconciliation of existing projects has been tested only on simulated projects, so dry-run it on a copy of the real checklist data first. The three pending migrations then apply in order. The RLS migration is untracked, so it needs committing as well. Its own notes say it doesn't affect the app, but it should still be proven on staging first.
+**Before production:** the database in `.env` still has the older template. The reconciliation of existing projects has been tested only on simulated projects, so dry-run it on a copy of the real checklist data first. The four pending migrations then apply in order. The RLS migration is untracked, so it needs committing as well. Its own notes say it doesn't affect the app, but it should still be proven on staging first.
 
 ## 10. Left unchanged for now
 

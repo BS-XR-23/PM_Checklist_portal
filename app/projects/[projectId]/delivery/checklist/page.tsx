@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { ChecklistTable } from "@/components/checklist/checklist-table";
 import { PageGuide } from "@/components/ui/page-guide";
 import { CHECKLIST_TYPE_BY_KEY } from "@/lib/checklist-types";
+import { loadChecklistItems } from "@/lib/checklist-items";
 import { requireModuleAccess, getCurrentUser } from "@/lib/rbac";
 
 export const dynamic = "force-dynamic";
@@ -19,17 +20,10 @@ export default async function DeliveryChecklistPage({ params }: { params: { proj
     getCurrentUser(),
   ]);
 
-  const [items, people] = await Promise.all([
-    prisma.checklistItem.findMany({
-      where: { projectId: params.projectId, type: active.key },
-      orderBy: { order: "asc" },
-      include: { ownerPerson: { select: { id: true, name: true } } },
-    }),
+  const [visibleItems, people] = await Promise.all([
+    loadChecklistItems(params.projectId, active.key, access),
     access === "WRITE" || (user?.role === "TPM" && access === "READ_FULL") ? prisma.person.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }) : Promise.resolve([]),
   ]);
-
-  const withOwnerName = items.map((i) => ({ ...i, ownerPersonName: i.ownerPerson?.name ?? null }));
-  const visibleItems = access === "READ_LIMITED" ? withOwnerName.map((i) => ({ ...i, notes: null })) : withOwnerName;
 
   return (
     <div>

@@ -43,7 +43,8 @@ export async function GET(_req: NextRequest, { params }: { params: { projectId: 
     "Client Sign-off": c.clientSignoff,
     "WBS Updated": c.wbsUpdated,
     Status: c.status,
-    ...(financialsHidden ? {} : { Notes: c.notes ?? "" }),
+    "Timeline Effect": c.timelineImpact ?? "",
+    ...(financialsHidden ? {} : { "CR Document": c.documentLink ?? "", Notes: c.notes ?? "" }),
   }));
 
   const buffer = buildXlsxBuffer("CR Log", sheetRows);

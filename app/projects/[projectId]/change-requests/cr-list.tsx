@@ -7,6 +7,7 @@ import { CR_TYPES, CR_SIGNOFF_STATUSES, CR_WBS_UPDATED, CR_STATUSES } from "@/li
 import { crAmount } from "@/lib/calculations";
 import { crWarnings } from "@/lib/risks";
 import { formatMoney, formatDate, toDateInputValue } from "@/lib/format";
+import { safeHref } from "@/lib/checklist";
 import { createChangeRequest, updateChangeRequest, deleteChangeRequest } from "./cr-actions";
 
 export type CrRow = {
@@ -23,6 +24,8 @@ export type CrRow = {
   wbsUpdated: string;
   status: string;
   notes: string | null; // null when stripped for Read Limited
+  documentLink: string | null; // null when stripped for Read Limited
+  timelineImpact: string | null;
 };
 
 const TYPE_STYLE: Record<string, { bg: string; text: string }> = {
@@ -125,6 +128,7 @@ function CrItem({ projectId, row, canWrite, financialsHidden }: { projectId: str
   const save = (data: Parameters<typeof updateChangeRequest>[2]) => updateChangeRequest(row.id, projectId, data);
   const warnings = crWarnings(row, financialsHidden);
   const money = moneyLine(row, financialsHidden);
+  const documentHref = safeHref(row.documentLink);
 
   return (
     <li className={clsx("px-4 py-3.5", pending && "opacity-60", row.status === "Rejected" && !editing && "opacity-75")}>
@@ -142,6 +146,17 @@ function CrItem({ projectId, row, canWrite, financialsHidden }: { projectId: str
             {row.dateRaised ? `Raised ${formatDate(row.dateRaised)}` : "No date raised"}
             {money && <> · {money}</>}
           </p>
+          {(documentHref || row.timelineImpact) && (
+            <p className="mt-1 text-xs text-slate-500">
+              {documentHref && (
+                <a href={documentHref} target="_blank" rel="noopener noreferrer" className="font-medium text-indigo-600 hover:underline">
+                  Open CR document
+                </a>
+              )}
+              {documentHref && row.timelineImpact && " · "}
+              {row.timelineImpact && <>Timeline: {row.timelineImpact}</>}
+            </p>
+          )}
           {row.description && <p className="mt-1 whitespace-pre-wrap text-sm text-slate-600">{row.description}</p>}
           {row.notes && <p className="mt-1 whitespace-pre-wrap text-xs text-slate-500">{row.notes}</p>}
           {warnings.length > 0 && <p className="mt-1 text-xs text-amber-700">{warnings.join(" · ")}</p>}
@@ -185,6 +200,16 @@ function CrItem({ projectId, row, canWrite, financialsHidden }: { projectId: str
                 <InlineNumber value={row.rate} step={1} onSave={(v) => save({ rate: v })} />
               </Field>
             )}
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {!financialsHidden && (
+              <Field label="CR document link (with customer approval)">
+                <InlineText value={row.documentLink ?? ""} onSave={(v) => save({ documentLink: v })} />
+              </Field>
+            )}
+            <Field label="Timeline effect">
+              <InlineText value={row.timelineImpact ?? ""} onSave={(v) => save({ timelineImpact: v })} />
+            </Field>
           </div>
           <Field label="Description">
             <InlineTextarea value={row.description ?? ""} placeholder="What changes, and why" onSave={(v) => save({ description: v })} />

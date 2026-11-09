@@ -5,9 +5,11 @@ import { prisma } from "@/lib/prisma";
 import { parseDateInput } from "@/lib/format";
 import { requireModuleWrite, writeAudit } from "@/lib/rbac";
 import { CR_TYPES, CR_SIGNOFF_STATUSES, CR_WBS_UPDATED, CR_STATUSES } from "@/lib/constants";
+import { normalizeLink } from "@/lib/checklist";
 
 function revalidateCrLog(projectId: string) {
   revalidatePath(`/projects/${projectId}/change-requests`);
+  revalidatePath(`/projects/${projectId}/checklist/qms`);
   revalidatePath(`/projects/${projectId}/dashboard`);
   revalidatePath(`/projects/${projectId}/activity`);
 }
@@ -66,6 +68,8 @@ export async function updateChangeRequest(
     wbsUpdated: string;
     status: string;
     notes: string;
+    documentLink: string;
+    timelineImpact: string;
   }>
 ) {
   // Guessed-ID fix: authorize against the CR's real project.
@@ -94,6 +98,8 @@ export async function updateChangeRequest(
       ...(data.wbsUpdated !== undefined ? { wbsUpdated: data.wbsUpdated } : {}),
       ...(data.status !== undefined ? { status: data.status } : {}),
       ...(data.notes !== undefined ? { notes: data.notes || null } : {}),
+      ...(data.documentLink !== undefined ? { documentLink: normalizeLink(data.documentLink) } : {}),
+      ...(data.timelineImpact !== undefined ? { timelineImpact: data.timelineImpact.trim() || null } : {}),
     },
   });
 

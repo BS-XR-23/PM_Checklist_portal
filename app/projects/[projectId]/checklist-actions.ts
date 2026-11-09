@@ -24,6 +24,7 @@ function revalidateChecklist(projectId: string, checklistType: string) {
   // route (see inGeneralChecklistNav) — revalidate wherever it's actually
   // rendered.
   revalidatePath(config.inGeneralChecklistNav ? `/projects/${projectId}/checklist/${config.routeSegment}` : `/projects/${projectId}/delivery/checklist`);
+  revalidatePath(`/projects/${projectId}/checklist/qms`);
   revalidatePath(`/projects/${projectId}/dashboard`);
   revalidatePath(`/projects/${projectId}/milestones`);
   revalidatePath(`/projects/${projectId}/activity`);
@@ -111,6 +112,67 @@ export async function tpmOverrideChecklistItem(itemId: string, data: Omit<Checkl
   });
 
   revalidateChecklist(existing.projectId, existing.type);
+}
+
+/** Keeps "Last done" on the item equal to its newest log (null once none are left). */
+async function syncLastDone(itemId: string) {
+  const { _max } = await prisma.checklistOccurrence.aggregate({ where: { checklistItemId: itemId }, _max: { date: true } });
+  await prisma.checklistItem.update({ where: { id: itemId }, data: { actualDate: _max.date } });
+}
+
+/** Records one occurrence of a recurring item, with the evidence that it happened. */
+export async function logChecklistOccurrence(itemId: string, input: { date: string; link: string; notes?: string }) {
+  const existing = await prisma.checklistItem.findUniqueOrThrow({ where: { id: itemId } });
+  const user = await requireModuleWrite(existing.projectId, configFor(existing.type).moduleName);
+  if (!existing.isRecurring) throw new Error("Only an ongoing cadence item can be logged.");
+
+  const date = parseDateInput(input.date);
+  if (!date) throw new Error("Choose the date it happened.");
+  const link = normalizeLink(input.link);
+  if (!link) throw new Error("Add a link to the evidence.");
+
+  const sprint = await prisma.sprint.findFirst({
+    where: { projectId: existing.projectId, startDate: { lte: date }, endDate: { gte: date } },
+    orderBy: { startDate: "desc" },
+    select: { id: true },
+  });
+
+  const created = await prisma.checklistOccurrence.create({
+    data: { checklistItemId: itemId, date, link, notes: input.notes?.trim() || null, sprintId: sprint?.id ?? null, recordedByName: user.name },
+  });
+  await syncLastDone(itemId);
+
+  await writeAudit({
+    actor: user,
+    projectId: existing.projectId,
+    action: "create",
+    entityType: "ChecklistOccurrence",
+    entityId: created.id,
+    summary: `Logged "${existing.itemText.slice(0, 60)}"`,
+  });
+
+  revalidateChecklist(existing.projectId, existing.type);
+}
+
+export async function deleteChecklistOccurrence(occurrenceId: string) {
+  const existing = await prisma.checklistOccurrence.findUniqueOrThrow({ where: { id: occurrenceId }, include: { checklistItem: true } });
+  const { checklistItem: item, ...occurrence } = existing;
+  const user = await requireModuleWrite(item.projectId, configFor(item.type).moduleName);
+
+  await prisma.checklistOccurrence.delete({ where: { id: occurrenceId } });
+  await syncLastDone(item.id);
+
+  await writeAudit({
+    actor: user,
+    projectId: item.projectId,
+    action: "delete",
+    entityType: "ChecklistOccurrence",
+    entityId: occurrenceId,
+    summary: `Removed a log of "${item.itemText.slice(0, 60)}"`,
+    diff: { before: occurrence },
+  });
+
+  revalidateChecklist(item.projectId, item.type);
 }
 
 /** Special-case escape hatch: a project-specific step the fixed template doesn't cover. */

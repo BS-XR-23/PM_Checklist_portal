@@ -28,7 +28,7 @@ export default async function CrLogPage({ params }: { params: { projectId: strin
 
   const s = summarizeCrs(crs);
   const needFixing = crs.filter((cr) => crWarnings(cr, financialsHidden).length > 0).length;
-  const rows = financialsHidden ? crs.map((cr) => ({ ...cr, rate: null, notes: null })) : crs;
+  const rows = financialsHidden ? crs.map((cr) => ({ ...cr, rate: null, notes: null, documentLink: null })) : crs;
 
   return (
     <div className="space-y-4">
@@ -54,6 +54,7 @@ export default async function CrLogPage({ params }: { params: { projectId: strin
             <><strong>Man-days planned</strong> is your estimate while the CR is proposed; <strong>billable man-days</strong> is what the client agreed to pay for. Amount = billable man-days × rate — keep the rate in line with the CR Rate Policy from the PM Checklist&apos;s Planning stage.</>,
             <><strong>Paid CR value</strong> adds up only Paid CRs the client has agreed to (Approved, In Progress or Completed). Proposed, Rejected, Free and Exchange CRs add nothing.</>,
             <>Once a CR is agreed it should have client sign-off and an updated WBS — the list flags any that don&apos;t. To keep a declined CR on record, set it to Rejected rather than deleting it.</>,
+            <>For QMS, link the <strong>CR document</strong> with the customer&apos;s approval on each agreed CR, and record its <strong>timeline effect</strong> (Edit).</>,
           ]}
         />
       )}
